@@ -757,23 +757,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const email = toAuthEmail(login);
       setLoading(true);
 
-      // Timeout strict sur l'appel Auth (évite bouton bloqué indéfiniment)
+      // Auth seul — timeout 12s (mobile 4G parfois lent vers Supabase)
       type AuthRes = Awaited<ReturnType<typeof supabase.auth.signInWithPassword>>;
       let data: AuthRes['data'] | null = null;
       let error: AuthRes['error'] | null = null;
       try {
-        const authPromise = supabase.auth.signInWithPassword({ email, password });
         const raced = await Promise.race([
-          authPromise.then((r) => ({ kind: 'ok' as const, r })),
+          supabase.auth.signInWithPassword({ email, password }).then((r) => ({
+            kind: 'ok' as const,
+            r,
+          })),
           new Promise<{ kind: 'timeout' }>((resolve) =>
-            setTimeout(() => resolve({ kind: 'timeout' }), 15000),
+            setTimeout(() => resolve({ kind: 'timeout' }), 12000),
           ),
         ]);
         if (raced.kind === 'timeout') {
           setLoading(false);
           return {
             error:
-              'Délai dépassé (réseau lent). Vérifiez Internet et réessayez.',
+              'Le serveur met trop de temps à répondre. Réessayez dans quelques secondes.',
           };
         }
         data = raced.r.data;
@@ -794,16 +796,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       registerLoginSuccess();
       const signedUser = data?.user ?? data?.session?.user ?? null;
+      // signInWithPassword a déjà posé la session dans le client — ne PAS await setSession (bloquant mobile)
       if (data?.session) {
         setSession(data.session);
-        try {
-          await supabase.auth.setSession({
-            access_token: data.session.access_token,
-            refresh_token: data.session.refresh_token,
-          });
-        } catch (e) {
-          console.warn('setSession', e);
-        }
       }
       if (!signedUser) {
         setLoading(false);
@@ -811,7 +806,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       setUser(signedUser);
 
-      // Nettoyage cache autres comptes (non bloquant)
+      // Cache autres comptes — synchrone et léger
       try {
         const keep = `mm_active_est:${signedUser.id}`;
         const keepIds = `mm_est_ids:${signedUser.id}`;
@@ -826,27 +821,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         toRemove.forEach((k) => localStorage.removeItem(k));
       } catch { /* */ }
 
-      // CRITIQUE : ne PAS bloquer le bouton sur loadMemberData.
-      // Session Auth déjà valide → l'UI peut naviguer ; le profil charge en fond.
       setLoading(false);
-      void (async () => {
-        try {
-          await loadMemberData(signedUser);
-        } catch (e) {
-          console.warn('background loadMemberData', e);
+      // Profil membre en fond — ne bloque jamais le bouton
+      void loadMemberData(signedUser).catch((e) => {
+        console.warn('background loadMemberData', e);
+        void (async () => {
           try {
             const { getCachedAuthProfile } = await import('./offline');
             const cached = await getCachedAuthProfile(signedUser.id);
-            if (cached?.member) {
-              setMember(cached.member as Member);
-            } else {
-              setMember((prev) => prev ?? buildFallbackMember(signedUser));
-            }
+            if (cached?.member) setMember(cached.member as Member);
+            else setMember((prev) => prev ?? buildFallbackMember(signedUser));
           } catch {
             setMember((prev) => prev ?? buildFallbackMember(signedUser));
           }
-        }
-      })();
+        })();
+      });
       return { error: null };
     } catch (e: any) {
       registerLoginFailure();
@@ -854,7 +843,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return {
         error:
           e?.message ||
-          'Connexion impossible (réseau). Vérifiez Internet et réessayez.',
+          'Connexion impossible. Vérifiez Internet et réessayez.',
       };
     }
   }

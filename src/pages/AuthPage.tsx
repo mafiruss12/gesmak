@@ -339,11 +339,12 @@ async function resendConfirmation() {
           setLoading(false);
           return;
         }
-        // Filet anti-spinner infini
+        let finished = false;
         const safetyTimer = window.setTimeout(() => {
+          if (finished) return;
           setLoading(false);
-          setError((prev) => prev || 'Connexion trop longue. Vérifiez Internet et réessayez.');
-        }, 20000);
+          setError((prev) => prev || 'Le serveur met trop de temps à répondre. Réessayez.');
+        }, 25000);
         let err: string | null = null;
         try {
           const res = await signIn(login, password);
@@ -351,6 +352,7 @@ async function resendConfirmation() {
         } catch (ex: any) {
           err = ex?.message || 'Connexion impossible';
         } finally {
+          finished = true;
           window.clearTimeout(safetyTimer);
         }
         if (err) {
@@ -359,61 +361,21 @@ async function resendConfirmation() {
           setLoading(false);
           return;
         }
-        // Compte ordinaire : aller au dashboard immédiatement.
-        // MFA admin : check rapide max 3s, sinon dashboard (pas de blocage).
-        let stayOnMfa = false;
-        try {
-          const { data: sess } = await supabase.auth.getSession();
-          const uid = sess.session?.user?.id;
-          if (uid) {
-            const rolePromise = supabase
-              .from('members')
-              .select('role')
-              .eq('user_id', uid)
-              .maybeSingle()
-              .then((r) => String(r.data?.role || ''));
-            const role = await Promise.race([
-              rolePromise,
-              new Promise<string>((resolve) => setTimeout(() => resolve(''), 3000)),
-            ]);
-            if (['super_admin', 'admin'].includes(role)) {
-              try {
-                const need = await Promise.race([
-                  needsMfaStepUp(),
-                  new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 3000)),
-                ]);
-                if (need) {
-                  const f = await hasVerifiedTotpFactor();
-                  setPendingMfaUserId(uid);
-                  setMfaFactorId(f.factorId);
-                  setMode('mfa');
-                  setSuccess('Double authentification — code à 6 chiffres de votre application');
-                  void logSecurityEvent('mfa_challenge', { role, native: true });
-                  stayOnMfa = true;
-                }
-              } catch (mfaErr) {
-                console.warn('MFA check skipped', mfaErr);
-              }
-            }
-            if (!stayOnMfa) void logSecurityEvent('login_success', { role: role || 'user' });
-          }
-        } catch (postErr) {
-          console.warn('post-login checks', postErr);
-        }
+        // Succès Auth → dashboard tout de suite (MFA admin géré par MfaGate si besoin)
+        void logSecurityEvent('login_success', {});
         setLoading(false);
-        if (stayOnMfa) return;
         setSuccess('Connexion réussie…');
         try {
           navigate('/dashboard', { replace: true });
         } catch {
           window.location.assign('/dashboard');
         }
-        // Secours mobile si navigate ne bascule pas
         window.setTimeout(() => {
-          if (window.location.pathname === '/' || window.location.pathname === '/login') {
+          const path = window.location.pathname;
+          if (path === '/' || path === '/login') {
             window.location.assign('/dashboard');
           }
-        }, 400);
+        }, 300);
         return;
       }
 
