@@ -145,7 +145,16 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const [estRecoveryTimedOut, setEstRecoveryTimedOut] = useState(false);
 
   const [unreadNotifs, setUnreadNotifs] = useState(0);
-  const [estName, setEstName] = useState<string | null>(null);
+  const [estName, setEstName] = useState<string | null>(() => {
+    try {
+      const raw = localStorage.getItem('mm_active_est');
+      if (raw) {
+        const p = JSON.parse(raw);
+        if (p?.name) return String(p.name);
+      }
+    } catch { /* */ }
+    return null;
+  });
   const [estLogo, setEstLogo] = useState<string | null>(null);
 
   const bizType = normalizeBusinessType(activeEstablishment?.type);
@@ -414,26 +423,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     );
   }
 
-  // Pendant le bootstrap : écran neutre max 5s (jamais infini)
-  if (
-    !estRecoveryTimedOut &&
-    (loading || (cachedIdsForUser.length > 0 && !hasEstablishment)) &&
-    Boolean(member) &&
-    !hasEstablishment &&
-    !member?.establishment_id
-  ) {
-    return (
-      <div className="min-h-screen bg-[#F5F5F5] text-stone-700 flex flex-col items-center justify-center p-6 gap-3">
-        <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
-        <p className="text-sm text-stone-500 text-center">
-          Récupération de votre établissement en cours. Si cela dure, tirez pour actualiser.
-        </p>
-        <button type="button" className="btn-secondary text-sm" onClick={() => refresh()}>
-          Réessayer
-        </button>
-      </div>
-    );
-  }
+  // Ne plus bloquer l’UI : le menu s’affiche toujours.
+  // L’établissement se charge en arrière-plan (cache local + refresh).
 
   if (showTypePicker) {
     return (

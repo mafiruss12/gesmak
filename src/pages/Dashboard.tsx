@@ -112,7 +112,19 @@ export default function Dashboard() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const estId = activeEstablishment?.id || member?.establishment_id || null;
+      let estId = activeEstablishment?.id || member?.establishment_id || null;
+      if (!estId) {
+        try {
+          const uid = member?.user_id;
+          const raw =
+            (uid && localStorage.getItem(`mm_active_est:${uid}`)) ||
+            localStorage.getItem('mm_active_est');
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed?.id) estId = String(parsed.id);
+          }
+        } catch { /* */ }
+      }
       if (!estId) {
         // Ne pas effacer un dashboard déjà affiché (évite flash au refresh)
         setLoading(false);
@@ -308,14 +320,42 @@ export default function Dashboard() {
     };
   }, [activeEstablishment?.id, member?.establishment_id]);
 
-  if (!(activeEstablishment?.id || member?.establishment_id)) {
-    // Sur mobile le membre charge après : ne pas afficher "aucun" trop tôt
+  // Établissement : cache local immédiat (évite écran « Chargement… » permanent)
+  let cachedEstId: string | null = null;
+  let cachedEstName: string | null = null;
+  try {
+    const uid = member?.user_id;
+    const raw =
+      (uid && localStorage.getItem(`mm_active_est:${uid}`)) ||
+      localStorage.getItem('mm_active_est');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed?.id) {
+        cachedEstId = String(parsed.id);
+        cachedEstName = parsed.name || null;
+      }
+    }
+  } catch { /* */ }
+
+  const estId = activeEstablishment?.id || member?.establishment_id || cachedEstId;
+
+  if (!estId) {
+    // Pas d’écran bloquant : message + actions, menu déjà visible autour
     return (
-      <EmptyState
-        icon={<LayoutDashboard size={48} />}
-        title="Chargement…"
-        message="Récupération de votre établissement en cours. Si cela dure, tirez pour actualiser."
-      />
+      <div className="px-4 py-10 text-center space-y-4">
+        <LayoutDashboard size={40} className="mx-auto text-stone-400" />
+        <h2 className="text-lg font-semibold text-stone-800">Établissement en cours de chargement</h2>
+        <p className="text-sm text-stone-500 max-w-sm mx-auto">
+          Le menu est disponible. Si rien n’apparaît, tirez pour actualiser ou rouvrez l’app.
+        </p>
+        <button
+          type="button"
+          className="btn-primary"
+          onClick={() => window.location.reload()}
+        >
+          Actualiser
+        </button>
+      </div>
     );
   }
   if (loading && !data) {

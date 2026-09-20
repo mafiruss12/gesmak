@@ -118,58 +118,38 @@ function DashboardSwitch() {
 
 function ProtectedRoutes() {
   const { user, member, loading, needsAccess } = useAuth();
-  const [memberWaitDone, setMemberWaitDone] = useState(Boolean(member));
-
-  // Après session OK : attendre le profil membre max 8s (ne déconnecte JAMAIS)
+  // Filet court uniquement si boot session reste bloqué (réseau mort)
+  const [bootTimedOut, setBootTimedOut] = useState(false);
   useEffect(() => {
-    if (member) {
-      setMemberWaitDone(true);
+    if (!loading) {
+      setBootTimedOut(false);
       return;
     }
-    if (!user) return;
-    const t = window.setTimeout(() => setMemberWaitDone(true), 8000);
+    const t = window.setTimeout(() => setBootTimedOut(true), 4000);
     return () => window.clearTimeout(t);
-  }, [user, member]);
+  }, [loading]);
 
   if (!isSupabaseConfigured) return <ConfigError />;
 
-  // Pendant le boot auth (getSession au refresh) : rester sur spinner.
-  // Ne JAMAIS envoyer vers /login tant que loading === true
-  // (c’était la cause de la « déconnexion » à chaque actualisation).
-  if (loading) {
+  // Spinner session UNIQUEMENT au tout début, max 4s — jamais d’écran « établissement »
+  if (loading && !user && !bootTimedOut) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-[#F5F5F5] px-6 text-center">
         <Loader2 className="animate-spin text-[#FF7900]" size={32} />
-        <p className="text-sm font-medium text-stone-700">Chargement de votre session…</p>
-        <p className="text-xs text-stone-500 max-w-xs">
-          Restauration de la connexion. Ne fermez pas la page.
-        </p>
+        <p className="text-sm font-medium text-stone-700">Connexion…</p>
       </div>
     );
   }
 
-  // Session lue : pas d’utilisateur = vraiment déconnecté (bouton Déconnexion ou session expirée)
   if (!user) return <Navigate to="/" replace />;
-
-  // Utilisateur OK, profil membre encore en cours
-  if (!member && !memberWaitDone) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-[#F5F5F5] px-6 text-center">
-        <Loader2 className="animate-spin text-[#FF7900]" size={32} />
-        <p className="text-sm font-medium text-stone-700">Chargement de votre espace…</p>
-        <p className="text-xs text-stone-500 max-w-xs">
-          Récupération de votre établissement…
-        </p>
-      </div>
-    );
-  }
 
   try {
     const acct = (user as any)?.user_metadata?.account_type;
     if (acct === 'visitor' || acct === 'provider') return <Navigate to="/" replace />;
   } catch { /* */ }
 
-  if (needsAccess && !member) return <PendingAccessPage />;
+  // needsAccess seulement si boot fini et vraiment pas de membre
+  if (!loading && needsAccess && !member) return <PendingAccessPage />;
 
   return (
     <AppLayout>
