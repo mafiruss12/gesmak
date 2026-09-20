@@ -118,45 +118,51 @@ function DashboardSwitch() {
 
 function ProtectedRoutes() {
   const { user, member, loading, needsAccess } = useAuth();
-  const [bootDone, setBootDone] = useState(!loading);
   const [memberWaitDone, setMemberWaitDone] = useState(Boolean(member));
 
-  // Filet 5s max sur le boot session (évite écran blanc infini)
-  useEffect(() => {
-    if (!loading) {
-      setBootDone(true);
-      return;
-    }
-    const t = window.setTimeout(() => setBootDone(true), 5000);
-    return () => window.clearTimeout(t);
-  }, [loading]);
-
-  // Après login : attendre le profil membre max 5s
+  // Après session OK : attendre le profil membre max 8s (ne déconnecte JAMAIS)
   useEffect(() => {
     if (member) {
       setMemberWaitDone(true);
       return;
     }
     if (!user) return;
-    const t = window.setTimeout(() => setMemberWaitDone(true), 5000);
+    const t = window.setTimeout(() => setMemberWaitDone(true), 8000);
     return () => window.clearTimeout(t);
   }, [user, member]);
 
   if (!isSupabaseConfigured) return <ConfigError />;
 
-  if ((loading && !bootDone) || (user && !member && !memberWaitDone)) {
+  // Pendant le boot auth (getSession au refresh) : rester sur spinner.
+  // Ne JAMAIS envoyer vers /login tant que loading === true
+  // (c’était la cause de la « déconnexion » à chaque actualisation).
+  if (loading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-[#F5F5F5] px-6 text-center">
         <Loader2 className="animate-spin text-[#FF7900]" size={32} />
-        <p className="text-sm font-medium text-stone-700">Chargement de votre espace…</p>
+        <p className="text-sm font-medium text-stone-700">Chargement de votre session…</p>
         <p className="text-xs text-stone-500 max-w-xs">
-          Récupération de votre établissement. Si cela dure trop longtemps, tirez pour actualiser.
+          Restauration de la connexion. Ne fermez pas la page.
         </p>
       </div>
     );
   }
 
+  // Session lue : pas d’utilisateur = vraiment déconnecté (bouton Déconnexion ou session expirée)
   if (!user) return <Navigate to="/" replace />;
+
+  // Utilisateur OK, profil membre encore en cours
+  if (!member && !memberWaitDone) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-[#F5F5F5] px-6 text-center">
+        <Loader2 className="animate-spin text-[#FF7900]" size={32} />
+        <p className="text-sm font-medium text-stone-700">Chargement de votre espace…</p>
+        <p className="text-xs text-stone-500 max-w-xs">
+          Récupération de votre établissement…
+        </p>
+      </div>
+    );
+  }
 
   try {
     const acct = (user as any)?.user_metadata?.account_type;

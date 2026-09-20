@@ -654,7 +654,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     async function boot() {
       // Restaure la session depuis localStorage (persistSession: true).
-      // Ne JAMAIS forcer null par timeout — c'est ce qui déconnectait au refresh.
+      // Ne JAMAIS forcer user=null par timeout — seule cause légitime = pas de token / signOut.
+      const safety = window.setTimeout(() => {
+        if (mounted) setLoading(false);
+      }, 15000);
       try {
         let session = null as Awaited<ReturnType<typeof supabase.auth.getSession>>['data']['session'];
         try {
@@ -664,7 +667,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } catch (e) {
           console.error('getSession', e);
         }
-        // Session absente mais tokens possibles → refresh unique (pas de timeout hard)
+        // Session absente mais refresh token présent → un seul essai
         if (!session) {
           try {
             const { data: ref } = await supabase.auth.refreshSession();
@@ -672,15 +675,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           } catch { /* */ }
         }
         if (!mounted) return;
-        setSession(session);
-        setUser(session?.user ?? null);
+        // Important : ne poser null que si vraiment aucune session
         if (session?.user) {
-          // Attendre la fin du bootstrap membre AVANT de lever loading
+          setSession(session);
+          setUser(session.user);
           await ensureMember(session.user);
+        } else {
+          // Ne pas écraser un user éventuellement posé par INITIAL_SESSION
+          setSession((prev) => prev ?? null);
+          setUser((prev) => prev ?? null);
         }
       } catch (e) {
         console.error('boot', e);
       } finally {
+        window.clearTimeout(safety);
         if (mounted) setLoading(false);
       }
     }
@@ -720,9 +728,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(newSession.user);
         // INITIAL_SESSION / SIGNED_IN / USER_UPDATED → charger le profil (await via void, loading géré)
         if (event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'INITIAL_SESSION') {
-          // SIGNED_IN déjà traité par signIn() ; INITIAL_SESSION peut doubler boot — seq le gère
+          // INITIAL_SESSION = restauration localStorage au refresh : garder user/session
           if (event === 'INITIAL_SESSION') {
-            // boot() charge déjà ; éviter double TypePicker
+            if (newSession?.user) {
+              setSession(newSession);
+              setUser(newSession.user);
+              // membre chargé par boot() ; ne pas rebloquer loading
+            }
             return;
           }
           // Ne pas rebloquer loading : signIn() a déjà posé user/session.
