@@ -70,6 +70,10 @@ export default function SuperAdmin() {
     role: 'employee' as Role,
     establishment_id: '',
     status: 'active' as 'active' | 'suspended' });
+  /** Mot de passe temporaire défini par l’admin (oublié par l’utilisateur) */
+  const [tempPassword, setTempPassword] = useState('');
+  const [pwdResetLoading, setPwdResetLoading] = useState(false);
+  const [pwdResetDone, setPwdResetDone] = useState<string | null>(null);
   const [estEditForm, setEstEditForm] = useState({
     name: '',
     type: 'maquis',
@@ -212,6 +216,53 @@ export default function SuperAdmin() {
       setEditMember(null);
       flash('Membre retiré');
       await loadData();
+    }
+  }
+
+
+  async function adminSetTemporaryPassword() {
+    if (!editMember?.user_id) {
+      setError('Ce membre n’a pas de compte Auth lié (user_id manquant).');
+      return;
+    }
+    const pwd = (tempPassword || generatePassword(8)).trim();
+    if (pwd.length < 6) {
+      setError('Mot de passe : minimum 6 caractères');
+      return;
+    }
+    if (!confirm(`Définir le mot de passe temporaire pour ${displayLogin(editMember.email)} ?\n\nIl devra le changer ensuite dans Paramètres.`)) {
+      return;
+    }
+    setPwdResetLoading(true);
+    setError(null);
+    setPwdResetDone(null);
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) {
+        setError('Session admin expirée — reconnectez-vous.');
+        return;
+      }
+      const res = await fetch('/api/admin/set-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ user_id: editMember.user_id, password: pwd }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(json.error || json.detail || 'Échec réinitialisation mot de passe');
+        return;
+      }
+      setTempPassword(pwd);
+      setPwdResetDone(pwd);
+      flash('Mot de passe temporaire défini — communiquez-le à l’utilisateur');
+    } catch (e: any) {
+      setError(e?.message || 'Erreur réseau');
+    } finally {
+      setPwdResetLoading(false);
     }
   }
 
@@ -456,7 +507,7 @@ export default function SuperAdmin() {
 
   function openEditMember(m: Member) {
     setError(null);
-    setEditMember(m);
+    setEditMember(m); setTempPassword(''); setPwdResetDone(null);
     setMemberEditForm({
       full_name: m.full_name || '',
       role: m.role,
@@ -1549,6 +1600,63 @@ export default function SuperAdmin() {
                 <option value="suspended">Suspendu</option>
               </select>
             </div>
+            {/* Mot de passe oublié — admin définit un mot de passe temporaire */}
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 space-y-2">
+              <label className="label flex items-center gap-1.5 text-amber-200">
+                <KeyRound size={14} /> Mot de passe temporaire (oublié)
+              </label>
+              <p className="text-[11px] text-stone-400 leading-snug">
+                Si l’utilisateur a oublié son mot de passe, définissez-en un temporaire.
+                Il se connecte avec, puis le change dans <strong>Paramètres</strong>.
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={tempPassword}
+                  onChange={(e) => { setTempPassword(e.target.value); setPwdResetDone(null); }}
+                  className="input-field flex-1 font-mono text-sm"
+                  placeholder="Ex. Stock2026 ou générer"
+                  autoComplete="off"
+                />
+                <button
+                  type="button"
+                  className="btn-secondary shrink-0 px-2"
+                  title="Générer"
+                  onClick={() => {
+                    const p = generatePassword(8);
+                    setTempPassword(p);
+                    setPwdResetDone(null);
+                  }}
+                >
+                  <RefreshCw size={14} />
+                </button>
+              </div>
+              {pwdResetDone && (
+                <div className="text-xs text-emerald-300 bg-emerald-500/10 rounded-lg px-2 py-1.5 flex items-center justify-between gap-2">
+                  <span>À communiquer : <strong className="font-mono">{pwdResetDone}</strong></span>
+                  <button
+                    type="button"
+                    className="btn-ghost text-[11px] shrink-0"
+                    onClick={() => {
+                      void navigator.clipboard.writeText(pwdResetDone);
+                      flash('Mot de passe copié');
+                    }}
+                  >
+                    <Copy size={12} /> Copier
+                  </button>
+                </div>
+              )}
+              <button
+                type="button"
+                disabled={pwdResetLoading || !editMember.user_id}
+                onClick={() => void adminSetTemporaryPassword()}
+                className="w-full flex items-center justify-center gap-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-stone-950 font-semibold text-sm py-2.5 disabled:opacity-50"
+              >
+                {pwdResetLoading ? <Loader2 className="animate-spin" size={16} /> : <KeyRound size={16} />}
+                Appliquer ce mot de passe
+              </button>
+            </div>
+
             <button
               onClick={saveMemberEdit}
               disabled={actionLoading === editMember.id}
