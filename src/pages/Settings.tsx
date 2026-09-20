@@ -53,7 +53,7 @@ export default function SettingsPage() {
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => getStoredTheme());
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [pwdForm, setPwdForm] = useState({ password: '', confirm: '' });
+  const [pwdForm, setPwdForm] = useState({ current: '', password: '', confirm: '' });
   const [pwdMsg, setPwdMsg] = useState<string | null>(null);
   const [pwdErr, setPwdErr] = useState<string | null>(null);
   const [pwdSaving, setPwdSaving] = useState(false);
@@ -211,6 +211,10 @@ async function saveProfile() {
   async function changePassword() {
     setPwdErr(null);
     setPwdMsg(null);
+    if (!pwdForm.current.trim()) {
+      setPwdErr('Saisissez votre mot de passe actuel.');
+      return;
+    }
     if (pwdForm.password.length < 6) {
       setPwdErr('Le mot de passe doit contenir au moins 6 caractères.');
       return;
@@ -219,14 +223,38 @@ async function saveProfile() {
       setPwdErr('Les mots de passe ne correspondent pas.');
       return;
     }
+    if (pwdForm.current === pwdForm.password) {
+      setPwdErr('Le nouveau mot de passe doit être différent de l’actuel.');
+      return;
+    }
     setPwdSaving(true);
-    const { error: err } = await supabase.auth.updateUser({ password: pwdForm.password });
-    setPwdSaving(false);
-    if (err) setPwdErr(err.message);
-    else {
-      setPwdMsg('Mot de passe mis à jour.');
-      setPwdForm({ password: '', confirm: '' });
-      setTimeout(() => setPwdMsg(null), 3000);
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const email = sess.session?.user?.email;
+      if (!email) {
+        setPwdErr('Session expirée — reconnectez-vous.');
+        return;
+      }
+      // Vérifier l’ancien mot de passe avant de le changer
+      const { error: reauthErr } = await supabase.auth.signInWithPassword({
+        email,
+        password: pwdForm.current,
+      });
+      if (reauthErr) {
+        setPwdErr('Mot de passe actuel incorrect.');
+        return;
+      }
+      const { error: err } = await supabase.auth.updateUser({ password: pwdForm.password });
+      if (err) setPwdErr(err.message);
+      else {
+        setPwdMsg('Mot de passe mis à jour.');
+        setPwdForm({ current: '', password: '', confirm: '' });
+        setTimeout(() => setPwdMsg(null), 3000);
+      }
+    } catch (e: any) {
+      setPwdErr(e?.message || 'Impossible de changer le mot de passe.');
+    } finally {
+      setPwdSaving(false);
     }
   }
 
@@ -658,6 +686,20 @@ async function saveProfile() {
             <div className="mb-3 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">{pwdMsg}</div>
           )}
           <div className="space-y-3">
+            <div>
+              <label className="label">Mot de passe actuel</label>
+              <div className="relative">
+                <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-500" />
+                <input
+                  type="password"
+                  value={pwdForm.current}
+                  onChange={(e) => setPwdForm({ ...pwdForm, current: e.target.value })}
+                  className="input-field pl-10"
+                  placeholder="Votre mot de passe actuel"
+                  autoComplete="current-password"
+                />
+              </div>
+            </div>
             <div>
               <label className="label">Nouveau mot de passe</label>
               <div className="relative">
