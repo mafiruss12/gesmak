@@ -1,0 +1,37 @@
+name: Sauvegarde nocturne de la base (gratuite)
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Installer les outils PostgreSQL
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Exporter la base (pg_dump)
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          mkdir -p backups
+          STAMP=$(date +%Y-%m-%d)
+          pg_dump "$DATABASE_URL" --no-owner --no-privileges -F c -f "backups/backup-$STAMP.dump"
+
+      - name: Committer la sauvegarde dans le depot
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -B db-backups
+          git add backups/
+          git commit -m "backup: sauvegarde automatique $(date +%Y-%m-%d)" || echo "Rien de nouveau"
+          git push origin db-backups --force
+
+      - name: Purger les sauvegardes de plus de 30 jours
+        run: |
+          find backups -name '*.dump' -mtime +30 -delete || true
