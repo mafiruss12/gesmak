@@ -12,8 +12,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Installer les outils PostgreSQL
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Installer pg_dump v17 (meme version majeure que Supabase)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y postgresql-client-17
 
       - name: Exporter la base (pg_dump)
         env:
@@ -21,7 +25,7 @@ jobs:
         run: |
           mkdir -p backups
           STAMP=$(date +%Y-%m-%d)
-          pg_dump "$DATABASE_URL" --no-owner --no-privileges -F c -f "backups/backup-$STAMP.dump"
+          /usr/lib/postgresql/17/bin/pg_dump "$DATABASE_URL" --no-owner --no-privileges -F c -f "backups/backup-$STAMP.dump"
 
       - name: Committer la sauvegarde dans le depot
         run: |
