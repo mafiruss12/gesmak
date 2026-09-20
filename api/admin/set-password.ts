@@ -17,17 +17,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'OPTIONS') return res.status(204).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const supabaseUrl =
-    getEnv('SUPABASE_URL') || getEnv('VITE_SUPABASE_URL') || '';
-  const serviceKey =
+  const supabaseUrl = (
+    process.env.SUPABASE_URL ||
+    process.env.VITE_SUPABASE_URL ||
+    getEnv('SUPABASE_URL') ||
+    getEnv('VITE_SUPABASE_URL') ||
+    ''
+  ).trim();
+  const serviceKey = (
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_SERVICE_KEY ||
     getEnv('SUPABASE_SERVICE_ROLE_KEY') ||
     getEnv('SERVICE_ROLE_KEY') ||
-    getEnv('SUPABASE_SERVICE_KEY');
-  const anonKey = getEnv('SUPABASE_ANON_KEY') || getEnv('VITE_SUPABASE_ANON_KEY') || '';
+    ''
+  ).trim();
+  const anonKey = (
+    process.env.SUPABASE_ANON_KEY ||
+    process.env.VITE_SUPABASE_ANON_KEY ||
+    getEnv('SUPABASE_ANON_KEY') ||
+    getEnv('VITE_SUPABASE_ANON_KEY') ||
+    ''
+  ).trim();
 
   if (!supabaseUrl || !serviceKey) {
+    const present = Object.keys(process.env)
+      .filter((k) => /SUPABASE|SERVICE_ROLE/i.test(k))
+      .sort();
     return res.status(503).json({
-      error: 'SUPABASE_SERVICE_ROLE_KEY manquant sur Vercel — contactez le développeur.',
+      error:
+        'Clé service Supabase absente ou vide sur Vercel. Ouvrez Supabase → Settings → API → service_role, copiez la clé, ajoutez-la dans Vercel → Environment Variables → SUPABASE_SERVICE_ROLE_KEY (Production).',
+      debug_keys: present,
+      has_url: Boolean(supabaseUrl),
+      has_service: Boolean(serviceKey),
     });
   }
 
