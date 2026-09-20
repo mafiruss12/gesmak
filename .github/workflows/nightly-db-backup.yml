@@ -1,5 +1,8 @@
 name: Sauvegarde nocturne de la base (gratuite)
 
+permissions:
+  contents: write
+
 on:
   schedule:
     - cron: '0 3 * * *'
