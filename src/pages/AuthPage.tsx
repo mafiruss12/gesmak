@@ -2,7 +2,7 @@ import BrandFooter from '@/components/BrandFooter';
 import AdMarquee from '@/components/AdMarquee';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Beer, Mail, Lock, User, Loader2, Chrome, KeyRound, ArrowLeft, AlertCircle, CheckCircle2, Package, TrendingUp, WifiOff, Shield, Bot, Users, ClipboardList, Sparkles } from 'lucide-react';
+import { Beer, Mail, Lock, User, Loader2, KeyRound, ArrowLeft, AlertCircle, CheckCircle2, Package, TrendingUp, WifiOff, Shield, Bot, Users, ClipboardList, Sparkles } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { toAuthEmail } from '@/lib/login';
 import { makeSignupCaptcha, checkSignupCaptcha, getLoginLockRemaining } from '@/lib/security';
@@ -100,7 +100,7 @@ function mapAuthError(err: string, context: 'signin' | 'signup' | 'forgot' | 'ot
 }
 
 export default function AuthPage() {
-  const { signIn, signUp, signInWithGoogle, user, loading: authLoading } = useAuth();
+  const { signIn, signUp, user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [mode, setMode] = useState<Mode>('signin');
   const [newPassword, setNewPassword] = useState('');
@@ -126,71 +126,12 @@ export default function AuthPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
-
-  // Erreurs renvoyées par Google / OAuth dans l'URL
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
-    const err =
-      params.get('error_description') ||
-      params.get('error') ||
-      hash.get('error_description') ||
-      hash.get('error');
-    if (err) {
-      const decoded = decodeURIComponent(err.replace(/\+/g, ' '));
-      let msg = `Connexion Google impossible : ${decoded}`;
-      if (err.includes('access_denied')) {
-        msg = 'Connexion Google annulée.';
-      } else if (/unable to exchange external code/i.test(decoded)) {
-        msg =
-          'Google refuse l’échange du code (secret OAuth incorrect ou URI de redirection). ' +
-          'Dans Google Cloud → Identifiants OAuth (type Application Web), vérifiez le secret ' +
-          'et l’URI : https://ycoaxbgxstxondxxnhhf.supabase.co/auth/v1/callback — ' +
-          'puis collez le même Client ID + secret dans Supabase → Authentication → Providers → Google.';
-      } else if (/redirect/i.test(decoded)) {
-        msg = 'URL de retour non autorisée. Vérifiez les Redirect URLs dans Supabase et Google Cloud.';
-      }
-      setError(msg);
-      window.history.replaceState({}, '', window.location.pathname);
-    }
-  }, []);
-
   // Déjà connecté → dashboard
   useEffect(() => {
     if (user && !authLoading) {
       navigate('/dashboard', { replace: true });
     }
   }, [user, authLoading, navigate]);
-
-  // Retour Google OAuth : session puis dashboard
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const href = window.location.href;
-        const hasToken =
-          href.includes('access_token') ||
-          href.includes('refresh_token') ||
-          window.location.search.includes('code=') ||
-          window.location.hash.includes('access_token');
-        if (!hasToken) return;
-        await new Promise((r) => setTimeout(r, 250));
-        const { data } = await supabase.auth.getSession();
-        if (cancelled) return;
-        if (data.session?.user) {
-          setSuccess('Connexion Google réussie…');
-          window.history.replaceState({}, '', '/');
-          navigate('/dashboard', { replace: true });
-        }
-      } catch (e) {
-        console.error('oauth return', e);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
 
   
@@ -783,35 +724,7 @@ async function resendConfirmation() {
             </button>
           ) : (
             <>
-              <div className="my-5 flex items-center gap-3">
-                <div className="h-px flex-1 bg-stone-700" />
-                <span className="text-xs text-stone-500">ou</span>
-                <div className="h-px flex-1 bg-stone-700" />
-              </div>
-              <button
-                type="button"
-                disabled={googleLoading}
-                onClick={async () => {
-                  setError(null);
-                  setGoogleLoading(true);
-                  try {
-                    await signInWithGoogle();
-                    // Redirection Google en cours
-                  } catch (e: any) {
-                    setError(
-                      e?.message?.includes('provider')
-                        ? 'Google n\'est pas correctement configuré. Utilisez e-mail + mot de passe, ou contactez l\'admin.'
-                        : mapAuthError(e?.message || 'Connexion Google impossible')
-                    );
-                    setGoogleLoading(false);
-                  }
-                }}
-                className="w-full py-2.5 rounded-xl border border-stone-600 text-stone-200 text-sm flex items-center justify-center gap-2 hover:bg-stone-800 disabled:opacity-60"
-              >
-                {googleLoading ? <Loader2 size={16} className="animate-spin" /> : <Chrome size={16} />}
-                Continuer avec Google
-              </button>
-              <p className="text-center text-sm text-stone-400 mt-5">
+<p className="text-center text-sm text-stone-400 mt-5">
                 {mode === 'signin' ? (
                   <>
                     Pas de compte ?{' '}

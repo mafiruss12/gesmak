@@ -27,7 +27,6 @@ interface AuthContextValue {
   switchEstablishment: (establishmentId: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: string | null }>;
-  signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
   refresh: () => Promise<void>;
 }
@@ -976,42 +975,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  async function signInWithGoogle() {
-    const origin = window.location.origin.replace(/\/$/, '');
-    // Callback dédié PKCE (allow-list Supabase : …/auth/callback)
-    const redirectTo = `${origin}/auth/callback`;
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo,
-        // Une seule navigation : on contrôle l'URL retournée
-        skipBrowserRedirect: true,
-        queryParams: {
-          access_type: 'online',
-          prompt: 'select_account',
-        },
-      },
-    });
-    if (error) {
-      const msg = error.message || '';
-      if (/provider is not enabled/i.test(msg)) {
-        throw new Error(
-          "Google n'est pas activé sur Supabase. Activez Authentication → Providers → Google."
-        );
-      }
-      if (/redirect/i.test(msg)) {
-        throw new Error(
-          `URL de retour non autorisée (${redirectTo}). Ajoutez-la dans Supabase → Authentication → URL Configuration.`
-        );
-      }
-      throw error;
-    }
-    if (!data?.url) {
-      throw new Error('Connexion Google impossible (URL OAuth manquante). Réessayez.');
-    }
-    window.location.assign(data.url);
-  }
-
   async function signOut() {
     clearEstablishmentCache();
     setSession(null);
@@ -1091,7 +1054,6 @@ return (
         switchEstablishment,
         signIn,
         signUp,
-        signInWithGoogle,
         signOut,
         refresh,
       }}
