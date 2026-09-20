@@ -1,12 +1,11 @@
-/* Stock Manager AI — Service Worker offline-first v4 */
-const CACHE_NAME = 'maquis-shell-v4';
+/* Stock Manager AI — Service Worker v5 (network-first assets) */
+const CACHE_NAME = 'maquis-shell-v5';
 const PRECACHE = [
   '/',
   '/index.html',
   '/manifest.webmanifest',
   '/icon-192.png',
   '/icon-512.png',
-  '/login',
 ];
 
 self.addEventListener('install', (event) => {
@@ -29,29 +28,50 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url);
 
-  // API distantes : réseau uniquement (pas de cache trompeur)
+  // API distantes : réseau uniquement
   if (url.hostname.includes('supabase.co') || url.hostname.includes('googleapis.com')) return;
 
-  // Navigation : offline → shell index.html (SPA)
+  // Navigation SPA : réseau d'abord, fallback shell
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request)
         .then((res) => {
           const clone = res.clone();
           caches.open(CACHE_NAME).then((c) => {
-            c.put('/index.html', clone);
+            c.put('/index.html', clone.clone());
             c.put('/', clone);
           });
           return res;
         })
         .catch(() =>
-          caches.match('/index.html').then((r) => r || caches.match('/') || caches.match('/login'))
+          caches.match('/index.html').then((r) => r || caches.match('/'))
         )
     );
     return;
   }
 
-  // Assets même origine : cache d'abord puis réseau
+  // JS / CSS / modules : TOUJOURS réseau d'abord (évite vieux bundles cassés)
+  if (
+    url.origin === self.location.origin &&
+    (url.pathname.endsWith('.js') ||
+      url.pathname.endsWith('.css') ||
+      url.pathname.includes('/assets/'))
+  ) {
+    event.respondWith(
+      fetch(request)
+        .then((res) => {
+          if (res && res.ok) {
+            const clone = res.clone();
+            caches.open(CACHE_NAME).then((c) => c.put(request, clone));
+          }
+          return res;
+        })
+        .catch(() => caches.match(request))
+    );
+    return;
+  }
+
+  // Autres assets même origine : cache puis réseau
   if (url.origin === self.location.origin) {
     event.respondWith(
       caches.match(request).then((cached) => {

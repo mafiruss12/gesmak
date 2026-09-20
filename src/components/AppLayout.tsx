@@ -142,6 +142,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => getStoredTheme());
   const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
+  const [estRecoveryTimedOut, setEstRecoveryTimedOut] = useState(false);
+
   const [unreadNotifs, setUnreadNotifs] = useState(0);
   const [estName, setEstName] = useState<string | null>(null);
   const [estLogo, setEstLogo] = useState<string | null>(null);
@@ -341,6 +343,19 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   const hadEstRef = useRef(false);
   if (hasEstablishment) hadEstRef.current = true;
+
+  // Filet 5s : ne jamais rester bloqué sur « Récupération établissement »
+  useEffect(() => {
+    if (hasEstablishment || member?.establishment_id) {
+      setEstRecoveryTimedOut(false);
+      return;
+    }
+    if (!member) return;
+    setEstRecoveryTimedOut(false);
+    const t = window.setTimeout(() => setEstRecoveryTimedOut(true), 5000);
+    return () => window.clearTimeout(t);
+  }, [member, member?.establishment_id, hasEstablishment]);
+
   // Nouveau user sans établissement : reset le ref
   if (member && !member.establishment_id && (!myEstablishments || myEstablishments.length === 0)) {
     hadEstRef.current = false;
@@ -399,9 +414,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     );
   }
 
-  // Pendant le bootstrap mobile : écran neutre (pas TypePicker)
-  // Aussi si cache local indique un établissement connu (race RLS mobile)
+  // Pendant le bootstrap : écran neutre max 5s (jamais infini)
   if (
+    !estRecoveryTimedOut &&
     (loading || (cachedIdsForUser.length > 0 && !hasEstablishment)) &&
     Boolean(member) &&
     !hasEstablishment &&

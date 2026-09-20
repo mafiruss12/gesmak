@@ -119,24 +119,39 @@ function DashboardSwitch() {
 function ProtectedRoutes() {
   const { user, member, loading, needsAccess } = useAuth();
   const [bootDone, setBootDone] = useState(!loading);
+  const [memberWaitDone, setMemberWaitDone] = useState(Boolean(member));
 
-  // Attendre la fin réelle du bootstrap auth (pas de timeout qui ouvre TypePicker)
-  // Filet sécurité 12s uniquement pour éviter écran blanc infini réseau mort
+  // Filet 5s max sur le boot session (évite écran blanc infini)
   useEffect(() => {
     if (!loading) {
       setBootDone(true);
       return;
     }
-    const t = window.setTimeout(() => setBootDone(true), 12000);
+    const t = window.setTimeout(() => setBootDone(true), 5000);
     return () => window.clearTimeout(t);
   }, [loading]);
 
+  // Après login : attendre le profil membre max 5s
+  useEffect(() => {
+    if (member) {
+      setMemberWaitDone(true);
+      return;
+    }
+    if (!user) return;
+    const t = window.setTimeout(() => setMemberWaitDone(true), 5000);
+    return () => window.clearTimeout(t);
+  }, [user, member]);
+
   if (!isSupabaseConfigured) return <ConfigError />;
 
-  if (loading && !bootDone) {
+  if ((loading && !bootDone) || (user && !member && !memberWaitDone)) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F5F5F5]">
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-[#F5F5F5] px-6 text-center">
         <Loader2 className="animate-spin text-[#FF7900]" size={32} />
+        <p className="text-sm font-medium text-stone-700">Chargement de votre espace…</p>
+        <p className="text-xs text-stone-500 max-w-xs">
+          Récupération de votre établissement. Si cela dure trop longtemps, tirez pour actualiser.
+        </p>
       </div>
     );
   }
