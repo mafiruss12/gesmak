@@ -68,10 +68,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Montants de référence (doivent correspondre aux plans)
     const PLAN_PRICES: Record<number, number> = {
-      1: 7000,
-      3: 20000,
-      6: 38000,
-      12: 70000,
+      1: 6000,
+      3: 17100,
+      6: 32400,
+      12: 60000,
     };
     // On accepte une tolérance basique ; le montant exact est validé côté init aussi
     if (paidAmount < 100) {

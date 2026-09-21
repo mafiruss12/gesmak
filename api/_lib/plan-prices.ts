@@ -3,9 +3,9 @@
  * Le frontend affiche, le serveur valide.
  */
 export const SERVER_PLAN_PRICES = {
-  starter: { setup: 12_000, monthly: 7_000 },
-  pro: { setup: 30_000, monthly: 15_000 },
-  business: { setup: 100_000, monthly: 35_000 },
+  starter: { setup: 12_500, monthly: 6_000 },
+  pro: { setup: 25_000, monthly: 12_000 },
+  business: { setup: 55_000, monthly: 25_000 },
 } as const;
 
 export const SERVER_PERIOD_MULTIPLIERS: Record<number, number> = {

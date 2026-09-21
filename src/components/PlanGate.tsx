@@ -34,7 +34,7 @@ export default function PlanGate({
         {isTrialPro ? ' (hors essai)' : ''}.
       </p>
       <p className="text-xs text-stone-500">
-        Passez en <strong>Pro</strong> (15 000 F/mois) ou <strong>Business</strong> (35 000 F/mois) pour y accéder.
+        Passez en <strong>Pro</strong> (12 000 F/mois) ou <strong>Business</strong> (25 000 F/mois) pour y accéder.
       </p>
       <a href={wa} target="_blank" rel="noreferrer" className="btn-primary inline-flex justify-center w-full">
         Demander l’upgrade (WhatsApp)

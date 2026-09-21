@@ -3,10 +3,10 @@
 /** Tarifs de référence (affichage commercial) */
 export const PLAN = {
   /** Référence affichage = offre Essentiel (entrée) */
-  setupStockFcfa: 12_000,
+  setupStockFcfa: 12_500,
   setupTrainingFcfa: 0,
-  setupTotalFcfa: 12_000,
-  monthlyFcfa: 7_000,
+  setupTotalFcfa: 12_500,
+  monthlyFcfa: 6_000,
   trialDays: 30,
   graceDays: 3,
   currencyLabel: 'F CFA',
@@ -41,8 +41,8 @@ export const PLANS: Record<PlanTier, PlanLimits> = {
   starter: {
     id: 'starter',
     label: 'Essentiel',
-    setupFcfa: 12_000,
-    monthlyFcfa: 7_000,
+    setupFcfa: 12_500,
+    monthlyFcfa: 6_000,
     maxEstablishments: 1,
     maxEmployees: 3,
     maxProducts: 80,
@@ -56,8 +56,8 @@ export const PLANS: Record<PlanTier, PlanLimits> = {
   pro: {
     id: 'pro',
     label: 'Pro',
-    setupFcfa: 30_000,
-    monthlyFcfa: 15_000,
+    setupFcfa: 25_000,
+    monthlyFcfa: 12_000,
     maxEstablishments: 3,
     maxEmployees: 8,
     maxProducts: 500,
@@ -71,8 +71,8 @@ export const PLANS: Record<PlanTier, PlanLimits> = {
   business: {
     id: 'business',
     label: 'Business',
-    setupFcfa: 100_000,
-    monthlyFcfa: 35_000,
+    setupFcfa: 55_000,
+    monthlyFcfa: 25_000,
     maxEstablishments: 20,
     maxEmployees: 100,
     maxProducts: 5_000,
