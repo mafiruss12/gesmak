@@ -191,7 +191,7 @@ function ProtectedRoutes() {
         <Route path="/suppliers" element={<Suppliers />} />
         <Route path="/purchases" element={<Purchases />} />
         <Route path="/accounting" element={<Accounting />} />
-        <Route path="/statistics" element={<Statistics />} />
+        <Route path="/statistics" element={<PlanGate feature="advancedReports" label="Statistiques avancees"><Statistics /></PlanGate>} />
         <Route path="/reports" element={<Navigate to="/daily-report" replace />} />
         <Route path="/daily-report" element={<DailyReportSafe />} />
         <Route path="/live-sales" element={<LiveDaySales />} />
@@ -199,8 +199,8 @@ function ProtectedRoutes() {
         <Route path="/print-qr" element={<PlanGate feature="qrOrdering" label="Imprimer QR tables"><PrintTableQR /></PlanGate>} />
         <Route path="/patron" element={<PatronMode />} />
         <Route path="/cloture" element={<RedirectToReportTab tab="cloture" />} />
-        <Route path="/ai" element={<AIAssistant />} />
-        <Route path="/ai-train" element={<AITrain />} />
+        <Route path="/ai" element={<PlanGate feature="ocrAi" label="Assistant IA"><AIAssistant /></PlanGate>} />
+        <Route path="/ai-train" element={<PlanGate feature="ocrAi" label="Entrainement IA"><AITrain /></PlanGate>} />
         <Route path="/chat" element={<ChatPage />} />
         <Route path="/suivi" element={<Navigate to="/mes-employes" replace />} />
         <Route path="/suivi-gerant" element={<Navigate to="/mes-employes" replace />} />
