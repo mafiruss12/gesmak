@@ -555,28 +555,7 @@ async function resendConfirmation() {
 
 
         <form onSubmit={handleSubmit} className="space-y-4">
-            {(mode === 'signin' || mode === 'signup') && (
-              <div className="grid grid-cols-2 gap-2 p-1 rounded-xl bg-stone-100 border border-stone-700 mb-1">
-                <button
-                  type="button"
-                  onClick={() => { setMode('signin'); setError(null); setSuccess(null); }}
-                  className={`py-2.5 rounded-lg text-sm font-semibold transition ${
-                    mode === 'signin' ? 'bg-amber-500 text-stone-950' : 'text-stone-400 hover:text-stone-200'
-                  }`}
-                >
-                  Se connecter
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setMode('signup'); setError(null); setSuccess(null); }}
-                  className={`py-2.5 rounded-lg text-sm font-semibold transition ${
-                    mode === 'signup' ? 'bg-amber-500 text-stone-950' : 'text-stone-400 hover:text-stone-200'
-                  }`}
-                >
-                  S&apos;inscrire
-                </button>
-              </div>
-            )}
+            {/* Inscription publique desactivee : seul un admin cree les comptes membres. */}
 
             {mode === 'signup' && (
               <div>
@@ -722,27 +701,7 @@ async function resendConfirmation() {
             >
               <ArrowLeft size={14} /> Retour à la connexion
             </button>
-          ) : (
-            <>
-<p className="text-center text-sm text-stone-400 mt-5">
-                {mode === 'signin' ? (
-                  <>
-                    Pas de compte ?{' '}
-                    <button type="button" className="text-amber-400 hover:text-amber-300" onClick={() => setMode('signup')}>
-                      S&apos;inscrire
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    Déjà inscrit ?{' '}
-                    <button type="button" className="text-amber-400 hover:text-amber-300" onClick={() => setMode('signin')}>
-                      Se connecter
-                    </button>
-                  </>
-                )}
-              </p>
-            </>
-          )}
+          ) : null}
         </div>
         </div>
       </div>
