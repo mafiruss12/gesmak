@@ -24,6 +24,9 @@ import {
   applyBusinessTheme,
   normalizeBusinessType,
   MENU_BY_TYPE,
+  getEstablishmentServices,
+  menuRoutesForComplexe,
+  inventoryLabelForServices,
   BUSINESS_LABELS,
   BUSINESS_THEMES,
   canManageEstablishments,
@@ -252,7 +255,19 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     window.location.assign('/');
   }
 
-  const allowedRoutes = new Set(MENU_BY_TYPE[bizType] || MENU_BY_TYPE.maquis);
+  // Services cochés (type Établissement) → menu adapté, pas générique maquis
+  const estServices =
+    bizType === 'complexe'
+      ? getEstablishmentServices(
+          activeEstablishment?.id || member?.establishment_id,
+          (activeEstablishment as { services?: string[] } | null)?.services,
+        )
+      : [];
+  const allowedRoutes = new Set(
+    bizType === 'complexe'
+      ? menuRoutesForComplexe(estServices)
+      : MENU_BY_TYPE[bizType] || MENU_BY_TYPE.maquis,
+  );
 
   const RENT_ONLY = new Set([
     '/rent/equipment',
@@ -265,7 +280,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     '/rent/invoices',
   ]);
 
-  const isLocation = bizType === 'location_event';
+  const isLocation = bizType === 'location_event' || (bizType === 'complexe' && estServices.includes('location'));
 
   const visibleSections = NAV_SECTIONS.map((section) => {
     let items = section.items.filter((item) => {
@@ -315,6 +330,22 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       items = items.map((item) =>
         item.to === '/kitchen' ? { ...item, label: 'Grill / Bar' } : item
       );
+    }
+    // Établissement multi-services : libellés selon services cochés
+    if (bizType === 'complexe') {
+      const hasResto = estServices.includes('restaurant');
+      const hasMaquis = estServices.includes('maquis');
+      items = items.map((item) => {
+        if (item.to === '/kitchen') {
+          if (hasResto && hasMaquis) return { ...item, label: 'Cuisine / Grill' };
+          if (hasResto) return { ...item, label: 'Cuisine' };
+          if (hasMaquis) return { ...item, label: 'Grill / Bar' };
+        }
+        if (item.to === '/inventory') {
+          return { ...item, label: inventoryLabelForServices(estServices) };
+        }
+        return item;
+      });
     }
 
     return { ...section, items };
@@ -693,6 +724,21 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 { to: '/print-qr', label: 'Imprimer QR', icon: <QrCode size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager'] },
       { to: '/tables', label: 'Tables', icon: <UtensilsCrossed size={22} /> },
                 { to: '/kitchen', label: 'Cuisine', icon: <Package size={22} /> },
+                { to: '/daily-report', label: 'Journal', icon: <ClipboardCheck size={22} /> },
+              ]
+            : bizType === 'complexe'
+            ? [
+                { to: '/dashboard', label: 'Accueil', icon: <LayoutDashboard size={22} /> },
+                ...(estServices.includes('restaurant')
+                  ? [
+                      { to: '/orders', label: 'Commandes', icon: <Receipt size={22} /> },
+                      { to: '/tables', label: 'Tables', icon: <UtensilsCrossed size={22} /> },
+                    ]
+                  : [
+                      { to: '/live-sales', label: 'Ventes', icon: <ShoppingCart size={20} /> },
+                      { to: '/pos', label: 'Caisse', icon: <ShoppingCart size={22} /> },
+                    ]),
+                { to: '/inventory', label: inventoryLabelForServices(estServices), icon: <Package size={22} /> },
                 { to: '/daily-report', label: 'Journal', icon: <ClipboardCheck size={22} /> },
               ]
             : [

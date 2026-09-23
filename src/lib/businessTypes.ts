@@ -193,6 +193,96 @@ export const MENU_BY_TYPE: Record<BusinessType, string[]> = {
   ],
 };
 
+
+/** Services cochés pour un type « Établissement » (complexe) */
+export type EstablishmentServiceId = 'maquis' | 'restaurant' | 'chambres' | 'location' | 'magasin';
+
+const SERVICE_TO_MENU_TYPE: Record<string, BusinessType> = {
+  maquis: 'maquis',
+  restaurant: 'restaurant',
+  magasin: 'magasin',
+  location: 'location_event',
+  // chambres : tronc commun (pas encore de module dédié)
+};
+
+/** Routes de base toujours présentes pour un établissement multi-services */
+const COMPLEXE_CORE_ROUTES = [
+  '/dashboard',
+  '/daily-report',
+  '/expenses',
+  '/mes-employes',
+  '/calendar',
+  '/statistics',
+  '/reports',
+  '/accounting',
+  '/ai',
+  '/chat',
+  '/notifications',
+  '/settings',
+  '/guide',
+  '/customers',
+  '/purchases',
+  '/inventory',
+  '/inventory/scan',
+  '/pos',
+];
+
+/**
+ * Lit les services cochés (localStorage prioritaire, puis champ establishment.services).
+ */
+export function getEstablishmentServices(
+  establishmentId: string | null | undefined,
+  fromDb?: string[] | null,
+): EstablishmentServiceId[] {
+  const fallback: EstablishmentServiceId[] = ['maquis'];
+  if (!establishmentId) return fallback;
+  try {
+    const raw = localStorage.getItem(`mm_est_services:${establishmentId}`);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed as EstablishmentServiceId[];
+    }
+  } catch { /* */ }
+  if (Array.isArray(fromDb) && fromDb.length > 0) {
+    return fromDb as EstablishmentServiceId[];
+  }
+  return fallback;
+}
+
+/**
+ * Construit les routes autorisées pour le type établissement selon les services cochés.
+ * Union des menus métier + routes cœur — évite un menu 100 % maquis.
+ */
+export function menuRoutesForComplexe(services: string[]): string[] {
+  const set = new Set<string>(COMPLEXE_CORE_ROUTES);
+  const list = services?.length ? services : ['maquis'];
+  for (const s of list) {
+    if (s === 'chambres') {
+      set.add('/calendar');
+      set.add('/customers');
+      set.add('/expenses');
+      set.add('/inventory');
+      continue;
+    }
+    const mapped = SERVICE_TO_MENU_TYPE[s];
+    if (mapped && MENU_BY_TYPE[mapped]) {
+      for (const r of MENU_BY_TYPE[mapped]) set.add(r);
+    }
+  }
+  return Array.from(set);
+}
+
+/** Libellés adaptatifs selon services (bas de page / inventaire) */
+export function inventoryLabelForServices(services: string[]): string {
+  const s = new Set(services || []);
+  if (s.has('restaurant') && (s.has('maquis') || s.has('magasin'))) return 'Stock';
+  if (s.has('restaurant')) return 'Carte';
+  if (s.has('maquis')) return 'Boissons';
+  if (s.has('location')) return 'Matériel';
+  if (s.has('magasin')) return 'Stock';
+  return 'Stock';
+}
+
 export const EQUIPMENT_CATEGORIES = [
   'chaises', 'chaises_presidentielles', 'tables', 'treteaux', 'baches',
   'chapiteaux', 'sonorisation', 'vaisselle', 'decoration', 'autres',

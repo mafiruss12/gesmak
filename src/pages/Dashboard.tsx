@@ -13,6 +13,7 @@ import { StatCard, EmptyState } from '@/components/ui';
 import { BarChart, Sparkline } from '@/components/MiniChart';
 import {
   normalizeBusinessType,
+  getEstablishmentServices,
   BUSINESS_LABELS,
   BUSINESS_THEMES,
   type BusinessType,
@@ -106,6 +107,10 @@ export default function Dashboard() {
   }, [data, activeEstablishment?.id, member?.establishment_id]);
 
   const bizType: BusinessType = normalizeBusinessType(activeEstablishment?.type);
+  const estServices =
+    bizType === 'complexe'
+      ? getEstablishmentServices(activeEstablishment?.id, (activeEstablishment as any)?.services)
+      : [];
   const theme = BUSINESS_THEMES[bizType];
   const ui = getBusinessUI(bizType);
 
@@ -425,7 +430,9 @@ export default function Dashboard() {
       )}
       <div className="flex flex-wrap items-end justify-between gap-3 mb-6">
         <div>
-          <p className="text-xs font-medium uppercase tracking-wide" style={{ color: theme.primary }}>Mode {BUSINESS_LABELS[bizType]}</p>
+          <p className="text-xs font-medium uppercase tracking-wide" style={{ color: theme.primary }}>Mode {bizType === 'complexe' && estServices.length
+            ? `Établissement · ${estServices.map((s) => ({ maquis: 'Maquis', restaurant: 'Resto', chambres: 'Chambres', location: 'Location', magasin: 'Magasin' } as Record<string, string>)[s] || s).join(' · ')}`
+            : BUSINESS_LABELS[bizType]}</p>
           <h1 className="text-2xl font-bold font-display text-stone-100">{activeEstablishment?.name ?? 'Tableau de bord'}</h1>
           <p className="text-stone-400 text-sm">Vue d&apos;évolution de votre activité</p>
         </div>
