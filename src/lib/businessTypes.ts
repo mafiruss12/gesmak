@@ -37,7 +37,7 @@ export const BUSINESS_LABELS: Record<BusinessType, string> = {
   location_event: 'Location événementielle',
   btp: 'BTP / BatiDevis',
   depot: 'Dépôt / Grossiste',
-  complexe: 'Complexe / Résidence',
+  complexe: 'Établissement',
 };
 
 export const BUSINESS_DESCRIPTIONS: Record<BusinessType, string> = {
@@ -50,7 +50,7 @@ export const BUSINESS_DESCRIPTIONS: Record<BusinessType, string> = {
   location_event: 'Chaises, tables, bâches, sono — mariages et cérémonies',
   btp: 'Devis, factures et matériaux pour artisans et entreprises du bâtiment',
   depot: 'Livraisons boissons aux maquis, bars et restaurants — stock gros et bons de livraison',
-  complexe: 'Résidence ou complexe hôtelier : plusieurs services (chambres, resto, bar, maquis) au même endroit',
+  complexe: 'Un lieu avec plusieurs services (maquis, restaurant, chambres…) — vous cochez ce que vous proposez',
 };
 
 export const BUSINESS_THEMES: Record<
@@ -124,7 +124,7 @@ export const BUSINESS_THEMES: Record<
     primary: '#7c3aed',
     primarySoft: 'rgba(124, 58, 237, 0.16)',
     accent: '#5b21b6',
-    label: 'Violet complexe',
+    label: 'Violet',
     gradient: 'from-violet-500/20 to-purple-700/5',
   },
 };
@@ -362,10 +362,10 @@ export const BUSINESS_UI: Record<BusinessType, BusinessUI> = {
   complexe: {
     productSingular: 'Article / service',
     productPlural: 'Services & stock',
-    inventoryTitle: 'Inventaire complexe',
+    inventoryTitle: 'Inventaire établissement',
     inventorySubtitle: 'Boissons, restauration et fournitures multi-services',
-    posTitle: 'Caisse complexe',
-    posSubtitle: 'Encaissement multi-services',
+    posTitle: 'Caisse établissement',
+    posSubtitle: 'Encaissement selon vos services',
     stockAlert: 'Ruptures multi-services',
     categories: ['Chambre', 'Bière', 'Soda', 'Eau', 'Plat', 'Grillade', 'Service', 'Autre'],
     unitDefault: 'unité',

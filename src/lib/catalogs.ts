@@ -221,7 +221,7 @@ export function catalogLabel(type: string | null | undefined): string {
     location_event: 'Parc type location (chaises, tables, sono)',
     btp: 'Catalogue matériaux BTP',
     depot: 'Catalogue dépôt (boissons gros)',
-    complexe: 'Catalogue complexe (bar & services)',
+    complexe: 'Catalogue établissement (bar & services)',
   };
   return map[t] || 'Catalogue de démarrage';
 }

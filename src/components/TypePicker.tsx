@@ -11,6 +11,15 @@ import {
   type BusinessType,
 } from '@/lib/businessTypes';
 
+/** Services proposés quand le type « Établissement » (multi-services) est choisi */
+export const ESTABLISHMENT_SERVICES: { id: string; label: string; hint: string }[] = [
+  { id: 'maquis', label: 'Maquis / Bar', hint: 'Boissons, grillades, caisse' },
+  { id: 'restaurant', label: 'Restaurant', hint: 'Salle, cuisine, carte' },
+  { id: 'chambres', label: 'Chambres / Hébergement', hint: 'Résidence, hôtel, nuitées' },
+  { id: 'location', label: 'Location événementielle', hint: 'Salle, matériel, cérémonies' },
+  { id: 'magasin', label: 'Boutique / Magasin', hint: 'Vente de produits' },
+];
+
 const ICONS: Record<BusinessType, typeof Beer> = {
   maquis: Beer,
   restaurant: UtensilsCrossed,
@@ -34,6 +43,7 @@ interface Props {
 export default function TypePicker({ mode, onDone, defaultName = '' }: Props) {
   const { member, user, refresh } = useAuth();
   const [selected, setSelected] = useState<BusinessType | null>(null);
+  const [selectedServices, setSelectedServices] = useState<string[]>(['maquis']);
   const [name, setName] = useState(defaultName);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,6 +55,10 @@ export default function TypePicker({ mode, onDone, defaultName = '' }: Props) {
     }
     if (mode === 'create' && !name.trim()) {
       setError('Indiquez le nom de l’établissement');
+      return;
+    }
+    if (selected === 'complexe' && selectedServices.length === 0) {
+      setError('Cochez au moins un service proposé par votre établissement.');
       return;
     }
     setLoading(true);
@@ -100,6 +114,20 @@ export default function TypePicker({ mode, onDone, defaultName = '' }: Props) {
           );
           await supabase.from('establishments').update({ owner_user_id: user.id, created_by: user.id }).eq('id', est.id);
         }
+
+        // Services cochés (organisation multi-services)
+        if (selected === 'complexe' && selectedServices.length > 0) {
+          try {
+            localStorage.setItem(`mm_est_services:${est.id}`, JSON.stringify(selectedServices));
+          } catch { /* */ }
+          try {
+            await supabase
+              .from('establishments')
+              .update({ services: selectedServices } as any)
+              .eq('id', est.id);
+          } catch { /* colonne absente = ignore */ }
+        }
+
         // Catalogue de démarrage (boissons / produits à 0)
         try {
           await seedDefaultStockForEstablishment(est.id, selected);
@@ -164,7 +192,7 @@ export default function TypePicker({ mode, onDone, defaultName = '' }: Props) {
               <button
                 key={t}
                 type="button"
-                onClick={() => setSelected(t)}
+                onClick={() => { setSelected(t); if (t !== 'complexe') setSelectedServices(['maquis']); }}
                 className={`text-left rounded-2xl border p-4 transition-all ${
                   active ? 'ring-2 scale-[1.02]' : 'hover:border-stone-600'
                 }`}
@@ -201,10 +229,42 @@ export default function TypePicker({ mode, onDone, defaultName = '' }: Props) {
         )}
 
         {selected === 'complexe' && (
-          <p className="text-xs text-violet-700 bg-violet-50 border border-violet-200 rounded-xl px-3 py-2 leading-snug mb-3">
-            Complexe / résidence : créez ce site principal, puis ajoutez d&apos;autres établissements
-            (restaurant, maquis, bar…) liés au même compte pour basculer d&apos;un service à l&apos;autre au même endroit.
-          </p>
+          <div className="mb-4 rounded-2xl border border-violet-200 bg-violet-50/80 p-3 space-y-2">
+            <p className="text-sm font-semibold text-stone-800">Services proposés</p>
+            <p className="text-[11px] text-stone-600 leading-snug">
+              Cochez ce que votre établissement propose. Cela aide à organiser menus et suivi.
+            </p>
+            <div className="space-y-2 pt-1">
+              {ESTABLISHMENT_SERVICES.map((s) => {
+                const checked = selectedServices.includes(s.id);
+                return (
+                  <label
+                    key={s.id}
+                    className={`flex items-start gap-3 rounded-xl border px-3 py-2.5 cursor-pointer transition ${
+                      checked
+                        ? 'border-violet-500 bg-white ring-1 ring-violet-300'
+                        : 'border-stone-200 bg-white/70 hover:border-violet-300'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      className="mt-1 h-4 w-4 accent-violet-600"
+                      checked={checked}
+                      onChange={() => {
+                        setSelectedServices((prev) =>
+                          checked ? prev.filter((x) => x !== s.id) : [...prev, s.id]
+                        );
+                      }}
+                    />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium text-stone-900">{s.label}</span>
+                      <span className="block text-[11px] text-stone-500">{s.hint}</span>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
         )}
 
         <button

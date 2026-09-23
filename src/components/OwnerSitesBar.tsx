@@ -44,7 +44,7 @@ export default function OwnerSitesBar() {
       </div>
       {myEstablishments.length === 1 && (
         <p className="text-[11px] text-stone-600 mt-2 leading-snug">
-          Un seul site pour l’instant. Pour un complexe multi-services, créez d’autres établissements
+          Un seul site pour l’instant. Pour un établissement multi-services, créez d’autres établissements
           (resto, maquis…) sur le même compte — vous pourrez basculer ici.
         </p>
       )}
