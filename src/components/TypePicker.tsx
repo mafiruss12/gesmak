@@ -15,9 +15,9 @@ import {
 export const ESTABLISHMENT_SERVICES: { id: string; label: string; hint: string }[] = [
   { id: 'maquis', label: 'Maquis / Bar', hint: 'Boissons, grillades, caisse' },
   { id: 'restaurant', label: 'Restaurant', hint: 'Salle, cuisine, carte' },
-  { id: 'chambres', label: 'Chambres / Hébergement', hint: 'Résidence, hôtel, nuitées' },
-  { id: 'location', label: 'Location événementielle', hint: 'Salle, matériel, cérémonies' },
-  { id: 'magasin', label: 'Boutique / Magasin', hint: 'Vente de produits' },
+  { id: 'chambres', label: 'Chambres / Hébergement', hint: 'Résidence, hôtel, divertissement, piscine' },
+  { id: 'location', label: 'Location événementielle', hint: 'Salle, matériel' },
+  { id: 'magasin', label: 'Boutique / Magasin', hint: 'Vente produits' },
 ];
 
 const ICONS: Record<BusinessType, typeof Beer> = {
