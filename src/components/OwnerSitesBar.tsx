@@ -6,7 +6,7 @@ import { BUSINESS_LABELS, normalizeBusinessType } from '@/lib/businessTypes';
 export default function OwnerSitesBar() {
   const { member, myEstablishments, activeEstablishment, switchEstablishment, effectiveRole } = useAuth();
   const role = String(effectiveRole || member?.role || '');
-  const canSwitch = ['super_admin', 'admin', 'owner'].includes(role);
+  const canSwitch = ['super_admin', 'admin', 'owner', 'manager'].includes(role);
   const currentId = activeEstablishment?.id || member?.establishment_id || '';
 
   if (!canSwitch || myEstablishments.length === 0) return null;
@@ -44,7 +44,13 @@ export default function OwnerSitesBar() {
       </div>
       {myEstablishments.length === 1 && (
         <p className="text-[11px] text-stone-600 mt-2 leading-snug">
-          Un seul site pour l’instant. Créez un 2ᵉ établissement depuis le choix d’activité à l’inscription / Super-admin.
+          Un seul site pour l’instant. Pour un complexe multi-services, créez d’autres établissements
+          (resto, maquis…) sur le même compte — vous pourrez basculer ici.
+        </p>
+      )}
+      {myEstablishments.length > 1 && (
+        <p className="text-[11px] text-stone-600 mt-2 leading-snug">
+          Touchez un site pour basculer (même endroit, autre service). Les données suivent l’établissement actif.
         </p>
       )}
     </div>

@@ -9,7 +9,8 @@ export type BusinessType =
   | 'quincaillerie'
   | 'location_event'
   | 'btp'
-  | 'depot';
+  | 'depot'
+  | 'complexe';
 
 
 export const BUSINESS_TYPES: BusinessType[] = [
@@ -22,6 +23,7 @@ export const BUSINESS_TYPES: BusinessType[] = [
   'location_event',
   'btp',
   'depot',
+  'complexe',
 ];
 
 
@@ -35,6 +37,7 @@ export const BUSINESS_LABELS: Record<BusinessType, string> = {
   location_event: 'Location événementielle',
   btp: 'BTP / BatiDevis',
   depot: 'Dépôt / Grossiste',
+  complexe: 'Complexe / Résidence',
 };
 
 export const BUSINESS_DESCRIPTIONS: Record<BusinessType, string> = {
@@ -47,6 +50,7 @@ export const BUSINESS_DESCRIPTIONS: Record<BusinessType, string> = {
   location_event: 'Chaises, tables, bâches, sono — mariages et cérémonies',
   btp: 'Devis, factures et matériaux pour artisans et entreprises du bâtiment',
   depot: 'Livraisons boissons aux maquis, bars et restaurants — stock gros et bons de livraison',
+  complexe: 'Résidence ou complexe hôtelier : plusieurs services (chambres, resto, bar, maquis) au même endroit',
 };
 
 export const BUSINESS_THEMES: Record<
@@ -116,6 +120,13 @@ export const BUSINESS_THEMES: Record<
     label: 'Teal',
     gradient: 'from-teal-500/20 to-cyan-600/5',
   },
+  complexe: {
+    primary: '#7c3aed',
+    primarySoft: 'rgba(124, 58, 237, 0.16)',
+    accent: '#5b21b6',
+    label: 'Violet complexe',
+    gradient: 'from-violet-500/20 to-purple-700/5',
+  },
 };
 
 export const MENU_BY_TYPE: Record<BusinessType, string[]> = {
@@ -172,6 +183,13 @@ export const MENU_BY_TYPE: Record<BusinessType, string[]> = {
     '/dashboard', '/depot/clients', '/depot/deliveries', '/inventory', '/inventory/scan',
     '/customers', '/expenses', '/accounting', '/statistics', '/daily-report',
     '/guide', '/mes-employes', '/ai', '/chat', '/notifications', '/settings',
+  ],
+  complexe: [
+    '/dashboard', '/pos', '/live-sales', '/tables', '/print-qr', '/orders', '/kitchen', '/mon-service',
+    '/inventory', '/inventory/scan', '/guide', '/menu-qr', '/purchases', '/customers',
+    '/expenses', '/mes-employes', '/calendar', '/daily-report', '/cloture',
+    '/statistics', '/reports', '/accounting', '/ai', '/chat',
+    '/notifications', '/settings',
   ],
 };
 
@@ -341,6 +359,20 @@ export const BUSINESS_UI: Record<BusinessType, BusinessUI> = {
     shortcutInventory: 'Stock dépôt',
     emptyProducts: 'Aucun produit en stock dépôt. Ajoutez le catalogue gros.',
   },
+  complexe: {
+    productSingular: 'Article / service',
+    productPlural: 'Services & stock',
+    inventoryTitle: 'Inventaire complexe',
+    inventorySubtitle: 'Boissons, restauration et fournitures multi-services',
+    posTitle: 'Caisse complexe',
+    posSubtitle: 'Encaissement multi-services',
+    stockAlert: 'Ruptures multi-services',
+    categories: ['Chambre', 'Bière', 'Soda', 'Eau', 'Plat', 'Grillade', 'Service', 'Autre'],
+    unitDefault: 'unité',
+    salesLabel: 'Ventes',
+    shortcutInventory: 'Stock',
+    emptyProducts: 'Aucun article. Ajoutez le stock des services (bar, resto, etc.).',
+  },
 };
 
 export function getBusinessUI(type: string | null | undefined): BusinessUI {
@@ -369,7 +401,7 @@ export function normalizeBusinessType(raw: string | null | undefined): BusinessT
   if (v in { bar: 1, pharmacie: 1, commerce: 1, cafe: 1 }) return 'maquis';
   if (v === 'resto' || v === 'restauration') return 'restaurant';
   const allowed: BusinessType[] = [
-    'maquis', 'restaurant', 'magasin', 'boutique', 'superette', 'quincaillerie', 'location_event', 'btp', 'depot',
+    'maquis', 'restaurant', 'magasin', 'boutique', 'superette', 'quincaillerie', 'location_event', 'btp', 'depot', 'complexe',
   ];
   if ((allowed as string[]).includes(v)) return v as BusinessType;
   if (v === 'store' || v === 'shop') return 'magasin';
@@ -377,6 +409,7 @@ export function normalizeBusinessType(raw: string | null | undefined): BusinessT
   if (v === 'location' || v === 'event' || v === 'rental') return 'location_event';
   if (v === 'batidevis' || v === 'construction' || v === 'chantier' || v === 'devis') return 'btp';
   if (v === 'depot' || v === 'grossiste' || v === 'gros' || v === 'wholesaler' || v === 'entrepot' || v === 'entrepôt') return 'depot';
+  if (v === 'complexe' || v === 'residence' || v === 'résidence' || v === 'hotel' || v === 'hôtel' || v === 'hotellerie' || v === 'hôtelier') return 'complexe';
   return 'maquis';
 }
 

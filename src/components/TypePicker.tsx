@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Beer, Store, CalendarDays, Loader2, Check, ShoppingBag, Wrench, ShoppingCart, HardHat, UtensilsCrossed, Warehouse } from 'lucide-react';
+import { Beer, Store, CalendarDays, Loader2, Check, ShoppingBag, Wrench, ShoppingCart, HardHat, UtensilsCrossed, Warehouse, Building2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { seedDefaultStockForEstablishment } from '@/lib/seedDefaultStock';
@@ -21,6 +21,7 @@ const ICONS: Record<BusinessType, typeof Beer> = {
   location_event: CalendarDays,
   btp: HardHat,
   depot: Warehouse,
+  complexe: Building2,
 };
 
 interface Props {
@@ -197,6 +198,13 @@ export default function TypePicker({ mode, onDone, defaultName = '' }: Props) {
           <div className="mb-3 text-sm text-error-300 bg-error-500/10 border border-error-500/30 rounded-xl p-3">
             {error}
           </div>
+        )}
+
+        {selected === 'complexe' && (
+          <p className="text-xs text-violet-700 bg-violet-50 border border-violet-200 rounded-xl px-3 py-2 leading-snug mb-3">
+            Complexe / résidence : créez ce site principal, puis ajoutez d&apos;autres établissements
+            (restaurant, maquis, bar…) liés au même compte pour basculer d&apos;un service à l&apos;autre au même endroit.
+          </p>
         )}
 
         <button

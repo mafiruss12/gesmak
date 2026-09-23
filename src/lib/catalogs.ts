@@ -201,6 +201,7 @@ const BY_TYPE: Record<BusinessType, SeedProduct[]> = {
   location_event: LOCATION,
   btp: [],
   depot: MAQUIS,
+  complexe: MAQUIS,
 };
 
 export function getSeedCatalog(type: string | null | undefined): SeedProduct[] {
@@ -220,6 +221,7 @@ export function catalogLabel(type: string | null | undefined): string {
     location_event: 'Parc type location (chaises, tables, sono)',
     btp: 'Catalogue matériaux BTP',
     depot: 'Catalogue dépôt (boissons gros)',
+    complexe: 'Catalogue complexe (bar & services)',
   };
   return map[t] || 'Catalogue de démarrage';
 }

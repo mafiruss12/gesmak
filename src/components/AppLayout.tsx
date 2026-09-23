@@ -436,7 +436,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   // Type inconnu : ne pas bloquer toute l'app — fallback type "maquis"
   const knownTypes = new Set([
-    'maquis', 'restaurant', 'magasin', 'boutique', 'superette', 'depot',
+    'maquis', 'restaurant', 'magasin', 'boutique', 'superette', 'depot', 'complexe',
     'quincaillerie', 'location_event', 'btp',
   ]);
   const rawType = (activeEstablishment?.type || cachedEstPayload?.type || '').toLowerCase().trim();
