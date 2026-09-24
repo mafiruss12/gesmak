@@ -275,7 +275,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const allowedRoutes = new Set(
     bizType === 'complexe'
       ? menuRoutesForComplexe(estServices)
-      : MENU_BY_TYPE[bizType] || MENU_BY_TYPE.maquis,
+      : bizType === 'complexe_hotelier'
+        ? (MENU_BY_TYPE.complexe_hotelier || MENU_BY_TYPE.maquis)
+        : MENU_BY_TYPE[bizType] || MENU_BY_TYPE.maquis,
   );
 
   const RENT_ONLY = new Set([
@@ -758,13 +760,28 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 { to: '/inventory', label: inventoryLabelForServices(estServices), icon: <Package size={22} /> },
                 { to: '/daily-report', label: 'Journal', icon: <ClipboardCheck size={22} /> },
               ]
-            : [
+            : ['boutique', 'magasin', 'superette', 'quincaillerie'].includes(bizType)
+            ? [
                 { to: '/dashboard', label: 'Accueil', icon: <LayoutDashboard size={22} /> },
-                { to: '/live-sales', label: 'Ventes journée', icon: <ShoppingCart size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'cashier', 'employee'] },
-      { to: '/pos', label: 'Caisse', icon: <ShoppingCart size={22} /> },
-                { to: '/orders', label: 'Ventes', icon: <Receipt size={22} /> },
+                { to: '/pos', label: 'Caisse', icon: <ShoppingCart size={22} /> },
+                { to: '/inventory', label: 'Stock', icon: <Package size={22} /> },
+                { to: '/customers', label: 'Clients', icon: <Users size={22} /> },
+                { to: '/daily-report', label: 'Journal', icon: <ClipboardCheck size={22} /> },
+              ]
+            : bizType === 'maquis'
+            ? [
+                { to: '/dashboard', label: 'Accueil', icon: <LayoutDashboard size={22} /> },
+                { to: '/live-sales', label: 'Ventes journée', icon: <ShoppingCart size={20} /> },
+                { to: '/pos', label: 'Caisse', icon: <ShoppingCart size={22} /> },
                 { to: '/inventory', label: 'Boissons', icon: <Package size={22} /> },
                 { to: '/daily-report', label: 'Journal', icon: <ClipboardCheck size={22} /> },
+              ]
+            : [
+                { to: '/dashboard', label: 'Accueil', icon: <LayoutDashboard size={22} /> },
+                { to: '/pos', label: 'Caisse', icon: <ShoppingCart size={22} /> },
+                { to: '/inventory', label: 'Stock', icon: <Package size={22} /> },
+                { to: '/daily-report', label: 'Journal', icon: <ClipboardCheck size={22} /> },
+                { to: '/settings', label: 'Réglages', icon: <Settings size={22} /> },
               ]
           ).map((item) => (
             <NavLink

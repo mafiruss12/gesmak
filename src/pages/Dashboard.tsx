@@ -387,31 +387,41 @@ export default function Dashboard() {
       { to: '/kitchen', label: 'Cuisine', icon: UtensilsCrossed },
       { to: '/tables', label: 'Tables', icon: LayoutDashboard },
       { to: '/pos', label: ui.posTitle, icon: ShoppingCart },
-    ] : bizType === 'bar' ? [
+    ] : bizType === 'maquis' ? [
+      { to: '/live-sales', label: 'Ventes journée', icon: ShoppingCart },
       { to: '/pos', label: ui.posTitle, icon: ShoppingCart },
-      { to: '/orders', label: 'Commandes', icon: Receipt },
       { to: '/inventory', label: ui.shortcutInventory, icon: Package },
-      { to: '/daily-report', label: 'Clôture', icon: TrendingUp },
-    ] : bizType === 'pharmacie' ? [
-      { to: '/pos', label: 'Caisse pharmacie', icon: ShoppingCart },
-      { to: '/inventory', label: 'Médicaments', icon: Package },
-      { to: '/purchases', label: 'Approvisionnement', icon: Truck },
-      { to: '/suppliers', label: 'Fournisseurs', icon: Truck },
+      { to: '/daily-report', label: 'Point du soir', icon: TrendingUp },
+    ] : bizType === 'complexe_hotelier' || bizType === 'complexe' ? [
+      { to: '/hotel', label: 'Dashboard hôtel', icon: LayoutDashboard },
+      { to: '/hotel/rooms', label: 'Chambres', icon: LayoutDashboard },
+      { to: '/hotel/reservations', label: 'Réservations', icon: Receipt },
+      { to: '/pos', label: 'Caisse', icon: ShoppingCart },
+    ] : bizType === 'depot' ? [
+      { to: '/depot/deliveries', label: 'Livraisons', icon: Truck },
+      { to: '/inventory', label: 'Stock dépôt', icon: Package },
+      { to: '/depot/clients', label: 'Clients', icon: Users },
+      { to: '/daily-report', label: 'Journal', icon: TrendingUp },
     ] : bizType === 'quincaillerie' ? [
       { to: '/pos', label: ui.posTitle, icon: ShoppingCart },
       { to: '/inventory', label: 'Matériaux', icon: Package },
       { to: '/purchases', label: 'Achats', icon: Truck },
-      { to: '/suppliers', label: 'Fournisseurs', icon: Truck },
-    ] : bizType === 'boutique' || bizType === 'superette' || bizType === 'magasin' || bizType === 'commerce' ? [
+      { to: '/documents', label: 'Devis', icon: Receipt },
+    ] : bizType === 'boutique' || bizType === 'superette' || bizType === 'magasin' ? [
       { to: '/pos', label: ui.posTitle, icon: ShoppingCart },
       { to: '/inventory', label: ui.shortcutInventory, icon: Package },
       { to: '/purchases', label: 'Achats', icon: Truck },
-      { to: '/suppliers', label: 'Fournisseurs', icon: Truck },
+      { to: '/customers', label: 'Clients', icon: Users },
     ] : bizType === 'location_event' ? [
       { to: '/rent/equipment', label: 'Matériel', icon: Package },
       { to: '/rent/orders', label: 'Commandes', icon: Receipt },
       { to: '/rent/calendar', label: 'Calendrier', icon: LayoutDashboard },
       { to: '/rent/clients', label: 'Clients', icon: Users },
+    ] : bizType === 'btp' ? [
+      { to: '/btp/documents', label: 'Devis', icon: Receipt },
+      { to: '/btp/clients', label: 'Clients', icon: Users },
+      { to: '/btp/materials', label: 'Matériaux', icon: Package },
+      { to: '/expenses', label: 'Dépenses', icon: DollarSign },
     ] : [
       { to: '/pos', label: ui.posTitle, icon: ShoppingCart },
       { to: '/inventory', label: ui.shortcutInventory, icon: Package },

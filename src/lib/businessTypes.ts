@@ -156,28 +156,32 @@ export const MENU_BY_TYPE: Record<BusinessType, string[]> = {
     '/notifications', '/settings',
   ],
   magasin: [
-    '/dashboard', '/pos', '/documents', '/inventory', '/inventory/scan', '/point-manuel', '/guide',
-    '/kits', '/menu-qr', '/stock-transfer', '/purchases', '/suppliers', '/customers',
-    '/expenses', '/mes-employes', '/daily-report', '/cloture', '/statistics', '/accounting', '/reports',
-    '/ai', '/ai-train', '/chat', '/notifications', '/settings',
+    '/dashboard', '/pos', '/inventory', '/inventory/scan', '/documents',
+    '/purchases', '/suppliers', '/customers', '/stock-transfer',
+    '/expenses', '/mes-employes', '/daily-report', '/cloture',
+    '/statistics', '/accounting', '/guide',
+    '/ai', '/chat', '/notifications', '/settings',
   ],
   boutique: [
-    '/dashboard', '/pos', '/documents', '/inventory', '/inventory/scan', '/point-manuel', '/guide',
-    '/kits', '/menu-qr', '/stock-transfer', '/purchases', '/suppliers', '/customers',
-    '/expenses', '/mes-employes', '/daily-report', '/cloture', '/statistics', '/accounting', '/reports',
-    '/ai', '/ai-train', '/chat', '/notifications', '/settings',
+    '/dashboard', '/pos', '/inventory', '/inventory/scan', '/documents',
+    '/purchases', '/suppliers', '/customers', '/stock-transfer',
+    '/expenses', '/mes-employes', '/daily-report', '/cloture',
+    '/statistics', '/accounting', '/guide',
+    '/ai', '/chat', '/notifications', '/settings',
   ],
   superette: [
-    '/dashboard', '/pos', '/documents', '/inventory', '/inventory/scan', '/point-manuel', '/guide',
-    '/kits', '/menu-qr', '/stock-transfer', '/purchases', '/suppliers', '/customers',
-    '/expenses', '/mes-employes', '/daily-report', '/cloture', '/statistics', '/accounting', '/reports',
-    '/ai', '/ai-train', '/chat', '/notifications', '/settings',
+    '/dashboard', '/pos', '/inventory', '/inventory/scan', '/documents',
+    '/purchases', '/suppliers', '/customers', '/stock-transfer',
+    '/expenses', '/mes-employes', '/daily-report', '/cloture',
+    '/statistics', '/accounting', '/guide',
+    '/ai', '/chat', '/notifications', '/settings',
   ],
   quincaillerie: [
-    '/dashboard', '/pos', '/documents', '/inventory', '/inventory/scan', '/point-manuel', '/guide',
-    '/kits', '/menu-qr', '/stock-transfer', '/purchases', '/suppliers', '/customers',
-    '/expenses', '/mes-employes', '/daily-report', '/cloture', '/statistics', '/accounting', '/reports',
-    '/ai', '/ai-train', '/chat', '/notifications', '/settings',
+    '/dashboard', '/pos', '/inventory', '/inventory/scan', '/documents',
+    '/purchases', '/suppliers', '/customers', '/stock-transfer',
+    '/expenses', '/mes-employes', '/daily-report', '/cloture',
+    '/statistics', '/accounting', '/guide',
+    '/ai', '/chat', '/notifications', '/settings',
   ],
   location_event: [
     '/dashboard', '/rent/equipment', '/rent/clients', '/rent/orders',
@@ -507,16 +511,47 @@ export function getBusinessUI(type: string | null | undefined): BusinessUI {
 /** Libellés de menu adaptés au métier */
 export function menuLabelFor(path: string, type: BusinessType): string | null {
   const ui = BUSINESS_UI[type];
+  const isCommerce = ['boutique', 'magasin', 'superette', 'quincaillerie'].includes(type);
+  const isFnb = type === 'maquis' || type === 'restaurant';
   const map: Record<string, string> = {
     '/inventory': ui.inventoryTitle,
     '/pos': ui.posTitle,
-    '/inventory/scan': type === 'location_event' ? 'Scan matériel' : 'Scan inventaire',
-    '/orders': type === 'location_event' ? 'Commandes location' : 'Commandes',
-    '/kitchen': 'Préparation',
-    '/tables': 'Espaces',
-    '/customers': type === 'location_event' ? 'Clients location' : 'Clients',
+    '/inventory/scan': type === 'location_event' ? 'Scan matériel' : isCommerce ? 'Scan produits' : 'Scan inventaire',
+    '/orders': type === 'location_event'
+      ? 'Commandes location'
+      : type === 'restaurant'
+        ? 'Commandes salle'
+        : type === 'maquis'
+          ? 'Ventes / commandes'
+          : isCommerce
+            ? 'Historique ventes'
+            : 'Commandes',
+    '/kitchen': type === 'restaurant' ? 'Cuisine' : type === 'maquis' ? 'Grill / Bar' : 'Préparation',
+    '/tables': type === 'restaurant' ? 'Tables' : type === 'maquis' ? 'Espaces' : 'Espaces',
+    '/customers': type === 'location_event' ? 'Clients location' : isCommerce ? 'Clients' : 'Clients',
+    '/purchases': isCommerce || type === 'depot' ? 'Achats' : 'Achats',
+    '/suppliers': 'Fournisseurs',
+    '/documents': type === 'quincaillerie' || type === 'btp' ? 'Devis & factures' : 'Documents',
+    '/live-sales': isFnb ? 'Ventes journée' : 'Ventes du jour',
   };
   return map[path] ?? null;
+}
+
+/** Vocabulaire métier pour libellés UI */
+export function orderWord(type: BusinessType): string {
+  if (type === 'restaurant' || type === 'maquis') return 'Commande';
+  if (type === 'location_event') return 'Location';
+  if (type === 'complexe_hotelier' || type === 'complexe') return 'Réservation';
+  if (['boutique', 'magasin', 'superette', 'quincaillerie', 'depot'].includes(type)) return 'Vente';
+  return 'Opération';
+}
+
+export function isCommerceType(type: BusinessType): boolean {
+  return ['boutique', 'magasin', 'superette', 'quincaillerie'].includes(type);
+}
+
+export function isFnbType(type: BusinessType): boolean {
+  return type === 'maquis' || type === 'restaurant';
 }
 
 
