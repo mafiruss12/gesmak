@@ -31,24 +31,39 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
   const [success, setSuccess] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
     (async () => {
-      if (!member?.establishment_id) {
+      if (!estId) {
         setLoading(false);
         return;
       }
-      const cacheKey = `products:${member.establishment_id}`;
-      const { data } = await fetchWithCache<Product[]>(cacheKey, async () => {
-        const res = await supabase
-          .from('products')
-          .select('*')
-          .eq('establishment_id', member.establishment_id)
-          .order('name');
-        return (res.data ?? []) as Product[];
-      });
-      setProducts(data ?? []);
-      setLoading(false);
+      setLoading(true);
+      const cacheKey = `products:${estId}`;
+      try {
+        const { data } = await fetchWithCache<Product[]>(cacheKey, async () => {
+          let list: Product[] = [];
+          for (let attempt = 0; attempt < 3; attempt++) {
+            const res = await supabase
+              .from('products')
+              .select('id,establishment_id,name,category,price,cost,stock,min_stock,unit,image_url')
+              .eq('establishment_id', estId)
+              .order('name');
+            list = (res.data ?? []) as Product[];
+            if (list.length || !res.error) break;
+            await new Promise((r) => setTimeout(r, 350 * (attempt + 1)));
+          }
+          return list;
+        });
+        if (!cancelled) setProducts(data ?? []);
+      } catch (e) {
+        console.error('Caisse load', e);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     })();
-  }, [member]);
+    const t = window.setTimeout(() => { if (!cancelled) setLoading(false); }, 8000);
+    return () => { cancelled = true; window.clearTimeout(t); };
+  }, [estId]);
 
   const filtered = products.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()));
   const cartTotal = cart.reduce((sum, item) => sum + item.product.price * item.qty, 0);

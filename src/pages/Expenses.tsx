@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Wallet, Plus, Trash2, TrendingDown } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
+import { useEstId } from '@/lib/useEstId';
 import type { Expense, PaymentMethod } from '@/lib/types';
 import { EXPENSE_CATEGORIES } from '@/lib/types';
 import { formatFCFA, formatDate, todayISO } from '@/lib/format';
@@ -10,6 +11,7 @@ import { cacheSet, fetchWithCache, isOnline, queueAdd } from '@/lib/offline';
 
 export default function Expenses() {
   const { member } = useAuth();
+  const estId = useEstId();
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -18,13 +20,13 @@ export default function Expenses() {
   const [monthTotal, setMonthTotal] = useState(0);
 
   async function load() {
-    if (!member?.establishment_id) { setLoading(false); return; }
-    const cacheKey = `expenses:${member.establishment_id}`;
+    if (!estId) { setLoading(false); return; }
+    const cacheKey = `expenses:${estId}`;
     const { data } = await fetchWithCache<Expense[]>(cacheKey, async () => {
       const res = await supabase
         .from('expenses')
         .select('*')
-        .eq('establishment_id', member.establishment_id)
+        .eq('establishment_id', estId)
         .order('created_at', { ascending: false })
         .limit(50);
       return (res.data ?? []) as Expense[];
@@ -39,12 +41,12 @@ export default function Expenses() {
     setLoading(false);
   }
 
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [member]);
+  useEffect(() => { void load(); }, [estId]);
 
   async function save() {
-    if (!member?.establishment_id || !form.amount) return;
+    if (!estId || !form.amount) return;
     const payload = {
-      establishment_id: member.establishment_id,
+      establishment_id: estId,
       category: form.category,
       description: form.description || null,
       amount: Number(form.amount),
@@ -64,7 +66,7 @@ export default function Expenses() {
       } as Expense;
       const next = [local, ...expenses];
       setExpenses(next);
-      await cacheSet(`expenses:${member.establishment_id}`, next);
+      await cacheSet(`expenses:${estId}`, next);
       setTodayTotal((t) => t + Number(form.amount));
       setMonthTotal((t) => t + Number(form.amount));
     }
@@ -84,7 +86,7 @@ export default function Expenses() {
   }
 
   if (loading) return <div className="flex items-center justify-center py-20 text-stone-400">Chargement...</div>;
-  if (!member?.establishment_id) return <EmptyState icon={<Wallet size={48} />} title="Aucun établissement" message="Vous n'êtes rattaché à aucun établissement." />;
+  if (!estId) return <EmptyState icon={<Wallet size={48} />} title="Aucun établissement" message="Vous n'êtes rattaché à aucun établissement." />;
 
   return (
     <div>

@@ -10,7 +10,7 @@ import { useEstId } from '@/lib/useEstId';
 import type { Product } from '@/lib/types';
 import { formatFCFA } from '@/lib/format';
 import ProductThumb from '@/components/ProductThumb';
-import { isOnline, queueAdd } from '@/lib/offline';
+import { isOnline, queueAdd, cacheGet, cacheSet } from '@/lib/offline';
 import { notifyOwnerOnReport } from '@/lib/notifyOwner';
 import { buildWhatsAppLink } from '@/lib/businessTypes';
 import {
@@ -54,22 +54,44 @@ export default function LiveDaySales() {
   useEffect(() => {
     if (!estId) return;
     setDay(loadLiveDay(estId, date));
+    let cancelled = false;
     (async () => {
       const cacheKey = `products:${estId}`;
-      if (!isOnline()) {
-        const cached = await cacheGet<Product[]>(cacheKey);
-        if (cached?.length) setProducts(cached);
-        return;
+      try {
+        if (!isOnline()) {
+          const cached = await cacheGet<Product[]>(cacheKey);
+          if (!cancelled && cached?.length) setProducts(cached);
+          return;
+        }
+        let list: Product[] = [];
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const { data, error } = await supabase
+            .from('products')
+            .select('id,establishment_id,name,category,price,cost,stock,min_stock,unit,image_url,units_per_package,casier_size')
+            .eq('establishment_id', estId)
+            .order('name');
+          if (error) console.warn('LiveDaySales products', error.message);
+          list = (data as Product[]) || [];
+          if (list.length) break;
+          await new Promise((r) => setTimeout(r, 350 * (attempt + 1)));
+        }
+        if (!list.length) {
+          const cached = await cacheGet<Product[]>(cacheKey);
+          if (cached?.length) list = cached;
+        }
+        if (!cancelled) {
+          setProducts(list);
+          if (list.length) await cacheSet(cacheKey, list);
+        }
+      } catch (e) {
+        console.error('LiveDaySales load', e);
+        try {
+          const cached = await cacheGet<Product[]>(cacheKey);
+          if (!cancelled && cached?.length) setProducts(cached);
+        } catch { /* */ }
       }
-      const { data } = await supabase
-        .from('products')
-        .select('*')
-        .eq('establishment_id', estId)
-        .order('name');
-      const list = (data as Product[]) || [];
-      setProducts(list);
-      if (list.length) await cacheSet(cacheKey, list);
     })();
+    return () => { cancelled = true; };
   }, [estId, date]);
 
   useEffect(() => {

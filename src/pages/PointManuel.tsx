@@ -56,13 +56,22 @@ export default function PointManuel() {
     }
     setLoading(true);
     setError(null);
-    const { data, error: err } = await supabase
-      .from('products')
-      .select('id, name, category, stock, min_stock, cost, price, unit, image_url, units_per_package')
-      .eq('establishment_id', estId)
-      .order('name');
+    let data: ProductRow[] | null = null;
+    let err: { message?: string } | null = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const res = await supabase
+        .from('products')
+        .select('id, name, category, stock, min_stock, cost, price, unit, image_url, units_per_package')
+        .eq('establishment_id', estId)
+        .order('name');
+      data = (res.data as ProductRow[]) || null;
+      err = res.error;
+      if (!err && data && data.length) break;
+      if (!err && data && data.length === 0) break;
+      await new Promise((r) => setTimeout(r, 350 * (attempt + 1)));
+    }
     if (err) {
-      setError(err.message);
+      setError(err.message || 'Erreur chargement');
       setLoading(false);
       return;
     }

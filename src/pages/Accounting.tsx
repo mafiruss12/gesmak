@@ -94,6 +94,7 @@ export default function Accounting() {
       return;
     }
     setLoading(true);
+    try {
     const today = todayISO();
     const startMon = mondayOf(today);
     startMon.setDate(startMon.getDate() - 7 * 15);
@@ -258,7 +259,11 @@ export default function Accounting() {
     setMonths(monthList);
     if (weekList[0]) setOpenWeek(weekList[0].weekKey);
     if (monthList[0]) setOpenMonth(monthList[0].monthKey);
-    setLoading(false);
+    } catch (e) {
+      console.error('Accounting load', e);
+    } finally {
+      setLoading(false);
+    }
   }, [estId]);
 
   useEffect(() => {
