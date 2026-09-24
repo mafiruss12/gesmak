@@ -142,10 +142,11 @@ export const BUSINESS_THEMES: Record<
 
 export const MENU_BY_TYPE: Record<BusinessType, string[]> = {
   maquis: [
-    '/dashboard', '/pos', '/live-sales', '/tables', '/print-qr', '/orders', '/kitchen', '/mon-service', '/inventory', '/inventory/scan', '/guide',
-    '/menu-qr', '/purchases', '/customers',
-    '/expenses', '/mes-employes', '/calendar', '/daily-report',
-    '/statistics', '/reports', '/accounting', '/ai', '/chat',
+    '/dashboard', '/pos', '/live-sales', '/tables', '/print-qr', '/orders', '/kitchen', '/mon-service',
+    '/inventory', '/inventory/scan', '/guide', '/menu-qr', '/kits', '/stock-transfer',
+    '/purchases', '/suppliers', '/customers', '/point-manuel', '/documents',
+    '/expenses', '/mes-employes', '/calendar', '/daily-report', '/cloture', '/patron',
+    '/statistics', '/reports', '/accounting', '/ai', '/ai-train', '/chat',
     '/notifications', '/settings',
   ],
   restaurant: [

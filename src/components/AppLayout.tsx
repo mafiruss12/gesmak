@@ -280,6 +280,12 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         : MENU_BY_TYPE[bizType] || MENU_BY_TYPE.maquis,
   );
 
+  const HOTEL_ONLY = new Set([
+    '/hotel', '/hotel/rooms', '/hotel/reservations', '/hotel/guests',
+    '/hotel/housekeeping', '/hotel/maintenance', '/hotel/events',
+    '/hotel/services', '/hotel/settings',
+  ]);
+
   const RENT_ONLY = new Set([
     '/rent/equipment',
     '/rent/clients',
@@ -312,6 +318,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       // Modules location uniquement pour location_event (et dans Outils)
       if (RENT_ONLY.has(item.to) && !isLocation) return false;
       if (RENT_ONLY.has(item.to) && section.label !== 'Outils') return false;
+
+      // Modules hôtel uniquement pour complexe hôtelier
+      if (HOTEL_ONLY.has(item.to) && bizType !== 'complexe_hotelier' && bizType !== 'complexe') return false;
 
       const roleForMenu = effectiveRole || member.role;
       if (['super_admin', 'admin', 'owner', 'manager'].includes(roleForMenu)) {
@@ -478,7 +487,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   // Type inconnu : ne pas bloquer toute l'app — fallback type "maquis"
   const knownTypes = new Set([
-    'maquis', 'restaurant', 'magasin', 'boutique', 'superette', 'depot', 'complexe',
+    'maquis', 'restaurant', 'magasin', 'boutique', 'superette', 'quincaillerie', 'depot', 'complexe', 'complexe_hotelier', 'location_event', 'btp',
     'quincaillerie', 'location_event', 'btp',
   ]);
   const rawType = (activeEstablishment?.type || cachedEstPayload?.type || '').toLowerCase().trim();
