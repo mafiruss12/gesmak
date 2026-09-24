@@ -74,6 +74,7 @@ export default function DailyReportPage({ embedded = false }: { embedded?: boole
     return todayISO();
   });
   const [products, setProducts] = useState<Product[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [qtyMap, setQtyMap] = useState<Record<string, string>>({});
   const [cashCounted, setCashCounted] = useState('');
   const [mobileCounted, setMobileCounted] = useState('');
@@ -219,35 +220,50 @@ export default function DailyReportPage({ embedded = false }: { embedded?: boole
   async function load() {
     if (!estId) {
       setProducts([]);
+      setLoadError(null);
       setLoading(false);
       return;
     }
     setLoading(true);
+    setLoadError(null);
     try {
-      const [{ data: prods, error: prodErr }, { data: existing }] = await Promise.all([
-        supabase
+      let prodErr: { message?: string } | null = null;
+      let prods: Product[] | null = null;
+      // Jusqu’à 3 essais : session/RLS parfois pas prête juste après navigation
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const res = await supabase
           .from('products')
-          .select('*')
+          .select('id,establishment_id,name,category,price,cost,stock,min_stock,unit,casier_size,image_url,units_per_package')
           .eq('establishment_id', estId)
-          .order('name'),
-        supabase
-          .from('daily_reports')
-          .select('*')
-          .eq('establishment_id', estId)
-          .eq('date', date)
-          .maybeSingle(),
-      ]);
+          .order('name');
+        prods = (res.data as Product[] | null) ?? null;
+        prodErr = res.error;
+        if (!prodErr && prods && prods.length > 0) break;
+        if (!prodErr && prods && prods.length === 0) break;
+        await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+      }
+
+      const { data: existing } = await supabase
+        .from('daily_reports')
+        .select('*')
+        .eq('establishment_id', estId)
+        .eq('date', date)
+        .maybeSingle();
 
       if (prodErr) {
         console.error('products load', prodErr);
+        setLoadError(prodErr.message || 'Impossible de charger les boissons (droits ou réseau).');
       }
 
       let list = (prods ?? []) as Product[];
-      // Fallback offline cache
+      // Fallback offline cache (uniquement si liste non vide en cache)
       if (!list.length) {
         try {
           const cached = await cacheGet<Product[]>(`products_${estId}`);
-          if (cached?.length) list = cached;
+          if (cached?.length) {
+            list = cached;
+            if (prodErr) setLoadError(null);
+          }
         } catch {
           /* */
         }
@@ -1367,9 +1383,16 @@ export default function DailyReportPage({ embedded = false }: { embedded?: boole
             <div className="space-y-2">
               <EmptyState
                 icon={<Beer size={40} />}
-                title="Aucune boisson"
-                message="Ajoutez des produits dans Inventaire, ou actualisez. Vérifiez l’établissement actif."
+                title={loadError ? 'Chargement impossible' : 'Aucune boisson'}
+                message={
+                  loadError
+                    ? `${loadError} Appuyez sur Réessayer. Si le problème continue, déconnectez-vous puis reconnectez-vous.`
+                    : "Les produits de cet établissement n'apparaissent pas. Ouvrez l'Inventaire pour vérifier, ou actualisez. Vérifiez l'établissement actif."
+                }
               />
+              {estId && (
+                <p className="text-xs text-stone-500 text-center break-all">Établissement : {activeEstablishment?.name || '—'} · {estId.slice(0, 8)}…</p>
+              )}
               <a href="/inventory" className="btn-secondary w-full text-center block">Ouvrir l’inventaire</a>
               <button type="button" className="btn-ghost w-full" onClick={() => void load()}>Réessayer le chargement</button>
             </div>
