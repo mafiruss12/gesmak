@@ -173,6 +173,16 @@ export default function SuperAdmin() {
           status: 'active' },
         { onConflict: 'user_id' }
       );
+      // Meme correction que saveMemberEdit : si on approuve cette personne comme
+      // 'owner' d'un etablissement existant (cree au prealable par l'admin pour la mettre
+      // en place), la propriete doit lui revenir reellement, sinon l'etablissement reste
+      // affiche indefiniment chez l'admin qui l'a cree a l'origine.
+      if (approveForm.role === 'owner') {
+        await supabase
+          .from('establishments')
+          .update({ created_by: req.user_id, owner_user_id: req.user_id })
+          .eq('id', approveForm.establishmentId);
+      }
       await supabase.from('access_requests').update({ status: 'approved' }).eq('id', req.id);
       setApproveModal(null);
       setApproveForm({ role: 'employee', establishmentId: '' });
@@ -294,6 +304,16 @@ export default function SuperAdmin() {
             status: 'active' },
           { onConflict: 'user_id,establishment_id' }
         );
+        // Transfert de propriete reelle : si ce membre devient 'owner' de cet etablissement,
+        // l'etablissement doit cesser d'apparaitre chez celui qui l'avait cree (ex. un admin
+        // qui le met en place pour le compte d'un client). Sans ce transfert, created_by
+        // restait fige sur le createur d'origine et l'etablissement s'affichait chez les deux.
+        if (memberEditForm.role === 'owner') {
+          await supabase
+            .from('establishments')
+            .update({ created_by: editMember.user_id, owner_user_id: editMember.user_id })
+            .eq('id', memberEditForm.establishment_id);
+        }
       }
       flash('Accès mis à jour');
       setEditMember(null);
