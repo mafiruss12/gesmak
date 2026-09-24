@@ -10,7 +10,8 @@ export type BusinessType =
   | 'location_event'
   | 'btp'
   | 'depot'
-  | 'complexe';
+  | 'complexe'
+  | 'complexe_hotelier';
 
 
 export const BUSINESS_TYPES: BusinessType[] = [
@@ -24,6 +25,7 @@ export const BUSINESS_TYPES: BusinessType[] = [
   'btp',
   'depot',
   'complexe',
+  'complexe_hotelier',
 ];
 
 
@@ -38,6 +40,7 @@ export const BUSINESS_LABELS: Record<BusinessType, string> = {
   btp: 'BTP / BatiDevis',
   depot: 'Dépôt / Grossiste',
   complexe: 'Établissement',
+  complexe_hotelier: 'Complexe hôtelier',
 };
 
 export const BUSINESS_DESCRIPTIONS: Record<BusinessType, string> = {
@@ -51,6 +54,7 @@ export const BUSINESS_DESCRIPTIONS: Record<BusinessType, string> = {
   btp: 'Devis, factures et matériaux pour artisans et entreprises du bâtiment',
   depot: 'Livraisons boissons aux maquis, bars et restaurants — stock gros et bons de livraison',
   complexe: 'Un lieu avec plusieurs services (maquis, restaurant, chambres…) — vous cochez ce que vous proposez',
+  complexe_hotelier: 'Hôtel / résidence : chambres, resto, bar, spa, événements — gestion complète',
 };
 
 export const BUSINESS_THEMES: Record<
@@ -127,6 +131,13 @@ export const BUSINESS_THEMES: Record<
     label: 'Violet',
     gradient: 'from-violet-500/20 to-purple-700/5',
   },
+  complexe_hotelier: {
+    primary: '#6d28d9',
+    primarySoft: 'rgba(109, 40, 217, 0.16)',
+    accent: '#5b21b6',
+    label: 'Violet hôtel',
+    gradient: 'from-violet-600/20 to-indigo-700/5',
+  },
 };
 
 export const MENU_BY_TYPE: Record<BusinessType, string[]> = {
@@ -190,6 +201,16 @@ export const MENU_BY_TYPE: Record<BusinessType, string[]> = {
     '/expenses', '/mes-employes', '/calendar', '/daily-report', '/cloture',
     '/statistics', '/reports', '/accounting', '/ai', '/chat',
     '/notifications', '/settings',
+  ],
+  complexe_hotelier: [
+    '/hotel', '/hotel/rooms', '/hotel/reservations', '/hotel/guests',
+    '/hotel/housekeeping', '/hotel/maintenance', '/hotel/events',
+    '/hotel/services', '/hotel/settings',
+    '/dashboard', '/pos', '/orders', '/tables', '/kitchen', '/inventory', '/inventory/scan',
+    '/live-sales', '/menu-qr', '/purchases', '/customers',
+    '/expenses', '/mes-employes', '/calendar', '/daily-report', '/cloture',
+    '/statistics', '/reports', '/accounting', '/ai', '/chat',
+    '/notifications', '/settings', '/guide',
   ],
 };
 
@@ -463,6 +484,20 @@ export const BUSINESS_UI: Record<BusinessType, BusinessUI> = {
     shortcutInventory: 'Stock',
     emptyProducts: 'Aucun article. Ajoutez le stock des services (bar, resto, etc.).',
   },
+  complexe_hotelier: {
+    productSingular: 'Article / service',
+    productPlural: 'Services & stock',
+    inventoryTitle: 'Stock complexe hôtelier',
+    inventorySubtitle: 'Bar, resto, housekeeping, boutique',
+    posTitle: 'Caisse',
+    posSubtitle: 'Encaissement multi-services',
+    stockAlert: 'Ruptures',
+    categories: ['Bière', 'Soda', 'Eau', 'Plat', 'Spiritueux', 'Entretien', 'Spa', 'Autre'],
+    unitDefault: 'unité',
+    salesLabel: 'Ventes',
+    shortcutInventory: 'Stock',
+    emptyProducts: 'Aucun article en stock.',
+  },
 };
 
 export function getBusinessUI(type: string | null | undefined): BusinessUI {
@@ -491,7 +526,7 @@ export function normalizeBusinessType(raw: string | null | undefined): BusinessT
   if (v in { bar: 1, pharmacie: 1, commerce: 1, cafe: 1 }) return 'maquis';
   if (v === 'resto' || v === 'restauration') return 'restaurant';
   const allowed: BusinessType[] = [
-    'maquis', 'restaurant', 'magasin', 'boutique', 'superette', 'quincaillerie', 'location_event', 'btp', 'depot', 'complexe',
+    'maquis', 'restaurant', 'magasin', 'boutique', 'superette', 'quincaillerie', 'location_event', 'btp', 'depot', 'complexe', 'complexe_hotelier',
   ];
   if ((allowed as string[]).includes(v)) return v as BusinessType;
   if (v === 'store' || v === 'shop') return 'magasin';
@@ -499,7 +534,8 @@ export function normalizeBusinessType(raw: string | null | undefined): BusinessT
   if (v === 'location' || v === 'event' || v === 'rental') return 'location_event';
   if (v === 'batidevis' || v === 'construction' || v === 'chantier' || v === 'devis') return 'btp';
   if (v === 'depot' || v === 'grossiste' || v === 'gros' || v === 'wholesaler' || v === 'entrepot' || v === 'entrepôt') return 'depot';
-  if (v === 'complexe' || v === 'residence' || v === 'résidence' || v === 'hotel' || v === 'hôtel' || v === 'hotellerie' || v === 'hôtelier') return 'complexe';
+  if (v === 'complexe_hotelier' || v === 'hotelier' || v === 'complexe hotelier' || v === 'hôtel complexe') return 'complexe_hotelier';
+  if (v === 'complexe' || v === 'residence' || v === 'résidence' || v === 'hotel' || v === 'hôtel' || v === 'hotellerie' || v === 'hôtelier') return 'complexe_hotelier';
   return 'maquis';
 }
 

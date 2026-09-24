@@ -76,10 +76,20 @@ import RentCalendar from '@/pages/rent/Calendar';
 import RentPacks from '@/pages/rent/Packs';
 import RentInvoices from '@/pages/rent/Invoices';
 import { isLocationEvent, isBtp } from '@/lib/businessTypes';
+import { isHotelComplex } from '@/lib/hotel';
 import BtpDashboard from '@/pages/btp/Dashboard';
 import BtpDocuments from '@/pages/btp/Documents';
 import BtpClients from '@/pages/btp/Clients';
 import BtpMaterials from '@/pages/btp/Materials';
+import HotelDashboard from '@/pages/hotel/HotelDashboard';
+import HotelRooms from '@/pages/hotel/HotelRooms';
+import HotelReservations from '@/pages/hotel/HotelReservations';
+import HotelGuests from '@/pages/hotel/HotelGuests';
+import HotelHousekeeping from '@/pages/hotel/HotelHousekeeping';
+import HotelMaintenance from '@/pages/hotel/HotelMaintenance';
+import HotelEvents from '@/pages/hotel/HotelEvents';
+import HotelServices from '@/pages/hotel/HotelServices';
+import HotelSettings from '@/pages/hotel/HotelSettings';
 
 import AppLayout from '@/components/AppLayout';
 import ErrorBoundary from '@/components/ErrorBoundary';
@@ -113,6 +123,7 @@ function DashboardSwitch() {
   if (role === 'super_admin') return <SuperAdmin />;
   if (isLocationEvent(activeEstablishment?.type)) return <RentDashboard />;
   if (isBtp(activeEstablishment?.type)) return <BtpDashboard />;
+  if (isHotelComplex(activeEstablishment?.type)) return <HotelDashboard />;
   return <Dashboard />;
 }
 
@@ -206,6 +217,17 @@ function ProtectedRoutes() {
         <Route path="/suivi-gerant" element={<Navigate to="/mes-employes" replace />} />
         <Route path="/notifications" element={<Notifications />} />
         <Route path="/sync-pending" element={<SyncPending />} />
+        
+        <Route path="/hotel" element={<HotelDashboard />} />
+        <Route path="/hotel/rooms" element={<HotelRooms />} />
+        <Route path="/hotel/reservations" element={<HotelReservations />} />
+        <Route path="/hotel/guests" element={<HotelGuests />} />
+        <Route path="/hotel/housekeeping" element={<HotelHousekeeping />} />
+        <Route path="/hotel/maintenance" element={<HotelMaintenance />} />
+        <Route path="/hotel/events" element={<HotelEvents />} />
+        <Route path="/hotel/services" element={<HotelServices />} />
+        <Route path="/hotel/settings" element={<HotelSettings />} />
+
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/team" element={<Navigate to="/mes-employes" replace />} />
         <Route path="/admin" element={<SuperAdmin />} />

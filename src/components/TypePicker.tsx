@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Beer, Store, CalendarDays, Loader2, Check, ShoppingBag, Wrench, ShoppingCart, HardHat, UtensilsCrossed, Warehouse, Building2 } from 'lucide-react';
+import { Beer, Store, CalendarDays, Loader2, Check, ShoppingBag, Wrench, ShoppingCart, HardHat, UtensilsCrossed, Warehouse, Building2, BedDouble } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { seedDefaultStockForEstablishment } from '@/lib/seedDefaultStock';
+import { ensureDefaultHotelServices, HOTEL_SERVICE_PRESETS } from '@/lib/hotel';
 import {
   BUSINESS_TYPES,
   BUSINESS_LABELS,
@@ -31,6 +32,7 @@ const ICONS: Record<BusinessType, typeof Beer> = {
   btp: HardHat,
   depot: Warehouse,
   complexe: Building2,
+  complexe_hotelier: BedDouble,
 };
 
 interface Props {
@@ -133,6 +135,16 @@ export default function TypePicker({ mode, onDone, defaultName = '' }: Props) {
           await seedDefaultStockForEstablishment(est.id, selected);
         } catch (seedErr) {
           console.warn('seed stock', seedErr);
+        }
+        if (selected === 'complexe_hotelier' || selected === 'complexe') {
+          try {
+            const codes = selected === 'complexe_hotelier'
+              ? HOTEL_SERVICE_PRESETS.map((p) => p.code)
+              : undefined;
+            await ensureDefaultHotelServices(est.id, codes);
+          } catch (hErr) {
+            console.warn('hotel services', hErr);
+          }
         }
         try {
           localStorage.setItem(

@@ -1,6 +1,6 @@
 import { type ReactNode, useState, useEffect , useRef} from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, ShoppingCart, Package, Camera, ClipboardCheck, QrCode, Users, Building2, Beer, LogOut, Menu, X, UserCog, ClipboardList, Calculator, BarChart3, Truck, UserCircle, Calendar, UtensilsCrossed, Bell, Settings, Sparkles, Receipt, Wallet, MessageCircle, FileText, Crown, Brain, Sun, Moon } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Package, Camera, ClipboardCheck, QrCode, Users, Building2, Beer, LogOut, Menu, X, UserCog, ClipboardList, Calculator, BarChart3, Truck, UserCircle, Calendar, UtensilsCrossed, Bell, Settings, Sparkles, Receipt, Wallet, MessageCircle, FileText, Crown, Brain, Sun, Moon, Wrench } from 'lucide-react';
 import DailyReportGate from '@/components/DailyReportGate';
 import OwnerReportReminder from '@/components/OwnerReportReminder';
 import ReportDelayNotifier from '@/components/ReportDelayNotifier';
@@ -43,6 +43,15 @@ const NAV_SECTIONS: NavSection[] = [
     label: 'Principal',
     items: [
       { to: '/dashboard', label: 'Tableau de bord', icon: <LayoutDashboard size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'cashier', 'employee'] },
+      { to: '/hotel', label: 'Dashboard hôtel', icon: <Building2 size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'cashier', 'employee'] },
+      { to: '/hotel/rooms', label: 'Chambres', icon: <Building2 size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'cashier', 'employee'] },
+      { to: '/hotel/reservations', label: 'Réservations', icon: <Calendar size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'cashier', 'employee'] },
+      { to: '/hotel/guests', label: 'Clients hôtel', icon: <UserCircle size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'cashier', 'employee'] },
+      { to: '/hotel/housekeeping', label: 'Housekeeping', icon: <Sparkles size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'employee'] },
+      { to: '/hotel/maintenance', label: 'Maintenance', icon: <Wrench size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'employee'] },
+      { to: '/hotel/events', label: 'Événementiel', icon: <Calendar size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'cashier'] },
+      { to: '/hotel/services', label: 'Services complexe', icon: <Settings size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager'] },
+      { to: '/hotel/settings', label: 'Paramètres hôtel', icon: <Settings size={20} />, roles: ['super_admin', 'admin', 'owner'] },
       { to: '/patron', label: 'Mode patron', icon: <Crown size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager'] },
       { to: '/mon-service', label: 'Mon service', icon: <Users size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'cashier', 'employee'] },
       { to: '/daily-report', label: 'Rapport du jour', icon: <ClipboardCheck size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'cashier', 'employee'] },
@@ -725,6 +734,14 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       { to: '/tables', label: 'Tables', icon: <UtensilsCrossed size={22} /> },
                 { to: '/kitchen', label: 'Cuisine', icon: <Package size={22} /> },
                 { to: '/daily-report', label: 'Journal', icon: <ClipboardCheck size={22} /> },
+              ]
+            : bizType === 'complexe_hotelier'
+            ? [
+                { to: '/hotel', label: 'Hôtel', icon: <Building2 size={22} /> },
+                { to: '/hotel/rooms', label: 'Chambres', icon: <Building2 size={22} /> },
+                { to: '/hotel/reservations', label: 'Résa', icon: <Calendar size={22} /> },
+                { to: '/pos', label: 'Caisse', icon: <ShoppingCart size={22} /> },
+                { to: '/hotel/housekeeping', label: 'Ménage', icon: <Sparkles size={22} /> },
               ]
             : bizType === 'complexe'
             ? [
