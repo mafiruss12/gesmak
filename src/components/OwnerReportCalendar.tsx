@@ -43,26 +43,46 @@ export default function OwnerReportCalendar({ establishmentId }: { establishment
   useEffect(() => {
     let cancelled = false;
     async function load() {
+      if (!establishmentId) {
+        setReports([]);
+        setStaff([]);
+        setLoading(false);
+        return;
+      }
       setLoading(true);
-      const from = toISO(cursor.y, cursor.m, 1);
-      const to = toISO(cursor.y, cursor.m, new Date(cursor.y, cursor.m + 1, 0).getDate());
-      const [repRes, team] = await Promise.all([
-        supabase
-          .from('daily_reports')
-          .select('id, date, signature, sent_at, created_at')
-          .eq('establishment_id', establishmentId)
-          .gte('date', from)
-          .lte('date', to),
-        getReportStaff(establishmentId),
-      ]);
-      if (cancelled) return;
-      setReports((repRes.data as ReportRow[]) || []);
-      setStaff(team);
-      setLoading(false);
+      try {
+        const from = toISO(cursor.y, cursor.m, 1);
+        const to = toISO(cursor.y, cursor.m, new Date(cursor.y, cursor.m + 1, 0).getDate());
+        const [repRes, team] = await Promise.all([
+          supabase
+            .from('daily_reports')
+            .select('id, date, signature, sent_at, created_at')
+            .eq('establishment_id', establishmentId)
+            .gte('date', from)
+            .lte('date', to),
+          getReportStaff(establishmentId),
+        ]);
+        if (cancelled) return;
+        setReports((repRes.data as ReportRow[]) || []);
+        setStaff(team);
+      } catch (e) {
+        console.error('OwnerReportCalendar load', e);
+        if (!cancelled) {
+          setReports([]);
+          setStaff([]);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     }
     void load();
+    // Filet : ne jamais rester sur Chargement plus de 8 s
+    const t = window.setTimeout(() => {
+      if (!cancelled) setLoading(false);
+    }, 8000);
     return () => {
       cancelled = true;
+      window.clearTimeout(t);
     };
   }, [establishmentId, cursor.y, cursor.m]);
 
