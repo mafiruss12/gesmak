@@ -5,7 +5,7 @@ import { useAuth } from '@/lib/auth';
 import { seedDefaultStockForEstablishment } from '@/lib/seedDefaultStock';
 import { ensureDefaultHotelServices, HOTEL_SERVICE_PRESETS } from '@/lib/hotel';
 import {
-  BUSINESS_TYPES,
+  BUSINESS_TYPES_SELECTABLE,
   BUSINESS_LABELS,
   BUSINESS_DESCRIPTIONS,
   BUSINESS_THEMES,
@@ -196,7 +196,7 @@ export default function TypePicker({ mode, onDone, defaultName = '' }: Props) {
         )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
-          {BUSINESS_TYPES.map((t) => {
+          {BUSINESS_TYPES_SELECTABLE.map((t) => {
             const Icon = ICONS[t];
             const theme = BUSINESS_THEMES[t];
             const active = selected === t;

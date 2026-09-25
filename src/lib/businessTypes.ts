@@ -14,6 +14,14 @@ export type BusinessType =
   | 'complexe_hotelier';
 
 
+/** Types proposés à la création (UI) — 3 seulement */
+export const BUSINESS_TYPES_SELECTABLE: BusinessType[] = [
+  'maquis',
+  'location_event',
+  'complexe',
+];
+
+/** Tous les codes encore reconnus en base (rétrocompat) */
 export const BUSINESS_TYPES: BusinessType[] = [
   'maquis',
   'restaurant',
@@ -40,7 +48,7 @@ export const BUSINESS_LABELS: Record<BusinessType, string> = {
   btp: 'BTP / BatiDevis',
   depot: 'Dépôt / Grossiste',
   complexe: 'Établissement',
-  complexe_hotelier: 'Complexe hôtelier',
+  complexe_hotelier: 'Établissement',
 };
 
 export const BUSINESS_DESCRIPTIONS: Record<BusinessType, string> = {
@@ -53,8 +61,8 @@ export const BUSINESS_DESCRIPTIONS: Record<BusinessType, string> = {
   location_event: 'Chaises, tables, bâches, sono — mariages et cérémonies',
   btp: 'Devis, factures et matériaux pour artisans et entreprises du bâtiment',
   depot: 'Livraisons boissons aux maquis, bars et restaurants — stock gros et bons de livraison',
-  complexe: 'Un lieu avec plusieurs services (maquis, restaurant, chambres…) — vous cochez ce que vous proposez',
-  complexe_hotelier: 'Hôtel / résidence : chambres, resto, bar, spa, événements — gestion complète',
+  complexe: 'Un lieu multi-services : maquis, restaurant, chambres, boutique, spa… — vous cochez ce que vous proposez',
+  complexe_hotelier: 'Un lieu multi-services : maquis, restaurant, chambres, boutique, spa… — vous cochez ce que vous proposez',
 };
 
 export const BUSINESS_THEMES: Record<
@@ -201,6 +209,9 @@ export const MENU_BY_TYPE: Record<BusinessType, string[]> = {
     '/guide', '/mes-employes', '/ai', '/chat', '/notifications', '/settings',
   ],
   complexe: [
+    '/hotel', '/hotel/rooms', '/hotel/reservations', '/hotel/guests',
+    '/hotel/housekeeping', '/hotel/maintenance', '/hotel/events',
+    '/hotel/services', '/hotel/settings',
     '/dashboard', '/pos', '/live-sales', '/tables', '/print-qr', '/orders', '/kitchen', '/mon-service',
     '/inventory', '/inventory/scan', '/guide', '/menu-qr', '/purchases', '/customers',
     '/expenses', '/mes-employes', '/calendar', '/daily-report', '/cloture',
@@ -211,11 +222,11 @@ export const MENU_BY_TYPE: Record<BusinessType, string[]> = {
     '/hotel', '/hotel/rooms', '/hotel/reservations', '/hotel/guests',
     '/hotel/housekeeping', '/hotel/maintenance', '/hotel/events',
     '/hotel/services', '/hotel/settings',
-    '/dashboard', '/pos', '/orders', '/tables', '/kitchen', '/inventory', '/inventory/scan',
-    '/live-sales', '/menu-qr', '/purchases', '/customers',
+    '/dashboard', '/pos', '/live-sales', '/tables', '/print-qr', '/orders', '/kitchen', '/mon-service',
+    '/inventory', '/inventory/scan', '/guide', '/menu-qr', '/purchases', '/customers',
     '/expenses', '/mes-employes', '/calendar', '/daily-report', '/cloture',
     '/statistics', '/reports', '/accounting', '/ai', '/chat',
-    '/notifications', '/settings', '/guide',
+    '/notifications', '/settings',
   ],
 };
 
@@ -558,20 +569,18 @@ export function isFnbType(type: BusinessType): boolean {
 
 export function normalizeBusinessType(raw: string | null | undefined): BusinessType {
   const v = (raw || '').toLowerCase().trim();
-  // Anciens types retirés → maquis
-  if (v in { bar: 1, pharmacie: 1, commerce: 1, cafe: 1 }) return 'maquis';
-  if (v === 'resto' || v === 'restauration') return 'restaurant';
-  const allowed: BusinessType[] = [
-    'maquis', 'restaurant', 'magasin', 'boutique', 'superette', 'quincaillerie', 'location_event', 'btp', 'depot', 'complexe', 'complexe_hotelier',
-  ];
-  if ((allowed as string[]).includes(v)) return v as BusinessType;
-  if (v === 'store' || v === 'shop') return 'magasin';
-  if (v === 'superette' || v === 'supermarche') return 'superette';
-  if (v === 'location' || v === 'event' || v === 'rental') return 'location_event';
-  if (v === 'batidevis' || v === 'construction' || v === 'chantier' || v === 'devis') return 'btp';
-  if (v === 'depot' || v === 'grossiste' || v === 'gros' || v === 'wholesaler' || v === 'entrepot' || v === 'entrepôt') return 'depot';
-  if (v === 'complexe_hotelier' || v === 'hotelier' || v === 'complexe hotelier' || v === 'hôtel complexe') return 'complexe_hotelier';
-  if (v === 'complexe' || v === 'residence' || v === 'résidence' || v === 'hotel' || v === 'hôtel' || v === 'hotellerie' || v === 'hôtelier') return 'complexe_hotelier';
+  if (v === 'maquis' || v === 'bar' || v === 'cafe' || v === 'café') return 'maquis';
+  if (v === 'location_event' || v === 'location' || v === 'event' || v === 'rental') return 'location_event';
+  if (
+    v === 'complexe' || v === 'complexe_hotelier' || v === 'etablissement' || v === 'établissement'
+    || v === 'residence' || v === 'résidence' || v === 'hotel' || v === 'hôtel'
+    || v === 'hotelier' || v === 'hotellerie' || v === 'hôtelier'
+  ) return 'complexe';
+  if (v in { magasin: 1, boutique: 1, superette: 1, quincaillerie: 1, depot: 1, commerce: 1, store: 1, shop: 1, supermarche: 1 }) return 'magasin';
+  if (v === 'restaurant' || v === 'resto' || v === 'restauration') return 'restaurant';
+  if (v === 'btp' || v === 'batidevis' || v === 'construction' || v === 'chantier' || v === 'devis') return 'magasin';
+  if (v === 'pharmacie') return 'maquis';
+  if ((BUSINESS_TYPES as string[]).includes(v)) return v as BusinessType;
   return 'maquis';
 }
 
@@ -616,4 +625,10 @@ export function buildSmsLink(phone: string | null | undefined, message: string):
   if (!phone) return '';
   const digits = phone.replace(/\D/g, '');
   return `sms:${digits}?body=${encodeURIComponent(message)}`;
+}
+
+
+export function isEtablissementType(type: BusinessType | string | null | undefined): boolean {
+  const t = normalizeBusinessType(type);
+  return t === 'complexe' || t === 'complexe_hotelier';
 }

@@ -275,8 +275,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const allowedRoutes = new Set(
     bizType === 'complexe'
       ? menuRoutesForComplexe(estServices)
-      : bizType === 'complexe_hotelier'
-        ? (MENU_BY_TYPE.complexe_hotelier || MENU_BY_TYPE.maquis)
+      : (bizType === 'complexe_hotelier')
+        ? (MENU_BY_TYPE.complexe || MENU_BY_TYPE.complexe_hotelier || MENU_BY_TYPE.maquis)
         : MENU_BY_TYPE[bizType] || MENU_BY_TYPE.maquis,
   );
 
@@ -320,7 +320,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       if (RENT_ONLY.has(item.to) && section.label !== 'Outils') return false;
 
       // Modules hôtel uniquement pour complexe hôtelier
-      if (HOTEL_ONLY.has(item.to) && bizType !== 'complexe_hotelier' && bizType !== 'complexe') return false;
+      if (HOTEL_ONLY.has(item.to) && bizType !== 'complexe' && bizType !== 'complexe_hotelier') return false;
 
       const roleForMenu = effectiveRole || member.role;
       if (['super_admin', 'admin', 'owner', 'manager'].includes(roleForMenu)) {
