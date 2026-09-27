@@ -31,14 +31,34 @@ interface AuthContextValue {
   refresh: () => Promise<void>;
 }
 
+function readLocalSupabaseSession(): { session: Session; user: User } | null {
+  try {
+    if (typeof localStorage === 'undefined') return null;
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k || !k.startsWith('sb-') || !k.includes('auth-token')) continue;
+      const raw = localStorage.getItem(k);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw);
+      const sess = (parsed?.currentSession || parsed?.session || parsed) as Session & { user?: User };
+      if (sess?.access_token && sess?.user?.id) {
+        return { session: sess as Session, user: sess.user as User };
+      }
+    }
+  } catch { /* */ }
+  return null;
+}
+
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null);
-  const [user, setUser] = useState<User | null>(null);
+  // Session lue synchrone depuis localStorage → pas d'écran bloquant au F5
+  const _bootLocal = typeof window !== 'undefined' ? readLocalSupabaseSession() : null;
+  const [session, setSession] = useState<Session | null>(_bootLocal?.session ?? null);
+  const [user, setUser] = useState<User | null>(_bootLocal?.user ?? null);
   const [member, setMember] = useState<Member | null>(null);
   const [accessRequest, setAccessRequest] = useState<AccessRequest | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!_bootLocal?.user);
   const [needsAccess, setNeedsAccess] = useState(false);
   const [viewAsRole, setViewAsRoleState] = useState<Member['role'] | null>(null);
 
@@ -655,11 +675,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     async function boot() {
-      // Restaure la session depuis localStorage (persistSession: true).
-      // Ne JAMAIS forcer user=null par timeout — seule cause légitime = pas de token / signOut.
+      // Session déjà hydratée en synchrone si token localStorage présent.
+      // ensureMember en arrière-plan — ne bloque jamais le menu.
       const safety = window.setTimeout(() => {
         if (mounted) setLoading(false);
-      }, 15000);
+      }, 8000);
       try {
         let session = null as Awaited<ReturnType<typeof supabase.auth.getSession>>['data']['session'];
         try {
@@ -669,15 +689,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } catch (e) {
           console.error('getSession', e);
         }
-        // Race connue PKCE : getSession peut être null un instant avant INITIAL_SESSION
-        if (!session) {
-          await new Promise((r) => setTimeout(r, 450));
-          try {
-            const { data } = await supabase.auth.getSession();
-            session = data?.session ?? null;
-          } catch { /* */ }
-        }
-        // Session absente mais refresh token présent → un seul essai
         if (!session) {
           try {
             const { data: ref } = await supabase.auth.refreshSession();
@@ -685,18 +696,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           } catch { /* */ }
         }
         if (!mounted) return;
-        // Important : ne poser null que si vraiment aucune session
         if (session?.user) {
           setSession(session);
           setUser(session.user);
-          await ensureMember(session.user);
+          setLoading(false);
+          void ensureMember(session.user).catch((e) => console.warn('boot ensureMember', e));
         } else {
-          // Ne pas écraser un user éventuellement posé par INITIAL_SESSION
+          // Pas de session : seulement si on n'a pas déjà un user synchrone
           setSession((prev) => prev ?? null);
           setUser((prev) => prev ?? null);
+          setLoading(false);
         }
       } catch (e) {
         console.error('boot', e);
+        if (mounted) setLoading(false);
       } finally {
         window.clearTimeout(safety);
         if (mounted) setLoading(false);

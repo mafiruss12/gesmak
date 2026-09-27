@@ -140,20 +140,16 @@ function ProtectedRoutes() {
 
   if (!isSupabaseConfigured) return <ConfigError />;
 
-  // Pendant le boot auth (getSession au refresh) : rester sur spinner.
-  // Ne JAMAIS envoyer vers /login tant que loading === true
-  // (c’était la cause de la « déconnexion » à chaque actualisation — régression bootTimedOut).
+  // Si session locale déjà connue (user posé en synchrone), afficher l’app tout de suite.
+  // Spinner discret uniquement s’il n’y a vraiment aucune session en mémoire.
   if (loading && !user) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-[#F5F5F5] px-6 text-center">
-        <Loader2 className="animate-spin text-[#FF7900]" size={32} />
-        <p className="text-sm font-medium text-stone-700">Restauration de la session…</p>
-        <p className="text-xs text-stone-500 max-w-xs">Ne fermez pas la page.</p>
+      <div className="min-h-screen flex items-center justify-center bg-[#F5F5F5]">
+        <Loader2 className="animate-spin text-[#FF7900]" size={28} />
       </div>
     );
   }
 
-  // Session lue : pas d’utilisateur = vraiment déconnecté
   if (!user) return <Navigate to="/" replace />;
 
   try {
