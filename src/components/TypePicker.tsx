@@ -136,9 +136,9 @@ export default function TypePicker({ mode, onDone, defaultName = '' }: Props) {
         } catch (seedErr) {
           console.warn('seed stock', seedErr);
         }
-        if (selected === 'complexe_hotelier' || selected === 'complexe') {
+        if (selected === 'complexe') {
           try {
-            const codes = selected === 'complexe_hotelier'
+            const codes = selectedServices.includes('chambres')
               ? HOTEL_SERVICE_PRESETS.map((p) => p.code)
               : undefined;
             await ensureDefaultHotelServices(est.id, codes);

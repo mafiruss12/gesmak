@@ -102,19 +102,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .eq('user_id', currentUser.id)
         .eq('status', 'active');
 
-      let estIds = (links ?? []).map((l) => l.establishment_id);
+      // UNIQUEMENT les liens d'équipe actifs — pas created_by / pas "tous les sites" admin.
+      // La vue globale admin reste dans AdminEstablishmentsMap.
+      let estIds = (links ?? [])
+        .map((l) => l.establishment_id)
+        .filter(Boolean) as string[];
+      // Lien principal members.establishment_id s'il n'est pas déjà dans member_establishments
       if (currentMember?.establishment_id && !estIds.includes(currentMember.establishment_id)) {
         estIds = [...estIds, currentMember.establishment_id];
-      }
-
-      if (currentMember && ['super_admin', 'admin', 'owner'].includes(currentMember.role)) {
-        const { data: owned } = await supabase
-          .from('establishments')
-          .select('id')
-          .eq('created_by', currentUser.id);
-        for (const o of owned ?? []) {
-          if (!estIds.includes(o.id)) estIds.push(o.id);
-        }
       }
 
       let list: MyEstablishment[] = [];
