@@ -58,6 +58,12 @@ export default function Orders() {
   const [tables, setTables] = useState<RestaurantTable[]>([]);
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [statusFilter, setStatusFilter] = useState<'open' | 'all' | 'pending' | 'served' | 'cancelled'>('open');
+  const [dateFilter, setDateFilter] = useState('');
+  const [detail, setDetail] = useState<OrderRow | null>(null);
+  const [detailItems, setDetailItems] = useState<{ product_name: string; qty: number; unit_price?: number }[]>([]);
+  const [pendingCount, setPendingCount] = useState(0);
+
   const [modalOpen, setModalOpen] = useState(false);
   const [catalogTab, setCatalogTab] = useState<'carte' | 'stock'>('carte');
   const [cart, setCart] = useState<CartLine[]>([]);
@@ -83,18 +89,39 @@ export default function Orders() {
       const [prodRes, tabRes, ordRes, cats, items] = await Promise.all([
         supabase.from('products').select('*').eq('establishment_id', estId).order('name'),
         supabase.from('restaurant_tables').select('*').eq('establishment_id', estId).order('number'),
-        supabase
-          .from('orders')
-          .select('*')
-          .eq('establishment_id', estId)
-          .in('status', ['pending', 'preparing', 'ready'])
-          .order('created_at', { ascending: false }),
+        (() => {
+          let q = supabase
+            .from('orders')
+            .select('*')
+            .eq('establishment_id', estId)
+            .order('created_at', { ascending: false })
+            .limit(200);
+          if (statusFilter === 'open') {
+            q = q.in('status', ['pending', 'preparing', 'ready']);
+          } else if (statusFilter === 'pending') {
+            q = q.eq('status', 'pending');
+          } else if (statusFilter === 'served') {
+            q = q.in('status', ['served', 'delivered', 'completed']);
+          } else if (statusFilter === 'cancelled') {
+            q = q.eq('status', 'cancelled');
+          }
+          if (dateFilter) {
+            q = q.gte('created_at', `${dateFilter}T00:00:00`).lte('created_at', `${dateFilter}T23:59:59.999`);
+          }
+          return q;
+        })(),
         listCategories(estId).catch(() => [] as MenuCategory[]),
         listMenuItems(estId).catch(() => [] as MenuItem[]),
       ]);
       setProducts((prodRes.data ?? []) as Product[]);
       setTables((tabRes.data ?? []) as RestaurantTable[]);
       setOrders((ordRes.data ?? []) as OrderRow[]);
+      const { count } = await supabase
+        .from('orders')
+        .select('id', { count: 'exact', head: true })
+        .eq('establishment_id', estId)
+        .eq('status', 'pending');
+      setPendingCount(count || 0);
       setCategories(cats);
       setMenuItems(items.filter((i) => i.is_available));
       if (canAssign) {
@@ -104,11 +131,24 @@ export default function Orders() {
     } finally {
       setLoading(false);
     }
-  }, [estId, canAssign]);
+  }, [estId, canAssign, statusFilter, dateFilter]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!estId) return;
+    const ch = supabase
+      .channel(`orders-live-${estId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'orders', filter: `establishment_id=eq.${estId}` },
+        () => { void load(); },
+      )
+      .subscribe();
+    return () => { void supabase.removeChannel(ch); };
+  }, [estId, load]);
 
   // Deep-link depuis Tables (double-clic) ou ajout sur commande existante
   useEffect(() => {
@@ -284,6 +324,21 @@ export default function Orders() {
     }
   }
 
+  async function openDetail(o: OrderRow) {
+    setDetail(o);
+    const { data } = await supabase
+      .from('order_items')
+      .select('product_name, qty, unit_price, name, quantity')
+      .eq('order_id', o.id);
+    setDetailItems(
+      (data || []).map((i: any) => ({
+        product_name: i.product_name || i.name || '?',
+        qty: Number(i.qty ?? i.quantity) || 0,
+        unit_price: Number(i.unit_price) || 0,
+      })),
+    );
+  }
+
   async function updateStatus(id: string, status: string) {
     await supabase.from('orders').update({ status }).eq('id', id);
     void load();
@@ -347,9 +402,16 @@ export default function Orders() {
     <div className="max-w-3xl mx-auto space-y-4 pb-16">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold text-stone-100">Commandes</h1>
+          <h1 className="text-2xl font-bold text-stone-100 flex items-center gap-2">
+            Commandes
+            {pendingCount > 0 && (
+              <span className="inline-flex items-center justify-center min-w-[1.5rem] h-6 px-1.5 rounded-full bg-red-600 text-white text-xs font-bold">
+                {pendingCount}
+              </span>
+            )}
+          </h1>
           <p className="text-sm text-stone-400">
-            {orders.length} en cours · Carte + stock
+            {orders.length} affichée(s) · {pendingCount} nouvelle(s)
           </p>
         </div>
         <button
@@ -364,21 +426,48 @@ export default function Orders() {
         </button>
       </div>
 
+      <div className="flex flex-wrap gap-2 items-center">
+        <select
+          className="input-field text-sm py-1.5"
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value as any)}
+        >
+          <option value="open">Ouvertes</option>
+          <option value="pending">Nouvelles</option>
+          <option value="all">Toutes (historique)</option>
+          <option value="served">Traitées</option>
+          <option value="cancelled">Annulées</option>
+        </select>
+        <input
+          type="date"
+          className="input-field text-sm py-1.5"
+          value={dateFilter}
+          onChange={(e) => setDateFilter(e.target.value)}
+        />
+        {dateFilter && (
+          <button type="button" className="text-xs text-stone-400" onClick={() => setDateFilter('')}>
+            Effacer date
+          </button>
+        )}
+      </div>
+
       {orders.length === 0 ? (
         <EmptyState
           icon={<ShoppingBag size={48} />}
-          title="Aucune commande ouverte"
-          message="Créez une commande depuis la carte ou le stock."
+          title="Aucune commande"
+          message="Les commandes QR et salle apparaîtront ici."
         />
       ) : (
         <ul className="space-y-3">
           {orders.map((o) => (
             <li key={o.id} className="card p-4 space-y-2">
+              <button type="button" className="w-full text-left" onClick={() => void openDetail(o)}>
               <div className="flex justify-between gap-2 items-start">
                 <div>
                   <div className="font-semibold text-stone-100">
                     {o.table_number ? `Table ${o.table_number}` : ORDER_TYPE_LABELS[o.order_type] || o.order_type}
                     {clientLabel(o) ? ` · ${clientLabel(o)}` : ''}
+                    {o.source === 'qr_table' ? ' · QR' : ''}
                   </div>
                   <div className="text-xs text-stone-500">
                     {formatTime(o.created_at)} · {formatFCFA(Number(o.total) || 0)}
@@ -387,6 +476,7 @@ export default function Orders() {
                 </div>
                 <Badge>{ORDER_STATUS_LABELS[o.status] || o.status}</Badge>
               </div>
+              </button>
               <div className="flex flex-wrap gap-2">
                 {o.status === 'pending' && (
                   <button
@@ -621,6 +711,46 @@ export default function Orders() {
           </button>
         </div>
       </Modal>
+
+      {detail && (
+        <Modal open={!!detail} onClose={() => setDetail(null)} title="Détail commande">
+          <div className="space-y-3">
+            <p className="text-sm text-stone-300">
+              {detail.customer_name && <span>Client : <strong>{detail.customer_name}</strong><br/></span>}
+              {detail.table_number && <span>Table : {detail.table_number}<br/></span>}
+              Heure : {formatTime(detail.created_at)}
+              {detail.source === 'qr_table' ? ' · QR' : ''}
+            </p>
+            <ul className="space-y-1 text-sm">
+              {detailItems.map((it, i) => (
+                <li key={i} className="flex justify-between text-stone-200">
+                  <span>{it.product_name} × {it.qty}</span>
+                  <span>{formatFCFA((it.unit_price || 0) * it.qty)}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="font-bold text-amber-400">{formatFCFA(Number(detail.total) || 0)}</p>
+            <div className="flex flex-wrap gap-2">
+              {detail.status === 'pending' && (
+                <button type="button" className="btn-primary text-sm" onClick={async () => { await updateStatus(detail.id, 'preparing'); setDetail(null); }}>
+                  En traitement
+                </button>
+              )}
+              {['pending', 'preparing', 'ready'].includes(detail.status) && (
+                <button type="button" className="btn-secondary text-sm" onClick={async () => { await updateStatus(detail.id, 'served'); setDetail(null); }}>
+                  Marquer traitée
+                </button>
+              )}
+              {detail.status !== 'cancelled' && detail.status !== 'served' && (
+                <button type="button" className="btn-ghost text-sm text-red-400" onClick={async () => { await updateStatus(detail.id, 'cancelled'); setDetail(null); }}>
+                  Annuler
+                </button>
+              )}
+            </div>
+          </div>
+        </Modal>
+      )}
+
     </div>
   );
 }

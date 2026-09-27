@@ -45,6 +45,9 @@ export default function PublicTableOrder() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [clientHistory, setClientHistory] = useState<{ id: string; created_at: string; total: number; status: string }[]>([]);
+  const [customerPhone, setCustomerPhone] = useState('');
+
   const [lastOrderId, setLastOrderId] = useState<string | null>(null);
   const [trackStatus, setTrackStatus] = useState<string>('pending');
   const [trackItems, setTrackItems] = useState<{ product_name: string; qty: number; unit_price: number }[]>([]);
@@ -205,6 +208,22 @@ export default function PublicTableOrder() {
     });
   }
 
+  async function loadClientHistory(name: string) {
+    if (!estId || name.trim().length < 2) {
+      setClientHistory([]);
+      return;
+    }
+    let q = supabase
+      .from('orders')
+      .select('id, created_at, total, status, customer_name, notes')
+      .eq('establishment_id', estId)
+      .ilike('customer_name', name.trim())
+      .order('created_at', { ascending: false })
+      .limit(10);
+    const { data } = await q;
+    setClientHistory((data as any) || []);
+  }
+
   async function submit() {
     if (!estId || lines.length === 0) return;
     const name = customerName.trim();
@@ -218,6 +237,7 @@ export default function PublicTableOrder() {
       const noteParts = [
         tableNum ? `Table ${tableNum}` : null,
         `Client: ${name}`,
+        customerPhone.trim() ? `Tél: ${customerPhone.trim()}` : null,
         note.trim() || null,
       ].filter(Boolean);
       const notesCombined = noteParts.join(' · ') || 'Commande QR';
@@ -562,18 +582,46 @@ export default function PublicTableOrder() {
           })}
         </div>
 
-        <label className="block text-xs text-stone-400">
-          Votre nom <span className="text-amber-400">*</span>
-          <input
-            className="mt-1 w-full rounded-xl border border-stone-700 bg-stone-900 px-3 py-2 text-sm text-stone-100"
-            placeholder="Ex. Koffi, Aya…"
-            value={customerName}
-            onChange={(e) => setCustomerName(e.target.value)}
-            maxLength={60}
-            autoComplete="name"
-            required
-          />
-        </label>
+        <div className="space-y-2">
+          <label className="block text-xs text-stone-400">
+            Votre nom <span className="text-amber-400">*</span>
+            <input
+              className="mt-1 w-full rounded-xl border border-stone-700 bg-stone-900 px-3 py-2 text-sm text-stone-100"
+              placeholder="Ex. Koffi, Aya…"
+              value={customerName}
+              onChange={(e) => setCustomerName(e.target.value)}
+              onBlur={() => void loadClientHistory(customerName)}
+              maxLength={60}
+              autoComplete="name"
+              required
+            />
+          </label>
+          <label className="block text-xs text-stone-400">
+            Téléphone <span className="text-stone-500">(optionnel — pour mieux vous reconnaître)</span>
+            <input
+              className="mt-1 w-full rounded-xl border border-stone-700 bg-stone-900 px-3 py-2 text-sm text-stone-100"
+              placeholder="07…"
+              value={customerPhone}
+              onChange={(e) => setCustomerPhone(e.target.value)}
+              inputMode="tel"
+            />
+          </label>
+          {clientHistory.length > 0 && (
+            <div className="rounded-xl border border-stone-700 bg-stone-900/80 p-3 text-xs space-y-1">
+              <p className="text-stone-400 font-medium">
+                Commandes précédentes (même nom — limite : d&apos;autres clients peuvent avoir le même nom)
+              </p>
+              {clientHistory.map((h) => (
+                <div key={h.id} className="flex justify-between text-stone-300">
+                  <span>{new Date(h.created_at).toLocaleString('fr-FR')}</span>
+                  <span>
+                    {Math.round(Number(h.total) || 0)} F · {h.status}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
         <label className="block text-xs text-stone-400">
           Note (optionnel)
           <input

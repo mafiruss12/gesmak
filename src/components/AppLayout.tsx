@@ -160,6 +160,26 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     void registerPushToken({ userId: uid, establishmentId: eid });
   }, [user?.id, member?.role, member?.establishment_id, activeEstablishment?.id]);
 
+  const [ordersPendingCount, setOrdersPendingCount] = useState(0);
+  useEffect(() => {
+    const eid = activeEstablishment?.id || member?.establishment_id;
+    if (!eid) { setOrdersPendingCount(0); return; }
+    const pull = async () => {
+      const { count } = await supabase
+        .from('orders')
+        .select('id', { count: 'exact', head: true })
+        .eq('establishment_id', eid)
+        .eq('status', 'pending');
+      setOrdersPendingCount(count || 0);
+    };
+    void pull();
+    const ch = supabase
+      .channel(`nav-orders-badge-${eid}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `establishment_id=eq.${eid}` }, () => { void pull(); })
+      .subscribe();
+    return () => { void supabase.removeChannel(ch); };
+  }, [activeEstablishment?.id, member?.establishment_id]);
+
 
   useEffect(() => {
     return startPrefetchInterval(
@@ -594,7 +614,14 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                     <span className={`nav-item-icon ${meta.iconBg}`}>
                       {item.icon}
                     </span>
-                    <span className="flex-1 truncate">{menuLabelFor(item.to, bizType) || item.label}</span>
+                    <span className="flex-1 truncate flex items-center gap-1">
+                      {menuLabelFor(item.to, bizType) || item.label}
+                      {item.to === '/orders' && ordersPendingCount > 0 && (
+                        <span className="inline-flex items-center justify-center min-w-[1.15rem] h-5 px-1 rounded-full bg-red-600 text-white text-[10px] font-bold">
+                          {ordersPendingCount}
+                        </span>
+                      )}
+                    </span>
                     {item.to === '/notifications' && unreadNotifs > 0 && (
                       <span className="px-1.5 py-0.5 rounded-full text-xs font-bold bg-error-500 text-white animate-pulse">
                         {unreadNotifs}
@@ -827,7 +854,12 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               }
             >
               {item.icon}
-              <span>{item.label}</span>
+              <span>{item.label}
+                    {item.to === '/orders' && ordersPendingCount > 0 && (
+                      <span className="ml-1 inline-flex items-center justify-center min-w-[1.15rem] h-5 px-1 rounded-full bg-red-600 text-white text-[10px] font-bold">
+                        {ordersPendingCount}
+                      </span>
+                    )}</span>
             </NavLink>
           ))}
         </div>
