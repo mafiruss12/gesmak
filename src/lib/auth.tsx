@@ -34,12 +34,20 @@ interface AuthContextValue {
 function readLocalSupabaseSession(): { session: Session; user: User } | null {
   try {
     if (typeof localStorage === 'undefined') return null;
+    const preferred = 'sb-ycoaxbgxstxondxxnhhf-auth-token';
+    const keys: string[] = [preferred];
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
-      if (!k || !k.startsWith('sb-') || !k.includes('auth-token')) continue;
+      if (k && k.startsWith('sb-') && k.includes('auth-token') && k !== preferred) keys.push(k);
+    }
+    for (const k of keys) {
       const raw = localStorage.getItem(k);
       if (!raw) continue;
-      const parsed = JSON.parse(raw);
+      let parsed: any = JSON.parse(raw);
+      // formats possibles selon versions auth-js
+      if (typeof parsed === 'string') {
+        try { parsed = JSON.parse(parsed); } catch { /* */ }
+      }
       const sess = (parsed?.currentSession || parsed?.session || parsed) as Session & { user?: User };
       if (sess?.access_token && sess?.user?.id) {
         return { session: sess as Session, user: sess.user as User };
@@ -675,8 +683,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     async function boot() {
-      // Session déjà hydratée en synchrone si token localStorage présent.
-      // ensureMember en arrière-plan — ne bloque jamais le menu.
+      // Ne PAS appeler refreshSession ici : autoRefreshToken + getSession suffisent.
+      // Un refresh concurrent invalidait le refresh_token (rotation) → faux SIGNED_OUT au F5.
       const safety = window.setTimeout(() => {
         if (mounted) setLoading(false);
       }, 8000);
@@ -689,12 +697,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } catch (e) {
           console.error('getSession', e);
         }
-        if (!session) {
-          try {
-            const { data: ref } = await supabase.auth.refreshSession();
-            session = ref?.session ?? null;
-          } catch { /* */ }
-        }
         if (!mounted) return;
         if (session?.user) {
           setSession(session);
@@ -702,10 +704,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setLoading(false);
           void ensureMember(session.user).catch((e) => console.warn('boot ensureMember', e));
         } else {
-          // Pas de session : seulement si on n'a pas déjà un user synchrone
-          setSession((prev) => prev ?? null);
-          setUser((prev) => prev ?? null);
-          setLoading(false);
+          // Si getSession vide mais token encore en localStorage → garder l'user synchrone
+          const local = readLocalSupabaseSession();
+          if (local?.user) {
+            setSession(local.session);
+            setUser(local.user);
+            setLoading(false);
+            void ensureMember(local.user).catch((e) => console.warn('boot ensureMember local', e));
+          } else {
+            setSession(null);
+            setUser(null);
+            setLoading(false);
+          }
         }
       } catch (e) {
         console.error('boot', e);
@@ -722,6 +732,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!mounted) return;
 
       if (event === 'SIGNED_OUT') {
+        // Faux positif fréquent : refresh token en course / double onglet.
+        // Si le token est encore en localStorage, ne pas déconnecter l'UI.
+        const still = readLocalSupabaseSession();
+        if (still?.user) {
+          setSession(still.session);
+          setUser(still.user);
+          setLoading(false);
+          return;
+        }
         setSession(null);
         setUser(null);
         setMember(null);

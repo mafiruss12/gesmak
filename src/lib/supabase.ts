@@ -21,6 +21,9 @@ if (!isSupabaseConfigured && import.meta.env.DEV) {
 export const SUPABASE_URL = supabaseUrl;
 export const SUPABASE_ANON = supabaseAnonKey;
 
+/** Clé stable = même projet, évite les collisions entre environnements */
+const AUTH_STORAGE_KEY = 'sb-ycoaxbgxstxondxxnhhf-auth-token';
+
 export const supabase: SupabaseClient = createClient(
   supabaseUrl || 'https://placeholder.supabase.co',
   supabaseAnonKey || 'placeholder-key',
@@ -28,10 +31,12 @@ export const supabase: SupabaseClient = createClient(
     auth: {
       persistSession: true,
       autoRefreshToken: true,
-      detectSessionInUrl: true,
+      // Pas d'OAuth Google : éviter qu'un ?code= résiduel invalide la session au refresh
+      detectSessionInUrl: false,
       storage: typeof window !== 'undefined' ? window.localStorage : undefined,
-      // implicit = plus fiable que PKCE sur mobile / redirections
-      flowType: 'pkce',
+      storageKey: AUTH_STORAGE_KEY,
+      // implicit = plus fiable pour login email/password SPA (évite courses PKCE au reload)
+      flowType: 'implicit',
     },
   }
 );
