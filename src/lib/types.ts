@@ -23,6 +23,7 @@ export interface Establishment {
   latitude?: number | null;
   longitude?: number | null;
   location_updated_at?: string | null;
+  location_consent?: boolean | null;
 }
 
 export interface Member {

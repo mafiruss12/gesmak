@@ -145,6 +145,7 @@ export default function SettingsPage() {
             latitude: lat,
             longitude: lng,
             location_updated_at: at,
+            location_consent: true,
           } as any)
           .eq('id', est.id);
         setGpsLoading(false);
@@ -167,6 +168,33 @@ export default function SettingsPage() {
         setGpsMsg(messages[geoErr.code] || geoErr.message);
       },
       { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 },
+    );
+  }
+
+  async function clearGps() {
+    if (!est?.id) return;
+    if (!window.confirm('Arrêter le partage de position de cet établissement ?')) return;
+    setGpsLoading(true);
+    const { error: err } = await supabase
+      .from('establishments')
+      .update({
+        latitude: null,
+        longitude: null,
+        location_updated_at: null,
+        location_consent: false,
+      } as any)
+      .eq('id', est.id);
+    setGpsLoading(false);
+    if (err) {
+      setError(err.message);
+      return;
+    }
+    setGpsCoords(null);
+    setGpsMsg('Partage de position désactivé.');
+    setEst((prev) =>
+      prev
+        ? { ...prev, latitude: null, longitude: null, location_updated_at: null, location_consent: false }
+        : prev,
     );
   }
 
@@ -940,6 +968,16 @@ async function saveProfile() {
                       <><MapPin size={18} /> {gpsCoords ? 'Mettre à jour ma position GPS' : 'Enregistrer ma position GPS'}</>
                     )}
                   </button>
+                  {gpsCoords && (
+                    <button
+                      type="button"
+                      className="btn-secondary w-full text-sm mt-2"
+                      disabled={gpsLoading}
+                      onClick={() => void clearGps()}
+                    >
+                      Arrêter le partage de position
+                    </button>
+                  )}
                 </div>
 
                   <button onClick={saveEstablishment} disabled={saving || !form.name} className="btn-primary w-full flex items-center justify-center gap-2">
