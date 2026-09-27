@@ -1,6 +1,6 @@
 import type { Role } from './types';
 
-/** Uniquement les 3 types créables / utilisés */
+/** Types créables : maquis, restaurant, location, établissement */
 export type BusinessType = 'maquis' | 'restaurant' | 'location_event' | 'complexe';
 
 export const BUSINESS_TYPES: BusinessType[] = ['maquis', 'restaurant', 'location_event', 'complexe'];

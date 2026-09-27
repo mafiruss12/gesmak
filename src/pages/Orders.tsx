@@ -14,11 +14,11 @@ import {
   assignServerToOrder,
   type ServerCandidate,
 } from '@/lib/serverDispatch';
-import { listCategories, listMenuItems, type MenuCategory, type MenuItem } from '@/lib/restaurant';
+import { listCategories, listMenuItems, listOptions, type MenuCategory, type MenuItem, type MenuItemOption } from '@/lib/restaurant';
 
 type CartLine =
   | { kind: 'product'; product: Product; qty: number }
-  | { kind: 'menu'; item: MenuItem; qty: number; notes?: string };
+  | { kind: 'menu'; item: MenuItem; qty: number; notes?: string; options?: { name: string; price_delta: number }[] };
 
 type OrderRow = Order & {
   customer_name?: string | null;
@@ -33,12 +33,15 @@ function lineKey(l: CartLine) {
   return l.kind === 'product' ? `p:${l.product.id}` : `m:${l.item.id}`;
 }
 
-function lineName(l: CartLine) {
-  return l.kind === 'product' ? l.product.name : l.item.name;
-}
-
 function linePrice(l: CartLine) {
-  return l.kind === 'product' ? Number(l.product.price) : Number(l.item.price);
+  if (l.kind === 'product') return Number(l.product.price);
+  const opt = (l.options || []).reduce((s, o) => s + Number(o.price_delta || 0), 0);
+  return Number(l.item.price) + opt;
+}
+function lineName(l: CartLine) {
+  if (l.kind === 'product') return l.product.name;
+  const opt = (l.options || []).map((o) => o.name).filter(Boolean);
+  return opt.length ? `${l.item.name} (${opt.join(', ')})` : l.item.name;
 }
 
 export default function Orders() {
@@ -66,6 +69,10 @@ export default function Orders() {
   const [assignBusy, setAssignBusy] = useState(false);
   const [busy, setBusy] = useState(false);
   const [appendOrderId, setAppendOrderId] = useState<string | null>(null);
+  const [optItem, setOptItem] = useState<MenuItem | null>(null);
+  const [optList, setOptList] = useState<MenuItemOption[]>([]);
+  const [optSelected, setOptSelected] = useState<string[]>([]);
+
 
   const load = useCallback(async () => {
     if (!estId) {
@@ -137,15 +144,37 @@ export default function Orders() {
     });
   }
 
-  function addMenu(item: MenuItem) {
+  async function addMenu(item: MenuItem) {
+    try {
+      const opts = await listOptions(item.id);
+      if (opts.length) {
+        setOptItem(item);
+        setOptList(opts);
+        setOptSelected([]);
+        return;
+      }
+    } catch {
+      /* ignore */
+    }
     setCart((prev) => {
       const key = `m:${item.id}`;
-      const ex = prev.find((i) => lineKey(i) === key);
+      const ex = prev.find((i) => lineKey(i) === key && !(i.kind === 'menu' && (i.options || []).length));
       if (ex) {
-        return prev.map((i) => (lineKey(i) === key ? { ...i, qty: i.qty + 1 } : i));
+        return prev.map((i) => (lineKey(i) === key && i === ex ? { ...i, qty: i.qty + 1 } : i));
       }
-      return [...prev, { kind: 'menu', item, qty: 1 }];
+      return [...prev, { kind: 'menu', item, qty: 1, options: [] }];
     });
+  }
+
+  function confirmMenuOptions() {
+    if (!optItem) return;
+    const selected = optList
+      .filter((o) => optSelected.includes(o.id))
+      .map((o) => ({ name: o.name, price_delta: Number(o.price_delta) || 0 }));
+    setCart((prev) => [...prev, { kind: 'menu', item: optItem, qty: 1, options: selected }]);
+    setOptItem(null);
+    setOptList([]);
+    setOptSelected([]);
   }
 
   function updateQty(key: string, delta: number) {
@@ -182,7 +211,7 @@ export default function Orders() {
               unit_price: i.item.price,
               status: 'pending',
               menu_item_id: i.item.id,
-              selected_options: [],
+              selected_options: i.options || [],
               notes: i.notes || null,
             });
           }
@@ -234,7 +263,7 @@ export default function Orders() {
               unit_price: i.item.price,
               status: 'pending',
               menu_item_id: i.item.id,
-              selected_options: [],
+              selected_options: i.options || [],
               notes: i.notes || null,
             });
           }
@@ -569,6 +598,30 @@ export default function Orders() {
           )}
         </div>
       </Modal>
+
+      <Modal open={!!optItem} onClose={() => setOptItem(null)} title={optItem ? `Options · ${optItem.name}` : 'Options'}>
+        <div className="space-y-3">
+          {optList.map((o) => (
+            <label key={o.id} className="flex items-center gap-2 text-sm text-stone-200">
+              <input
+                type="checkbox"
+                checked={optSelected.includes(o.id)}
+                onChange={(e) => {
+                  setOptSelected((prev) =>
+                    e.target.checked ? [...prev, o.id] : prev.filter((x) => x !== o.id),
+                  );
+                }}
+              />
+              <span className="flex-1">{o.name}</span>
+              <span className="text-amber-300">+{formatFCFA(o.price_delta)}</span>
+            </label>
+          ))}
+          <button type="button" className="btn-primary w-full" onClick={confirmMenuOptions}>
+            Ajouter au panier
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }
+

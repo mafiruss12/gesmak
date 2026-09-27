@@ -15,7 +15,21 @@ type TableRow = RestaurantTable & {
   server_name?: string | null;
 };
 
+const STATUS_STYLE: Record<string, string> = {
+  free: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200',
+  occupied: 'border-amber-500/40 bg-amber-500/10 text-amber-200',
+  reserved: 'border-sky-500/40 bg-sky-500/10 text-sky-200',
+  cleaning: 'border-stone-500/40 bg-stone-500/10 text-stone-300',
+};
+const STATUS_LABEL: Record<string, string> = {
+  free: 'Libre',
+  occupied: 'Occupée',
+  reserved: 'Réservée',
+  cleaning: 'Nettoyage',
+};
+
 export default function Tables() {
+
   const navigate = useNavigate();
   const { member, user, activeEstablishment } = useAuth();
   const estId = activeEstablishment?.id || member?.establishment_id || null;
@@ -83,7 +97,7 @@ export default function Tables() {
   }
 
   async function cycleStatus(t: TableRow) {
-    const next: Record<string, string> = { free: 'occupied', occupied: 'reserved', reserved: 'free', cleaning: 'free' };
+    const next: Record<string, string> = { free: 'occupied', occupied: 'reserved', reserved: 'cleaning', cleaning: 'free' };
     await supabase.from('restaurant_tables').update({ status: next[t.status] || 'free' }).eq('id', t.id);
     await load();
   }
@@ -199,7 +213,7 @@ export default function Tables() {
                   : t.status === 'occupied'
                     ? 'border-error-500/30 bg-error-500/5'
                     : 'border-warning-500/30 bg-warning-500/5'
-              }`}
+              } ${STATUS_STYLE[t.status] || ''}`}
             >
               <div className="absolute top-2 right-2 flex gap-1">
                 <button

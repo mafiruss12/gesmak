@@ -5,8 +5,10 @@ import { supabase } from '@/lib/supabase';
 import {
   listReservations,
   upsertReservation,
+  openOrderForTable,
   type RestaurantReservation,
 } from '@/lib/restaurant';
+import { useNavigate } from 'react-router-dom';
 import { Modal, EmptyState, Badge } from '@/components/ui';
 
 const STATUS_LABEL: Record<string, string> = {
@@ -17,6 +19,7 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 export default function Reservations() {
+  const navigate = useNavigate();
   const { member, user, activeEstablishment } = useAuth();
   const estId = activeEstablishment?.id || member?.establishment_id || null;
   const [rows, setRows] = useState<RestaurantReservation[]>([]);
@@ -100,6 +103,48 @@ export default function Reservations() {
     }
   }
 
+  async function seatGuest(r: RestaurantReservation) {
+    if (!estId || !user?.id) return;
+    if (!confirm(`Installer ${r.customer_name} ?`)) return;
+    try {
+      await upsertReservation(
+        estId,
+        {
+          id: r.id,
+          table_id: r.table_id,
+          customer_name: r.customer_name,
+          phone: r.phone,
+          party_size: r.party_size,
+          reservation_time: r.reservation_time,
+          status: 'seated',
+          notes: r.notes,
+        },
+        user.id,
+      );
+      if (r.table_id) {
+        const { data: tb } = await supabase
+          .from('restaurant_tables')
+          .select('id, number')
+          .eq('id', r.table_id)
+          .maybeSingle();
+        if (tb) {
+          const orderId = await openOrderForTable({
+            estId,
+            tableId: tb.id,
+            tableNumber: String(tb.number),
+            userId: user.id,
+            covers: r.party_size,
+          });
+          navigate(`/orders?order=${orderId}&table=${tb.number}`);
+          return;
+        }
+      }
+      await load();
+    } catch (e: any) {
+      setMsg(e?.message || 'Erreur installation');
+    }
+  }
+
   if (!estId) return <div className="card p-4 text-sm">Sélectionnez un établissement.</div>;
   if (loading) {
     return (
@@ -164,25 +209,36 @@ export default function Reservations() {
                 </div>
                 <Badge color="primary">{STATUS_LABEL[r.status] || r.status}</Badge>
               </div>
-              <button
-                type="button"
-                className="text-sm text-amber-700"
-                onClick={() => {
-                  setEdit(r);
-                  setForm({
-                    customer_name: r.customer_name,
-                    phone: r.phone || '',
-                    party_size: String(r.party_size),
-                    reservation_time: r.reservation_time.slice(0, 16),
-                    table_id: r.table_id || '',
-                    status: r.status,
-                    notes: r.notes || '',
-                  });
-                  setModal(true);
-                }}
-              >
-                Modifier
-              </button>
+              <div className="flex flex-col gap-1 items-end">
+                {r.status === 'confirmed' && (
+                  <button
+                    type="button"
+                    className="text-sm text-emerald-600 font-medium"
+                    onClick={() => void seatGuest(r)}
+                  >
+                    Installer
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="text-sm text-amber-700"
+                  onClick={() => {
+                    setEdit(r);
+                    setForm({
+                      customer_name: r.customer_name,
+                      phone: r.phone || '',
+                      party_size: String(r.party_size),
+                      reservation_time: r.reservation_time.slice(0, 16),
+                      table_id: r.table_id || '',
+                      status: r.status,
+                      notes: r.notes || '',
+                    });
+                    setModal(true);
+                  }}
+                >
+                  Modifier
+                </button>
+              </div>
             </li>
           ))}
         </ul>

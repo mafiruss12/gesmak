@@ -248,6 +248,27 @@ export default function Kitchen() {
     await load();
   }
 
+  function printBill(o: OrderWithItems) {
+    const lines = (o.items || [])
+      .map(
+        (it) =>
+          `<tr><td>${it.product_name} × ${it.qty}</td><td style="text-align:right">${Number(it.qty) * Number(it.unit_price)} F</td></tr>`,
+      )
+      .join('');
+    const w = window.open('', '_blank', 'width=360,height=560');
+    if (!w) return;
+    w.document.write(`<!doctype html><html><head><title>Addition</title>
+      <style>body{font-family:system-ui,sans-serif;padding:16px} table{width:100%} h1{font-size:16px}</style>
+      </head><body>
+      <h1>Addition — Table ${o.table_number || '—'}</h1>
+      <p>${new Date(o.created_at).toLocaleString('fr-FR')}</p>
+      <table>${lines}</table>
+      <p style="font-weight:bold;margin-top:12px">Total : ${Number(o.total) || 0} FCFA</p>
+      <script>window.print()</script>
+      </body></html>`);
+    w.document.close();
+  }
+
   function openClose(o: OrderWithItems) {
     setCloseFor(o);
     setSplitMode(false);
@@ -414,6 +435,13 @@ export default function Kitchen() {
                   onClick={() => void openAssign(o)}
                 >
                   Serveur
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary text-xs min-h-[40px] px-2"
+                  onClick={() => printBill(o)}
+                >
+                  Imprimer
                 </button>
                 <button
                   type="button"
