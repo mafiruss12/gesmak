@@ -9,7 +9,8 @@ import { orderBalance } from '@/lib/rentalTypes';
 import { notifyTeam } from '@/lib/rentalNotify';
 
 export default function RentPayments() {
-  const { member } = useAuth();
+  const { member, activeEstablishment } = useAuth();
+  const estId = activeEstablishment?.id || member?.establishment_id || null;
   const [orders, setOrders] = useState<RentalOrder[]>([]);
   const [payments, setPayments] = useState<RentalPayment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -19,11 +20,11 @@ export default function RentPayments() {
   const [saving, setSaving] = useState(false);
 
   async function load() {
-    if (!member?.establishment_id) {
+    if (!estId) {
       setLoading(false);
       return;
     }
-    const est = member.establishment_id;
+    const est = estId;
     const [o, p] = await Promise.all([
       supabase.from('rental_orders').select('*').eq('establishment_id', est).order('created_at', { ascending: false }),
       supabase.from('rental_payments').select('*').eq('establishment_id', est).order('created_at', { ascending: false }).limit(50),
@@ -36,16 +37,16 @@ export default function RentPayments() {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [member?.establishment_id]);
+  }, [estId]);
 
   const unpaid = orders.filter((o) => orderBalance(o) > 0 && o.status !== 'cancelled');
 
   async function addPayment() {
-    if (!member?.establishment_id || !orderId || amount <= 0) return;
+    if (!estId || !orderId || amount <= 0) return;
     setSaving(true);
     const order = orders.find((o) => o.id === orderId);
     await supabase.from('rental_payments').insert({
-      establishment_id: member.establishment_id,
+      establishment_id: estId,
       order_id: orderId,
       amount,
       method: 'cash',
@@ -56,7 +57,7 @@ export default function RentPayments() {
         .update({ paid_amount: Number(order.paid_amount) + amount })
         .eq('id', orderId);
       await notifyTeam(
-        member.establishment_id,
+        estId,
         'Paiement reçu',
         `${order.client_name || 'Client'} — ${formatFCFA(amount)}`,
         '/rent/payments'

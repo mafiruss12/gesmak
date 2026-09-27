@@ -23,7 +23,8 @@ const emptyForm = {
 };
 
 export default function RentEquipment() {
-  const { member } = useAuth();
+  const { member, activeEstablishment } = useAuth();
+  const estId = activeEstablishment?.id || member?.establishment_id || null;
   const [items, setItems] = useState<RentalEquipment[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
@@ -35,7 +36,7 @@ export default function RentEquipment() {
   const [categoryInput, setCategoryInput] = useState('');
 
   async function load() {
-    if (!member?.establishment_id) {
+    if (!estId) {
       setLoading(false);
       return;
     }
@@ -52,7 +53,7 @@ export default function RentEquipment() {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [member?.establishment_id]);
+  }, [estId]);
 
   function openCreate() {
     setEditId(null);
@@ -104,7 +105,7 @@ export default function RentEquipment() {
   }
 
   async function save() {
-    if (!member?.establishment_id || !form.name.trim()) {
+    if (!estId || !form.name.trim()) {
       setError('Le nom est obligatoire');
       return;
     }
@@ -151,7 +152,7 @@ export default function RentEquipment() {
     );
   }
 
-  if (!member?.establishment_id) {
+  if (!estId) {
     return (
       <EmptyState
         icon={<Package size={48} />}

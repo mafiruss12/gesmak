@@ -29,7 +29,8 @@ function toISODate(d: Date) {
 }
 
 export default function RentCalendar() {
-  const { member } = useAuth();
+  const { member, activeEstablishment } = useAuth();
+  const estId = activeEstablishment?.id || member?.establishment_id || null;
   const [orders, setOrders] = useState<RentalOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const now = new Date();
@@ -39,20 +40,20 @@ export default function RentCalendar() {
 
   useEffect(() => {
     (async () => {
-      if (!member?.establishment_id) {
+      if (!estId) {
         setLoading(false);
         return;
       }
       const { data } = await supabase
         .from('rental_orders')
         .select('*')
-        .eq('establishment_id', member.establishment_id)
+        .eq('establishment_id', estId)
         .neq('status', 'cancelled')
         .order('event_date');
       setOrders((data ?? []) as RentalOrder[]);
       setLoading(false);
     })();
-  }, [member?.establishment_id]);
+  }, [estId]);
 
   const byDate = useMemo(() => {
     const map: Record<string, RentalOrder[]> = {};

@@ -10,7 +10,8 @@ import type { RentalClient } from '@/lib/rentalTypes';
 const empty = { full_name: '', phone: '', whatsapp: '', email: '', location: '', notes: '' };
 
 export default function RentClients() {
-  const { member } = useAuth();
+  const { member, activeEstablishment } = useAuth();
+  const estId = activeEstablishment?.id || member?.establishment_id || null;
   const [list, setList] = useState<RentalClient[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
@@ -21,14 +22,14 @@ export default function RentClients() {
   const [error, setError] = useState<string | null>(null);
 
   async function load() {
-    if (!member?.establishment_id) {
+    if (!estId) {
       setLoading(false);
       return;
     }
     const { data } = await supabase
       .from('rental_clients')
       .select('*')
-      .eq('establishment_id', member.establishment_id)
+      .eq('establishment_id', estId)
       .order('full_name');
     setList((data ?? []) as RentalClient[]);
     setLoading(false);
@@ -37,7 +38,7 @@ export default function RentClients() {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [member?.establishment_id]);
+  }, [estId]);
 
   function openCreate() {
     setEditId(null);
@@ -61,7 +62,7 @@ export default function RentClients() {
   }
 
   async function save() {
-    if (!member?.establishment_id || !form.full_name.trim()) {
+    if (!estId || !form.full_name.trim()) {
       setError('Le nom est obligatoire');
       return;
     }
@@ -80,7 +81,7 @@ export default function RentClients() {
       ({ error: err } = await supabase.from('rental_clients').update(payload).eq('id', editId));
     } else {
       ({ error: err } = await supabase.from('rental_clients').insert({
-        establishment_id: member.establishment_id,
+        establishment_id: estId,
         ...payload,
       }));
     }

@@ -8,7 +8,8 @@ import { notifyTeam, clientWhatsAppUrl } from '@/lib/rentalNotify';
 import type { RentalOrder, RentalOrderItem, RentalEquipment } from '@/lib/rentalTypes';
 
 export default function RentMovements() {
-  const { member } = useAuth();
+  const { member, activeEstablishment } = useAuth();
+  const estId = activeEstablishment?.id || member?.establishment_id || null;
   const [orders, setOrders] = useState<RentalOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<RentalOrder | null>(null);
@@ -18,14 +19,14 @@ export default function RentMovements() {
   const [wa, setWa] = useState<string | null>(null);
 
   async function load() {
-    if (!member?.establishment_id) {
+    if (!estId) {
       setLoading(false);
       return;
     }
     const { data } = await supabase
       .from('rental_orders')
       .select('*')
-      .eq('establishment_id', member.establishment_id)
+      .eq('establishment_id', estId)
       .in('status', ['confirmed', 'out'])
       .order('event_date');
     setOrders((data ?? []) as RentalOrder[]);
@@ -35,10 +36,10 @@ export default function RentMovements() {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [member?.establishment_id]);
+  }, [estId]);
 
   async function processMovement() {
-    if (!selected || !member?.establishment_id) return;
+    if (!selected || !estId) return;
     setSaving(true);
     setWa(null);
 
@@ -49,7 +50,7 @@ export default function RentMovements() {
     const orderItems = (items ?? []) as RentalOrderItem[];
 
     await supabase.from('rental_movements').insert({
-      establishment_id: member.establishment_id,
+      establishment_id: estId,
       order_id: selected.id,
       type: mode,
       responsible: responsible || null,
@@ -88,7 +89,7 @@ export default function RentMovements() {
     await supabase.from('rental_orders').update({ status: newStatus, updated_at: new Date().toISOString() }).eq('id', selected.id);
 
     await notifyTeam(
-      member.establishment_id,
+      estId,
       mode === 'out' ? 'Sortie matériel' : 'Retour matériel',
       `${selected.client_name || 'Client'} — commande ${selected.id.slice(0, 8)}`,
       '/rent/movements'

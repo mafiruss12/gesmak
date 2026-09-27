@@ -43,20 +43,21 @@ const PRESETS: Omit<RentalPack, 'id' | 'establishment_id' | 'created_at'>[] = [
 ];
 
 export default function RentPacks() {
-  const { member } = useAuth();
+  const { member, activeEstablishment } = useAuth();
+  const estId = activeEstablishment?.id || member?.establishment_id || null;
   const [packs, setPacks] = useState<RentalPack[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   async function load() {
-    if (!member?.establishment_id) {
+    if (!estId) {
       setLoading(false);
       return;
     }
     const { data } = await supabase
       .from('rental_packs')
       .select('*')
-      .eq('establishment_id', member.establishment_id)
+      .eq('establishment_id', estId)
       .order('name');
     setPacks((data ?? []) as RentalPack[]);
     setLoading(false);
@@ -65,14 +66,14 @@ export default function RentPacks() {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [member?.establishment_id]);
+  }, [estId]);
 
   async function seedPresets() {
-    if (!member?.establishment_id) return;
+    if (!estId) return;
     setSaving(true);
     for (const p of PRESETS) {
       await supabase.from('rental_packs').insert({
-        establishment_id: member.establishment_id,
+        establishment_id: estId,
         name: p.name,
         event_type: p.event_type,
         guests: p.guests,

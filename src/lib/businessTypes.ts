@@ -155,49 +155,65 @@ export function menuRoutesForComplexe(services: string[]): string[] {
 export type BusinessUI = {
   productWord: string;
   productWordPlural: string;
+  /** Alias legacy pour formulaires inventaire */
+  productSingular?: string;
   inventoryTitle: string;
   inventorySubtitle: string;
   posTitle: string;
   shortcutInventory: string;
   emptyProducts: string;
+  categories: string[];
+  unitDefault: string;
 };
 
 export const BUSINESS_UI: Record<BusinessType, BusinessUI> = {
   maquis: {
     productWord: 'boisson',
     productWordPlural: 'boissons',
+    productSingular: 'boisson',
     inventoryTitle: 'Inventaire boissons',
-    inventorySubtitle: 'Stock, casiers, arrivages',
+    inventorySubtitle: 'Stock, casiers, arrivages, consignes',
     posTitle: 'Caisse maquis',
     shortcutInventory: 'Boissons',
     emptyProducts: 'Aucune boisson en stock.',
+    categories: ['Bière', 'Boisson gazeuse', 'Eau', 'Vin', 'Spiritueux', 'Grillade', 'Autre'],
+    unitDefault: 'bouteille',
   },
   restaurant: {
     productWord: 'plat',
     productWordPlural: 'plats',
+    productSingular: 'plat',
     inventoryTitle: 'Stock cuisine',
     inventorySubtitle: 'Ingrédients et produits liés à la carte',
     posTitle: 'Caisse restaurant',
     shortcutInventory: 'Stock',
     emptyProducts: 'Aucun produit en stock.',
+    categories: ['Entrée', 'Plat', 'Dessert', 'Boisson', 'Ingrédient', 'Autre'],
+    unitDefault: 'unité',
   },
   location_event: {
     productWord: 'matériel',
     productWordPlural: 'matériels',
+    productSingular: 'matériel',
     inventoryTitle: 'Parc matériel',
     inventorySubtitle: 'Location et disponibilités',
     posTitle: 'Location',
     shortcutInventory: 'Matériel',
     emptyProducts: 'Aucun matériel enregistré.',
+    categories: ['Chaises', 'Tables', 'Bâches', 'Sono', 'Autre'],
+    unitDefault: 'pièce',
   },
   complexe: {
     productWord: 'article',
     productWordPlural: 'articles',
+    productSingular: 'article',
     inventoryTitle: 'Stock établissement',
     inventorySubtitle: 'Services cochés (bar, resto, chambres…)',
     posTitle: 'Caisse',
     shortcutInventory: 'Stock',
     emptyProducts: 'Aucun produit enregistré.',
+    categories: ['Boisson', 'Alimentaire', 'Chambre', 'Boutique', 'Autre'],
+    unitDefault: 'unité',
   },
 };
 
@@ -320,3 +336,37 @@ export function buildSmsLink(phone: string | null | undefined, message: string):
   const digits = phone.replace(/\D/g, '');
   return `sms:${digits}?body=${encodeURIComponent(message)}`;
 }
+
+
+/** Location événementielle — statuts commande */
+export const RENTAL_STATUS_LABELS: Record<string, string> = {
+  draft: 'Brouillon',
+  quoted: 'Devis',
+  confirmed: 'Confirmée',
+  out: 'Sortie',
+  returned: 'Retournée',
+  cancelled: 'Annulée',
+  paid: 'Payée',
+};
+
+export const EQUIPMENT_CATEGORIES = [
+  'chaises',
+  'tables',
+  'baches',
+  'sono',
+  'eclairage',
+  'decoration',
+  'vaisselle',
+  'autre',
+] as const;
+
+export const EQUIPMENT_CATEGORY_LABELS: Record<string, string> = {
+  chaises: 'Chaises',
+  tables: 'Tables',
+  baches: 'Bâches / Tentes',
+  sono: 'Sono',
+  eclairage: 'Éclairage',
+  decoration: 'Décoration',
+  vaisselle: 'Vaisselle',
+  autre: 'Autre',
+};

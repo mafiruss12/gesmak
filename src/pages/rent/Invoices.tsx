@@ -12,25 +12,26 @@ type DocMode = 'facture' | 'devis';
 
 export default function RentInvoices() {
   const { member, activeEstablishment } = useAuth();
+  const estId = activeEstablishment?.id || member?.establishment_id || null;
   const [orders, setOrders] = useState<RentalOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [detail, setDetail] = useState<{ order: RentalOrder; items: RentalOrderItem[]; mode: DocMode } | null>(null);
 
   useEffect(() => {
     (async () => {
-      if (!member?.establishment_id) {
+      if (!estId) {
         setLoading(false);
         return;
       }
       const { data } = await supabase
         .from('rental_orders')
         .select('*')
-        .eq('establishment_id', member.establishment_id)
+        .eq('establishment_id', estId)
         .order('created_at', { ascending: false });
       setOrders((data ?? []) as RentalOrder[]);
       setLoading(false);
     })();
-  }, [member?.establishment_id]);
+  }, [estId]);
 
   async function openDoc(o: RentalOrder, mode: DocMode) {
     const { data } = await supabase.from('rental_order_items').select('*').eq('order_id', o.id);

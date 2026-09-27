@@ -10,7 +10,8 @@ import type { RentalClient, RentalEquipment, RentalOrder, RentalOrderItem } from
 import { orderBalance } from '@/lib/rentalTypes';
 
 export default function RentOrders() {
-  const { member, user } = useAuth();
+  const { member, user, activeEstablishment } = useAuth();
+  const estId = activeEstablishment?.id || member?.establishment_id || null;
   const [orders, setOrders] = useState<RentalOrder[]>([]);
   const [clients, setClients] = useState<RentalClient[]>([]);
   const [equipment, setEquipment] = useState<RentalEquipment[]>([]);
@@ -34,7 +35,7 @@ export default function RentOrders() {
   ]);
 
   async function load() {
-    if (!member?.establishment_id) {
+    if (!estId) {
       setLoading(false);
       return;
     }
@@ -53,10 +54,10 @@ export default function RentOrders() {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [member?.establishment_id]);
+  }, [estId]);
 
   async function createOrder() {
-    if (!member?.establishment_id) return;
+    if (!estId) return;
     const validLines = lines.filter((l) => l.equipment_id && l.qty > 0);
     if (!validLines.length) {
       setError('Ajoutez au moins un article');

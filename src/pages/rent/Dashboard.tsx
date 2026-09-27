@@ -13,6 +13,7 @@ import { orderBalance } from '@/lib/rentalTypes';
 
 export default function RentDashboard() {
   const { member, activeEstablishment } = useAuth();
+  const estId = activeEstablishment?.id || member?.establishment_id || null;
   const theme = BUSINESS_THEMES.location_event;
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
@@ -31,11 +32,11 @@ export default function RentDashboard() {
 
   useEffect(() => {
     (async () => {
-      if (!member?.establishment_id) {
+      if (!estId) {
         setLoading(false);
         return;
       }
-      const est = member.establishment_id;
+      const est = estId;
       const today = todayISO().slice(0, 10);
       const monthStart = today.slice(0, 8) + '01';
 
@@ -65,7 +66,7 @@ export default function RentDashboard() {
       });
       setLoading(false);
     })();
-  }, [member?.establishment_id]);
+  }, [estId]);
 
   if (loading) {
     return (
@@ -75,7 +76,7 @@ export default function RentDashboard() {
     );
   }
 
-  if (!member?.establishment_id) {
+  if (!estId) {
     return (
       <EmptyState
         icon={<Package size={48} />}
