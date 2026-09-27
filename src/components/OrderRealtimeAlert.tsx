@@ -1,0 +1,237 @@
+import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Bell, X, Volume2, VolumeX } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/lib/auth';
+import {
+  playOrderAlertSound,
+  orderSoundEnabled,
+  setOrderSoundEnabled,
+  showOrderBrowserNotification,
+  requestOrderAlertPermissions,
+} from '@/lib/orderAlerts';
+
+type IncomingOrder = {
+  id: string;
+  establishment_id: string;
+  table_number?: string | null;
+  customer_name?: string | null;
+  notes?: string | null;
+  total?: number | null;
+  source?: string | null;
+  created_at?: string;
+  itemsSummary?: string;
+};
+
+/**
+ * Alertes temps réel pour propriétaire / gérant :
+ * écoute INSERT sur orders de l'établissement actif (commandes QR incluses).
+ * Popup globale + son (si non coupé) + notification navigateur si autorisée.
+ */
+export default function OrderRealtimeAlert() {
+  const { member, activeEstablishment, user } = useAuth();
+  const navigate = useNavigate();
+  const estId = activeEstablishment?.id || member?.establishment_id || null;
+  const role = member?.role;
+  const canReceive =
+    !!estId &&
+    !!user &&
+    (role === 'owner' || role === 'manager' || role === 'admin' || role === 'super_admin');
+
+  const [popup, setPopup] = useState<IncomingOrder | null>(null);
+  const [soundOn, setSoundOn] = useState(() => {
+    try {
+      return localStorage.getItem('mm_order_sound_ok') !== '0';
+    } catch {
+      return true;
+    }
+  });
+  const seen = useRef<Set<string>>(new Set());
+  const armed = useRef(false);
+
+  // Débloque l'audio au premier geste (contrainte navigateurs)
+  useEffect(() => {
+    if (!canReceive) return;
+    const arm = () => {
+      if (armed.current) return;
+      armed.current = true;
+      void requestOrderAlertPermissions().then((r) => {
+        if (r.sound) setSoundOn(true);
+      });
+    };
+    window.addEventListener('pointerdown', arm, { once: true, passive: true });
+    window.addEventListener('keydown', arm, { once: true });
+    return () => {
+      window.removeEventListener('pointerdown', arm);
+      window.removeEventListener('keydown', arm);
+    };
+  }, [canReceive]);
+
+  useEffect(() => {
+    if (!canReceive || !estId) return;
+
+    const channel = supabase
+      .channel(`order-alert-${estId}-${user?.id || 'x'}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'orders',
+          filter: `establishment_id=eq.${estId}`,
+        },
+        async (payload) => {
+          const row = payload.new as IncomingOrder;
+          if (!row?.id || seen.current.has(row.id)) return;
+          seen.current.add(row.id);
+
+          // résumé articles
+          let itemsSummary = '';
+          try {
+            const { data: items } = await supabase
+              .from('order_items')
+              .select('product_name, qty')
+              .eq('order_id', row.id);
+            if (items?.length) {
+              itemsSummary = items
+                .map((i: any) => `${i.product_name || '?'} × ${i.qty}`)
+                .join(', ');
+            }
+          } catch {
+            /* */
+          }
+
+          const order: IncomingOrder = { ...row, itemsSummary };
+          setPopup(order);
+
+          if (soundOn && localStorage.getItem('mm_order_sound_ok') !== '0') {
+            playOrderAlertSound();
+          }
+
+          const body = [
+            order.customer_name || order.notes || 'Commande',
+            order.table_number ? `Table ${order.table_number}` : null,
+            itemsSummary || null,
+            order.total != null ? `${Math.round(Number(order.total))} F` : null,
+          ]
+            .filter(Boolean)
+            .join(' · ');
+
+          showOrderBrowserNotification('Nouvelle commande', body);
+
+          // historique notifications app
+          try {
+            if (user?.id) {
+              await supabase.from('notifications').insert({
+                user_id: user.id,
+                title: 'Nouvelle commande',
+                message: body,
+                type: 'qr_order',
+                link: '/kitchen',
+                read: false,
+              });
+            }
+          } catch {
+            /* */
+          }
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [canReceive, estId, user?.id, soundOn]);
+
+  function toggleSound() {
+    const next = !soundOn;
+    setSoundOn(next);
+    setOrderSoundEnabled(next);
+  }
+
+  if (!canReceive) return null;
+
+  return (
+    <>
+      {/* Rappel discret : son activable */}
+      <div className="sr-only" aria-live="polite" />
+
+      {popup && (
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-3 bg-black/50">
+          <div className="w-full max-w-md rounded-2xl border-2 border-red-500 bg-stone-900 shadow-2xl shadow-red-900/40 overflow-hidden animate-pulse-once">
+            <div className="bg-red-600 px-4 py-3 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 font-bold text-white">
+                <Bell className="animate-bounce" size={22} />
+                Nouvelle commande
+              </div>
+              <button
+                type="button"
+                className="text-white/90 p-1"
+                onClick={() => setPopup(null)}
+                aria-label="Fermer"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-4 space-y-2 text-stone-100">
+              {popup.customer_name && (
+                <p className="text-sm">
+                  <span className="text-stone-400">Client :</span> {popup.customer_name}
+                </p>
+              )}
+              {popup.table_number && (
+                <p className="text-sm">
+                  <span className="text-stone-400">Table :</span> {popup.table_number}
+                </p>
+              )}
+              {popup.itemsSummary && (
+                <p className="text-sm font-medium">{popup.itemsSummary}</p>
+              )}
+              {!popup.itemsSummary && popup.notes && (
+                <p className="text-sm text-stone-300">{popup.notes}</p>
+              )}
+              {popup.total != null && (
+                <p className="text-lg font-bold text-amber-400">
+                  {Math.round(Number(popup.total)).toLocaleString('fr-FR')} F
+                </p>
+              )}
+              <p className="text-xs text-stone-500">
+                {popup.created_at
+                  ? new Date(popup.created_at).toLocaleTimeString('fr-FR', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      second: '2-digit',
+                    })
+                  : 'À l’instant'}
+                {popup.source === 'qr_table' ? ' · QR table' : ''}
+              </p>
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  className="btn-primary flex-1"
+                  onClick={() => {
+                    setPopup(null);
+                    navigate('/kitchen');
+                  }}
+                >
+                  Traiter
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary flex items-center gap-1 px-3"
+                  onClick={toggleSound}
+                  title={soundOn ? 'Couper le son' : 'Activer le son'}
+                >
+                  {soundOn ? <Volume2 size={18} /> : <VolumeX size={18} />}
+                </button>
+                <button type="button" className="btn-ghost px-3" onClick={() => setPopup(null)}>
+                  Fermer
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}

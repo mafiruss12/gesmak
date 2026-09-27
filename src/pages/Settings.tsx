@@ -2,7 +2,7 @@ import { DEFAULT_BRANDING, type BtpBranding } from '@/lib/btp';
 import { isBtp } from '@/lib/businessTypes';
 import { getStoredTheme, applyTheme, type ThemeMode } from '@/lib/theme';
 import { useEffect, useState, type ReactNode } from 'react';
-import { Building2, User, Save, CheckCircle2, Camera, Plus, Lock, KeyRound, RefreshCw, Download, Shield, MapPin, Loader2, Navigation, Fingerprint, CreditCard, LogOut, Palette, ChevronRight } from 'lucide-react';
+import { Building2, User, Save, CheckCircle2, Camera, Plus, Lock, KeyRound, RefreshCw, Download, Shield, MapPin, Loader2, Navigation, Fingerprint, CreditCard, LogOut, Palette, ChevronRight, Bell } from 'lucide-react';
 // MapPin used for GPS
 import { requestMicrophone, resetPermissionsOnboarding, openAppSettings } from '@/lib/devicePermissions';
 import {
@@ -12,6 +12,7 @@ import {
   disableBiometric,
 } from '@/lib/biometric';
 import { supabase } from '@/lib/supabase';
+import { orderSoundEnabled, setOrderSoundEnabled } from '@/lib/orderAlerts';
 import { seedDefaultStockForEstablishment } from '@/lib/seedDefaultStock';
 import { useAuth } from '@/lib/auth';
 import { PLAN, PLANS, getSubscriptionState, getEffectivePlan, getPlanLimits, getPlanDisplayTitle, getActivePlanLimits, formatPlanLimitsLine, isOnTrial, paymentInstructions, paymentWhatsAppLink } from '@/lib/subscription';
@@ -603,6 +604,16 @@ async function saveProfile() {
             <SettingsRow icon={<KeyRound size={20} />} title="Mot de passe" subtitle="Changer le mot de passe" onClick={() => setOpenPanel('password')} />
             <SettingsRow icon={<Fingerprint size={20} />} title="Code PIN et biométrie" subtitle="Empreinte / Face ID" onClick={() => setOpenPanel('bio')} />
             <SettingsRow icon={<Shield size={20} />} title="Autorisations appareil" subtitle="Micro, caméra, GPS" onClick={() => setOpenPanel('perms')} />
+            <SettingsRow
+              icon={<Bell size={20} />}
+              title="Son commandes QR"
+              subtitle={typeof localStorage !== 'undefined' && localStorage.getItem('mm_order_sound_ok') === '0' ? 'Coupé — appuyer pour activer' : 'Activé — appuyer pour couper'}
+              onClick={() => {
+                const muted = localStorage.getItem('mm_order_sound_ok') === '0';
+                setOrderSoundEnabled(muted);
+                window.alert(muted ? 'Son des commandes activé' : 'Son des commandes coupé (la popup reste affichée)');
+              }}
+            />
           </div>
         </div>
         <div>

@@ -2,6 +2,7 @@ import { type ReactNode, useState, useEffect , useRef} from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, ShoppingCart, Package, Camera, ClipboardCheck, QrCode, Users, Building2, Beer, LogOut, Menu, X, UserCog, ClipboardList, Calculator, BarChart3, Truck, UserCircle, Calendar, CalendarDays, UtensilsCrossed, Bell, Settings, Sparkles, Receipt, Wallet, MessageCircle, FileText, Crown, Brain, Sun, Moon, Wrench } from 'lucide-react';
 import DailyReportGate from '@/components/DailyReportGate';
+import OrderRealtimeAlert from '@/components/OrderRealtimeAlert';
 import OwnerReportReminder from '@/components/OwnerReportReminder';
 import ReportDelayNotifier from '@/components/ReportDelayNotifier';
 import PermissionsOnboarding from '@/components/PermissionsOnboarding';
@@ -712,6 +713,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
         <main className="flex-1 p-4 lg:p-8 pb-36"><SubscriptionGate />
           <DailyReportGate />
+          <OrderRealtimeAlert />
           <OwnerReportReminder />
           <ReportDelayNotifier />
           <PermissionsOnboarding />
