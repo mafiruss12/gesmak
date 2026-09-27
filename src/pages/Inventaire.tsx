@@ -63,7 +63,7 @@ export default function Inventaire() {
   const [shareBusy, setShareBusy] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
   const [seeding, setSeeding] = useState(false);
-  const [tab, setTab] = useState<'stock' | 'arrivage' | 'options' | 'preuves'>('stock');
+  const [tab, setTab] = useState<'stock' | 'arrivage' | 'pertes' | 'options' | 'preuves'>('stock');
   const [proofs, setProofs] = useState<StockProofPhoto[]>([]);
   const [proofLoading, setProofLoading] = useState(false);
   const [proofBusy, setProofBusy] = useState(false);
@@ -78,6 +78,7 @@ export default function Inventaire() {
   const [auditRows, setAuditRows] = useState<any[]>([]);
   const [liveNote, setLiveNote] = useState('');
   const [arrivageForm, setArrivageForm] = useState({ productId: '', qty: '', note: '' });
+  const [perteForm, setPerteForm] = useState({ productId: '', qty: '', kind: 'perte' as 'perte' | 'casse', note: '' });
 
   const [form, setForm] = useState({
     name: '', category: ui.categories[0] || 'Autre', price: '', cost: '', stock: '', min_stock: '12', unit: ui.unitDefault || 'unité', image_url: '', units_per_package: '12', consigne_unit: '', empty_bottles: '0',
@@ -1081,6 +1082,80 @@ export default function Inventaire() {
     alert(`Arrivage enregistré : +${qty} ${p.name}`);
   }
 
+  async function confirmPerte() {
+    if (!canEditStock) { alert('Réservé au propriétaire'); return; }
+    if (!estId || !perteForm.productId || !perteForm.qty) {
+      alert('Produit et quantité obligatoires');
+      return;
+    }
+    const qty = Number(perteForm.qty);
+    if (!qty || qty <= 0) {
+      alert('Quantité invalide');
+      return;
+    }
+    const p = products.find((x) => x.id === perteForm.productId);
+    if (!p) return;
+    const kindLabel = perteForm.kind === 'casse' ? 'casse' : 'perte';
+    if (!confirm(`Confirmer ${kindLabel} de ${qty} « ${p.name} » ? Le stock sera diminué.`)) return;
+    const prev = Number(p.stock) || 0;
+    const next = Math.max(0, prev - qty);
+    if (isOnline()) {
+      const { error } = await supabase.from('products').update({ stock: next }).eq('id', p.id);
+      if (error) {
+        alert(error.message);
+        return;
+      }
+      await logAudit({
+        establishment_id: estId,
+        actor_id: member?.user_id,
+        actor_name: member?.full_name || member?.email,
+        action: 'stock.' + kindLabel,
+        entity_type: 'product',
+        entity_id: p.id,
+        entity_label: p.name,
+        old_value: { stock: prev },
+        new_value: { stock: next, qty },
+        reason: perteForm.note || kindLabel,
+        client_op_id: newClientOpId(),
+      });
+      try {
+        await supabase.from('stock_movements').insert({
+          establishment_id: estId,
+          product_id: p.id,
+          product_name: p.name,
+          qty: -qty,
+          movement_type: kindLabel,
+          unit_cost: Number(p.cost) || 0,
+          unit_price: Number(p.price) || 0,
+          reason: kindLabel,
+          note: perteForm.note || kindLabel,
+          created_by: member?.user_id || null,
+        });
+      } catch { /* */ }
+      // dépenses / pertes visibles en compta si possible
+      try {
+        const unitCost = Number(p.cost) || 0;
+        if (unitCost > 0) {
+          await supabase.from('expenses').insert({
+            establishment_id: estId,
+            amount: unitCost * qty,
+            category: kindLabel === 'casse' ? 'Casse' : 'Pertes',
+            description: `${kindLabel} — ${p.name} × ${qty}`,
+            created_by: member?.user_id || null,
+          });
+        }
+      } catch { /* */ }
+      await loadProducts();
+      void loadProofs();
+      await loadAudit();
+    } else {
+      await queueAdd('products', 'update', { stock: next, _prev_stock: prev }, { id: p.id });
+      setProducts((prevP) => prevP.map((x) => (x.id === p.id ? { ...x, stock: next } : x)));
+    }
+    setPerteForm({ productId: '', qty: '', kind: 'perte', note: '' });
+    setTab('stock');
+  }
+
   function printInventory(mode: 'stock' | 'blank' = 'blank') {
     const estName = member?.establishment_id ? 'Établissement' : 'Activité';
     const dateStr = new Date().toLocaleDateString('fr-FR', {
@@ -1248,7 +1323,7 @@ export default function Inventaire() {
 
       {/* Sections inventaire — arrivage / options uniquement propriétaire */}
       {canEditStock ? (
-      <div className="grid grid-cols-3 gap-2 p-1 rounded-2xl bg-stone-900 border border-stone-800">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-1 rounded-2xl bg-stone-900 border border-stone-800">
         <button
           type="button"
           onClick={() => setTab('stock')}
@@ -1266,6 +1341,15 @@ export default function Inventaire() {
           }`}
         >
           <Truck size={16} className="inline mr-1" /> Nouvel arrivage
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab('pertes')}
+          className={`rounded-xl px-2 py-2.5 text-xs sm:text-sm font-medium transition ${
+            tab === 'pertes' ? 'bg-amber-500/20 text-amber-200 border border-amber-500/40' : 'text-stone-400 hover:text-stone-200'
+          }`}
+        >
+          Pertes / casses
         </button>
         <button
           type="button"
@@ -1346,6 +1430,66 @@ export default function Inventaire() {
               Nouvelle référence produit
             </button>
           </div>
+        </div>
+      )}
+
+      
+      {tab === 'pertes' && canEditStock && (
+        <div className="card p-4 space-y-3 border border-red-500/20">
+          <h2 className="font-semibold text-stone-100 flex items-center gap-2">
+            Enregistrer une perte ou casse
+          </h2>
+          <p className="text-xs text-stone-400">
+            Diminue le stock, trace un mouvement et une dépense (si coût renseigné).
+          </p>
+          <label className="block text-xs text-stone-400">
+            Type
+            <select
+              className="input-field mt-1"
+              value={perteForm.kind}
+              onChange={(e) => setPerteForm({ ...perteForm, kind: e.target.value as 'perte' | 'casse' })}
+            >
+              <option value="perte">Perte</option>
+              <option value="casse">Casse</option>
+            </select>
+          </label>
+          <label className="block text-xs text-stone-400">
+            Produit
+            <select
+              className="input-field mt-1"
+              value={perteForm.productId}
+              onChange={(e) => setPerteForm({ ...perteForm, productId: e.target.value })}
+            >
+              <option value="">— Choisir —</option>
+              {products.map((pr) => (
+                <option key={pr.id} value={pr.id}>
+                  {pr.name} (stock {pr.stock})
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block text-xs text-stone-400">
+            Quantité
+            <input
+              type="number"
+              min={1}
+              className="input-field mt-1"
+              value={perteForm.qty}
+              onChange={(e) => setPerteForm({ ...perteForm, qty: e.target.value })}
+            />
+          </label>
+          <label className="block text-xs text-stone-400">
+            Note
+            <input
+              className="input-field mt-1"
+              value={perteForm.note}
+              onChange={(e) => setPerteForm({ ...perteForm, note: e.target.value })}
+              placeholder="Ex. bouteille cassée au service"
+            />
+          </label>
+          <button type="button" className="btn-primary w-full" onClick={() => void confirmPerte()}>
+            Valider perte / casse
+          </button>
         </div>
       )}
 
