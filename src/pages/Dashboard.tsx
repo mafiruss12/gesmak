@@ -382,46 +382,21 @@ export default function Dashboard() {
   }
 
   const shortcuts =
-    bizType === 'restaurant' ? [
-      { to: '/orders', label: 'Commandes', icon: Receipt },
-      { to: '/kitchen', label: 'Cuisine', icon: UtensilsCrossed },
-      { to: '/tables', label: 'Tables', icon: LayoutDashboard },
-      { to: '/pos', label: ui.posTitle, icon: ShoppingCart },
-    ] : bizType === 'maquis' ? [
+    bizType === 'maquis' ? [
       { to: '/live-sales', label: 'Ventes journée', icon: ShoppingCart },
       { to: '/pos', label: ui.posTitle, icon: ShoppingCart },
       { to: '/inventory', label: ui.shortcutInventory, icon: Package },
       { to: '/daily-report', label: 'Point du soir', icon: TrendingUp },
-    ] : bizType === 'complexe_hotelier' || bizType === 'complexe' ? [
-      { to: '/hotel', label: 'Dashboard hôtel', icon: LayoutDashboard },
+    ] : bizType === 'complexe' ? [
+      { to: '/hotel', label: 'Établissement', icon: LayoutDashboard },
       { to: '/hotel/rooms', label: 'Chambres', icon: LayoutDashboard },
       { to: '/hotel/reservations', label: 'Réservations', icon: Receipt },
       { to: '/pos', label: 'Caisse', icon: ShoppingCart },
-    ] : bizType === 'depot' ? [
-      { to: '/depot/deliveries', label: 'Livraisons', icon: Truck },
-      { to: '/inventory', label: 'Stock dépôt', icon: Package },
-      { to: '/depot/clients', label: 'Clients', icon: Users },
-      { to: '/daily-report', label: 'Journal', icon: TrendingUp },
-    ] : bizType === 'quincaillerie' ? [
-      { to: '/pos', label: ui.posTitle, icon: ShoppingCart },
-      { to: '/inventory', label: 'Matériaux', icon: Package },
-      { to: '/purchases', label: 'Achats', icon: Truck },
-      { to: '/documents', label: 'Devis', icon: Receipt },
-    ] : bizType === 'boutique' || bizType === 'superette' || bizType === 'magasin' ? [
-      { to: '/pos', label: ui.posTitle, icon: ShoppingCart },
-      { to: '/inventory', label: ui.shortcutInventory, icon: Package },
-      { to: '/purchases', label: 'Achats', icon: Truck },
-      { to: '/customers', label: 'Clients', icon: Users },
     ] : bizType === 'location_event' ? [
       { to: '/rent/equipment', label: 'Matériel', icon: Package },
       { to: '/rent/orders', label: 'Commandes', icon: Receipt },
       { to: '/rent/calendar', label: 'Calendrier', icon: LayoutDashboard },
       { to: '/rent/clients', label: 'Clients', icon: Users },
-    ] : bizType === 'btp' ? [
-      { to: '/btp/documents', label: 'Devis', icon: Receipt },
-      { to: '/btp/clients', label: 'Clients', icon: Users },
-      { to: '/btp/materials', label: 'Matériaux', icon: Package },
-      { to: '/expenses', label: 'Dépenses', icon: DollarSign },
     ] : [
       { to: '/pos', label: ui.posTitle, icon: ShoppingCart },
       { to: '/inventory', label: ui.shortcutInventory, icon: Package },
@@ -599,10 +574,10 @@ export default function Dashboard() {
         <StatCard title="Équipe" value={String(data.employeeCount)} icon={<Users size={20} />} />
           </>
         )}
-        {(bizType === 'restaurant' || bizType === 'bar') && (
+        {(false || false) && (
           <StatCard title="Commandes actives" value={String(data.activeOrders)} icon={<Receipt size={20} />} />
         )}
-        {bizType === 'restaurant' && (
+        {false && (
           <StatCard title="Tables" value={`${data.occupiedTables}/${data.occupiedTables + data.freeTables}`} icon={<LayoutDashboard size={20} />} />
         )}
         {(bizType === 'maquis' || bizType === 'magasin') && (
@@ -640,8 +615,8 @@ export default function Dashboard() {
         </DashLink>
         <DashLink to="/inventory" className="block">
         <div className="card h-full">
-          <h2 className="font-semibold text-stone-100 mb-3">{bizType === 'restaurant' ? 'Commandes en cours' : 'Top produits (7 j)'} →</h2>
-          {bizType === 'restaurant' && data.activeOrdersList.length > 0 ? (
+          <h2 className="font-semibold text-stone-100 mb-3">{false ? 'Commandes en cours' : 'Top produits (7 j)'} →</h2>
+          {false && data.activeOrdersList.length > 0 ? (
             <ul className="space-y-2">
               {data.activeOrdersList.slice(0, 5).map((o) => (
                 <li key={o.id} className="flex justify-between text-sm text-stone-300">

@@ -20,7 +20,7 @@ export type SeedProduct = {
 export function usesCasiers(type: string | null | undefined): boolean {
   // restaurant : casiers seulement si besoin bar — par défaut portions
   const t = normalizeBusinessType(type);
-  return t === 'maquis' || t === 'depot';
+  return t === 'maquis';
 }
 
 export function casierSize(type: string | null | undefined): number {
@@ -193,16 +193,8 @@ const RESTAURANT: SeedProduct[] = [
 
 const BY_TYPE: Record<BusinessType, SeedProduct[]> = {
   maquis: MAQUIS,
-  restaurant: RESTAURANT,
-  magasin: MAGASIN,
-  boutique: BOUTIQUE,
-  superette: SUPERETTE,
-  quincaillerie: QUINCAILLERIE,
-  location_event: LOCATION,
-  btp: [],
-  depot: MAQUIS,
+  location_event: [],
   complexe: MAQUIS,
-  complexe_hotelier: MAQUIS,
 };
 
 export function getSeedCatalog(type: string | null | undefined): SeedProduct[] {
@@ -213,17 +205,9 @@ export function getSeedCatalog(type: string | null | undefined): SeedProduct[] {
 export function catalogLabel(type: string | null | undefined): string {
   const t = normalizeBusinessType(type);
   const map: Record<BusinessType, string> = {
-    maquis: 'Importer catalogue',
-    restaurant: 'Importer carte restaurant',
-    magasin: 'Catalogue magasin (épicerie & hygiène)',
-    boutique: 'Catalogue boutique (prêt-à-porter)',
-    superette: 'Catalogue supérette (rayons)',
-    quincaillerie: 'Catalogue quincaillerie (outils & matériaux)',
-    location_event: 'Parc type location (chaises, tables, sono)',
-    btp: 'Catalogue matériaux BTP',
-    depot: 'Catalogue dépôt (boissons gros)',
-    complexe: 'Catalogue établissement (bar & services)',
-    complexe_hotelier: 'Catalogue complexe hôtelier',
+    maquis: 'Catalogue maquis (boissons)',
+    location_event: 'Catalogue location',
+    complexe: 'Catalogue établissement',
   };
   return map[t] || 'Catalogue de démarrage';
 }

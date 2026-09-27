@@ -64,7 +64,7 @@ export const RES_STATUS_LABELS: Record<ReservationStatus, string> = {
 export function isHotelComplex(type: string | null | undefined): boolean {
   const v = (type || '').toLowerCase();
   return (
-    v === 'complexe_hotelier' ||
+    
     v === 'complexe' ||
     v === 'hotel' ||
     v === 'hôtel' ||

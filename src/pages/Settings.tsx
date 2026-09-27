@@ -847,13 +847,9 @@ async function saveProfile() {
                   disabled={!canManageEst && !!est}
                 >
                   <option value="maquis">Maquis</option>
-                  <option value="restaurant">Restaurant</option>
-                                                      <option value="magasin">Magasin</option>
-                  <option value="boutique">Boutique</option>
-                  <option value="superette">Supérette</option>
-                                    <option value="quincaillerie">Quincaillerie</option>
-                                    <option value="location_event">Location événementielle</option>
-                </select>
+                  <option value="location_event">Location événementielle</option>
+              <option value="complexe">Établissement</option>
+            </select>
                 <p className="text-xs text-stone-500 mt-1">Change le menu, le thème et le tableau de bord.</p>
               </div>
               <div>

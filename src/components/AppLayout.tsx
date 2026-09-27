@@ -275,8 +275,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const allowedRoutes = new Set(
     bizType === 'complexe'
       ? menuRoutesForComplexe(estServices)
-      : (bizType === 'complexe_hotelier')
-        ? (MENU_BY_TYPE.complexe || MENU_BY_TYPE.complexe_hotelier || MENU_BY_TYPE.maquis)
+      : (bizType === 'complexe')
+        ? (MENU_BY_TYPE.complexe || MENU_BY_TYPE.maquis)
         : MENU_BY_TYPE[bizType] || MENU_BY_TYPE.maquis,
   );
 
@@ -320,7 +320,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       if (RENT_ONLY.has(item.to) && section.label !== 'Outils') return false;
 
       // Modules hôtel uniquement pour complexe hôtelier
-      if (HOTEL_ONLY.has(item.to) && bizType !== 'complexe' && bizType !== 'complexe_hotelier') return false;
+      if (HOTEL_ONLY.has(item.to) && bizType !== 'complexe') return false;
 
       const roleForMenu = effectiveRole || member.role;
       if (['super_admin', 'admin', 'owner', 'manager'].includes(roleForMenu)) {
@@ -487,8 +487,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   // Type inconnu : ne pas bloquer toute l'app — fallback type "maquis"
   const knownTypes = new Set([
-    'maquis', 'restaurant', 'magasin', 'boutique', 'superette', 'quincaillerie', 'depot', 'complexe', 'complexe_hotelier', 'location_event', 'btp',
-    'quincaillerie', 'location_event', 'btp',
+    'maquis', 'location_event', 'complexe',
   ]);
   const rawType = (activeEstablishment?.type || cachedEstPayload?.type || '').toLowerCase().trim();
   // Ancien écran "choose-type" désactivé pour éviter le spam récursif chez tous les users
@@ -713,7 +712,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       {/* Barre bas mobile — adaptée au type d'établissement */}
       <nav data-no-print className="bottom-nav-maquis lg:hidden fixed bottom-0 inset-x-0 z-40 border-t border-stone-800 bg-stone-900/95 backdrop-blur-md pb-[env(safe-area-inset-bottom)]">
         <div className="grid grid-cols-5 gap-0 max-w-lg mx-auto">
-          {(bizType === 'depot'
+          {(false
             ? [
                 { to: '/dashboard', label: 'Accueil', icon: <LayoutDashboard size={22} /> },
                 { to: '/depot/deliveries', label: 'Livraisons', icon: <Truck size={22} /> },
@@ -721,7 +720,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 { to: '/inventory', label: 'Stock', icon: <Package size={22} /> },
                 { to: '/daily-report', label: 'Journal', icon: <ClipboardCheck size={22} /> },
               ]
-            : bizType === 'btp'
+            : false
             ? [
                 { to: '/dashboard', label: 'Accueil', icon: <LayoutDashboard size={22} /> },
                 { to: '/btp/documents', label: 'Devis', icon: <FileText size={22} /> },
@@ -737,7 +736,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 { to: '/rent/equipment', label: 'Matériel', icon: <Package size={22} /> },
                 { to: '/rent/calendar', label: 'Agenda', icon: <Calendar size={22} /> },
               ]
-            : bizType === 'restaurant'
+            : false /* restaurant fusionné */
             ? [
                 { to: '/dashboard', label: 'Accueil', icon: <LayoutDashboard size={22} /> },
                 { to: '/orders', label: 'Commandes', icon: <Receipt size={22} /> },
@@ -746,7 +745,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 { to: '/kitchen', label: 'Cuisine', icon: <Package size={22} /> },
                 { to: '/daily-report', label: 'Journal', icon: <ClipboardCheck size={22} /> },
               ]
-            : bizType === 'complexe_hotelier'
+            : bizType === 'complexe'
             ? [
                 { to: '/hotel', label: 'Hôtel', icon: <Building2 size={22} /> },
                 { to: '/hotel/rooms', label: 'Chambres', icon: <Building2 size={22} /> },
@@ -769,7 +768,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 { to: '/inventory', label: inventoryLabelForServices(estServices), icon: <Package size={22} /> },
                 { to: '/daily-report', label: 'Journal', icon: <ClipboardCheck size={22} /> },
               ]
-            : ['boutique', 'magasin', 'superette', 'quincaillerie'].includes(bizType)
+            : false
             ? [
                 { to: '/dashboard', label: 'Accueil', icon: <LayoutDashboard size={22} /> },
                 { to: '/pos', label: 'Caisse', icon: <ShoppingCart size={22} /> },

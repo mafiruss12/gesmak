@@ -1,68 +1,22 @@
 import type { Role } from './types';
 
-export type BusinessType =
-  | 'maquis'
-  | 'restaurant'
-  | 'magasin'
-  | 'boutique'
-  | 'superette'
-  | 'quincaillerie'
-  | 'location_event'
-  | 'btp'
-  | 'depot'
-  | 'complexe'
-  | 'complexe_hotelier';
+/** Uniquement les 3 types créables / utilisés */
+export type BusinessType = 'maquis' | 'location_event' | 'complexe';
 
-
-/** Types proposés à la création (UI) — 3 seulement */
-export const BUSINESS_TYPES_SELECTABLE: BusinessType[] = [
-  'maquis',
-  'location_event',
-  'complexe',
-];
-
-/** Tous les codes encore reconnus en base (rétrocompat) */
-export const BUSINESS_TYPES: BusinessType[] = [
-  'maquis',
-  'restaurant',
-  'magasin',
-  'boutique',
-  'superette',
-  'quincaillerie',
-  'location_event',
-  'btp',
-  'depot',
-  'complexe',
-  'complexe_hotelier',
-];
-
+export const BUSINESS_TYPES: BusinessType[] = ['maquis', 'location_event', 'complexe'];
+export const BUSINESS_TYPES_SELECTABLE: BusinessType[] = BUSINESS_TYPES;
 
 export const BUSINESS_LABELS: Record<BusinessType, string> = {
   maquis: 'Maquis',
-  restaurant: 'Restaurant',
-  magasin: 'Magasin',
-  boutique: 'Boutique',
-  superette: 'Supérette',
-  quincaillerie: 'Quincaillerie',
   location_event: 'Location événementielle',
-  btp: 'BTP / BatiDevis',
-  depot: 'Dépôt / Grossiste',
   complexe: 'Établissement',
-  complexe_hotelier: 'Établissement',
 };
 
 export const BUSINESS_DESCRIPTIONS: Record<BusinessType, string> = {
   maquis: 'Boissons, grills et gestion de caisse au quotidien',
-  restaurant: 'Salle, commandes cuisine, carte et caisse',
-  magasin: 'Stock produits, achats, marge et vente au détail',
-  boutique: 'Articles, collections et vente au détail',
-  superette: 'Épicerie, stock rapide et rayons',
-  quincaillerie: 'Matériaux, outillage et stock technique',
   location_event: 'Chaises, tables, bâches, sono — mariages et cérémonies',
-  btp: 'Devis, factures et matériaux pour artisans et entreprises du bâtiment',
-  depot: 'Livraisons boissons aux maquis, bars et restaurants — stock gros et bons de livraison',
-  complexe: 'Un lieu multi-services : maquis, restaurant, chambres, boutique, spa… — vous cochez ce que vous proposez',
-  complexe_hotelier: 'Un lieu multi-services : maquis, restaurant, chambres, boutique, spa… — vous cochez ce que vous proposez',
+  complexe:
+    'Un lieu multi-services : maquis, restaurant, chambres, boutique… — vous cochez ce que vous proposez',
 };
 
 export const BUSINESS_THEMES: Record<
@@ -76,74 +30,18 @@ export const BUSINESS_THEMES: Record<
     label: 'Crème & Ambre',
     gradient: 'from-amber-500/20 to-orange-600/5',
   },
-  restaurant: {
-    primary: '#ef4444',
-    primarySoft: 'rgba(239, 68, 68, 0.16)',
-    accent: '#b91c1c',
-    label: 'Rouge resto',
-    gradient: 'from-red-500/20 to-orange-600/5',
-  },
-  magasin: {
-    primary: '#06b6d4',
-    primarySoft: 'rgba(6, 182, 212, 0.15)',
-    accent: '#0891b2',
-    label: 'Cyan',
-    gradient: 'from-cyan-500/20 to-blue-600/5',
-  },
-  boutique: {
-    primary: '#ec4899',
-    primarySoft: 'rgba(236, 72, 153, 0.15)',
-    accent: '#db2777',
-    label: 'Rose',
-    gradient: 'from-pink-500/20 to-rose-600/5',
-  },
-  superette: {
-    primary: '#84cc16',
-    primarySoft: 'rgba(132, 204, 22, 0.15)',
-    accent: '#65a30d',
-    label: 'Lime',
-    gradient: 'from-lime-500/20 to-green-600/5',
-  },
-  quincaillerie: {
-    primary: '#f97316',
-    primarySoft: 'rgba(249, 115, 22, 0.15)',
-    accent: '#ea580c',
-    label: 'Orange',
-    gradient: 'from-orange-500/20 to-amber-600/5',
-  },
   location_event: {
-    primary: '#6366f1',
-    primarySoft: 'rgba(99, 102, 241, 0.15)',
-    accent: '#4f46e5',
-    label: 'Indigo',
-    gradient: 'from-indigo-500/20 to-violet-600/5',
-  },
-  btp: {
-    primary: '#0ea5e9',
-    primarySoft: 'rgba(14, 165, 233, 0.15)',
-    accent: '#0284c7',
-    label: 'Sky',
-    gradient: 'from-sky-500/20 to-blue-600/5',
-  },
-  depot: {
-    primary: '#0d9488',
-    primarySoft: 'rgba(13, 148, 136, 0.16)',
-    accent: '#0f766e',
-    label: 'Teal',
-    gradient: 'from-teal-500/20 to-cyan-600/5',
-  },
-  complexe: {
-    primary: '#7c3aed',
-    primarySoft: 'rgba(124, 58, 237, 0.16)',
-    accent: '#5b21b6',
-    label: 'Violet',
+    primary: '#8b5cf6',
+    primarySoft: 'rgba(139, 92, 246, 0.16)',
+    accent: '#6d28d9',
+    label: 'Violet location',
     gradient: 'from-violet-500/20 to-purple-700/5',
   },
-  complexe_hotelier: {
+  complexe: {
     primary: '#6d28d9',
     primarySoft: 'rgba(109, 40, 217, 0.16)',
     accent: '#5b21b6',
-    label: 'Violet hôtel',
+    label: 'Violet établissement',
     gradient: 'from-violet-600/20 to-indigo-700/5',
   },
 };
@@ -157,56 +55,11 @@ export const MENU_BY_TYPE: Record<BusinessType, string[]> = {
     '/statistics', '/reports', '/accounting', '/ai', '/ai-train', '/chat',
     '/notifications', '/settings',
   ],
-  restaurant: [
-    '/dashboard', '/pos', '/documents', '/inventory', '/inventory/scan', '/point-manuel', '/guide',
-    '/kits', '/menu-qr', '/stock-transfer', '/orders', '/tables', '/print-qr', '/kitchen', '/mon-service', '/purchases', '/suppliers', '/customers',
-    '/expenses', '/mes-employes', '/calendar', '/daily-report', '/cloture', '/patron',
-    '/statistics', '/reports', '/accounting', '/ai', '/ai-train', '/chat',
-    '/notifications', '/settings',
-  ],
-  magasin: [
-    '/dashboard', '/pos', '/inventory', '/inventory/scan', '/documents',
-    '/purchases', '/suppliers', '/customers', '/stock-transfer',
-    '/expenses', '/mes-employes', '/daily-report', '/cloture',
-    '/statistics', '/accounting', '/guide',
-    '/ai', '/chat', '/notifications', '/settings',
-  ],
-  boutique: [
-    '/dashboard', '/pos', '/inventory', '/inventory/scan', '/documents',
-    '/purchases', '/suppliers', '/customers', '/stock-transfer',
-    '/expenses', '/mes-employes', '/daily-report', '/cloture',
-    '/statistics', '/accounting', '/guide',
-    '/ai', '/chat', '/notifications', '/settings',
-  ],
-  superette: [
-    '/dashboard', '/pos', '/inventory', '/inventory/scan', '/documents',
-    '/purchases', '/suppliers', '/customers', '/stock-transfer',
-    '/expenses', '/mes-employes', '/daily-report', '/cloture',
-    '/statistics', '/accounting', '/guide',
-    '/ai', '/chat', '/notifications', '/settings',
-  ],
-  quincaillerie: [
-    '/dashboard', '/pos', '/inventory', '/inventory/scan', '/documents',
-    '/purchases', '/suppliers', '/customers', '/stock-transfer',
-    '/expenses', '/mes-employes', '/daily-report', '/cloture',
-    '/statistics', '/accounting', '/guide',
-    '/ai', '/chat', '/notifications', '/settings',
-  ],
   location_event: [
     '/dashboard', '/rent/equipment', '/rent/clients', '/rent/orders',
     '/rent/movements', '/rent/payments', '/rent/calendar', '/rent/packs',
     '/rent/invoices', '/guide', '/mes-employes', '/daily-report', '/cloture',
     '/ai', '/ai-train', '/chat', '/notifications', '/settings',
-  ],
-  btp: [
-    '/dashboard', '/btp/documents', '/btp/clients', '/btp/materials',
-    '/guide', '/mes-employes', '/expenses', '/statistics',
-    '/ai', '/ai-train', '/chat', '/notifications', '/settings',
-  ],
-  depot: [
-    '/dashboard', '/depot/clients', '/depot/deliveries', '/inventory', '/inventory/scan',
-    '/customers', '/expenses', '/accounting', '/statistics', '/daily-report',
-    '/guide', '/mes-employes', '/ai', '/chat', '/notifications', '/settings',
   ],
   complexe: [
     '/hotel', '/hotel/rooms', '/hotel/reservations', '/hotel/guests',
@@ -218,301 +71,107 @@ export const MENU_BY_TYPE: Record<BusinessType, string[]> = {
     '/statistics', '/reports', '/accounting', '/ai', '/chat',
     '/notifications', '/settings',
   ],
-  complexe_hotelier: [
-    '/hotel', '/hotel/rooms', '/hotel/reservations', '/hotel/guests',
-    '/hotel/housekeeping', '/hotel/maintenance', '/hotel/events',
-    '/hotel/services', '/hotel/settings',
-    '/dashboard', '/pos', '/live-sales', '/tables', '/print-qr', '/orders', '/kitchen', '/mon-service',
-    '/inventory', '/inventory/scan', '/guide', '/menu-qr', '/purchases', '/customers',
-    '/expenses', '/mes-employes', '/calendar', '/daily-report', '/cloture',
-    '/statistics', '/reports', '/accounting', '/ai', '/chat',
-    '/notifications', '/settings',
-  ],
 };
 
-
-/** Services cochés pour un type « Établissement » (complexe) */
+/** Services cochés pour un type « Établissement » */
 export type EstablishmentServiceId = 'maquis' | 'restaurant' | 'chambres' | 'location' | 'magasin';
 
 const SERVICE_TO_MENU_TYPE: Record<string, BusinessType> = {
   maquis: 'maquis',
-  restaurant: 'restaurant',
-  magasin: 'magasin',
+  restaurant: 'maquis', // menus F&B proches maquis + routes resto via filtre services
+  magasin: 'maquis',
   location: 'location_event',
-  // chambres : tronc commun (pas encore de module dédié)
 };
 
-/** Routes de base toujours présentes pour un établissement multi-services */
 const COMPLEXE_CORE_ROUTES = [
-  '/dashboard',
-  '/daily-report',
-  '/expenses',
-  '/mes-employes',
-  '/calendar',
-  '/statistics',
-  '/reports',
-  '/accounting',
-  '/ai',
-  '/chat',
-  '/notifications',
-  '/settings',
-  '/guide',
-  '/customers',
-  '/purchases',
-  '/inventory',
-  '/inventory/scan',
-  '/pos',
+  '/dashboard', '/daily-report', '/expenses', '/mes-employes', '/calendar',
+  '/statistics', '/reports', '/accounting', '/ai', '/chat', '/notifications',
+  '/settings', '/guide', '/customers', '/purchases', '/inventory', '/inventory/scan', '/pos',
 ];
 
-/**
- * Lit les services cochés (localStorage prioritaire, puis champ establishment.services).
- */
+const HOTEL_ROUTES = [
+  '/hotel', '/hotel/rooms', '/hotel/reservations', '/hotel/guests',
+  '/hotel/housekeeping', '/hotel/maintenance', '/hotel/events',
+  '/hotel/services', '/hotel/settings',
+];
+
+const FNB_ROUTES = [
+  '/live-sales', '/tables', '/print-qr', '/orders', '/kitchen', '/mon-service',
+  '/menu-qr', '/kits', '/cloture', '/patron', '/point-manuel',
+];
+
+const LOCATION_ROUTES = [
+  '/rent/equipment', '/rent/clients', '/rent/orders', '/rent/movements',
+  '/rent/payments', '/rent/calendar', '/rent/packs', '/rent/invoices',
+];
+
 export function getEstablishmentServices(
   establishmentId: string | null | undefined,
-  fromDb?: string[] | null,
-): EstablishmentServiceId[] {
-  const fallback: EstablishmentServiceId[] = ['maquis'];
-  if (!establishmentId) return fallback;
+  servicesFromRow?: string[] | null,
+): string[] {
+  if (Array.isArray(servicesFromRow) && servicesFromRow.length) {
+    return servicesFromRow.map(String);
+  }
+  if (!establishmentId) return ['maquis'];
   try {
     const raw = localStorage.getItem(`mm_est_services:${establishmentId}`);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed as EstablishmentServiceId[];
+      if (Array.isArray(parsed) && parsed.length) return parsed.map(String);
     }
   } catch { /* */ }
-  if (Array.isArray(fromDb) && fromDb.length > 0) {
-    return fromDb as EstablishmentServiceId[];
-  }
-  return fallback;
+  return ['maquis'];
 }
 
-/**
- * Construit les routes autorisées pour le type établissement selon les services cochés.
- * Union des menus métier + routes cœur — évite un menu 100 % maquis.
- */
 export function menuRoutesForComplexe(services: string[]): string[] {
   const set = new Set<string>(COMPLEXE_CORE_ROUTES);
-  const list = services?.length ? services : ['maquis'];
-  for (const s of list) {
-    if (s === 'chambres') {
-      set.add('/calendar');
-      set.add('/customers');
-      set.add('/expenses');
-      set.add('/inventory');
-      continue;
-    }
-    const mapped = SERVICE_TO_MENU_TYPE[s];
-    if (mapped && MENU_BY_TYPE[mapped]) {
-      for (const r of MENU_BY_TYPE[mapped]) set.add(r);
-    }
+  const svc = services.length ? services : ['maquis'];
+  if (svc.includes('chambres')) HOTEL_ROUTES.forEach((r) => set.add(r));
+  if (svc.includes('maquis') || svc.includes('restaurant')) FNB_ROUTES.forEach((r) => set.add(r));
+  if (svc.includes('location')) LOCATION_ROUTES.forEach((r) => set.add(r));
+  if (svc.includes('magasin')) {
+    ['/documents', '/suppliers', '/stock-transfer'].forEach((r) => set.add(r));
   }
   return Array.from(set);
 }
 
-/** Libellés adaptatifs selon services (bas de page / inventaire) */
-export function inventoryLabelForServices(services: string[]): string {
-  const s = new Set(services || []);
-  if (s.has('restaurant') && (s.has('maquis') || s.has('magasin'))) return 'Stock';
-  if (s.has('restaurant')) return 'Carte';
-  if (s.has('maquis')) return 'Boissons';
-  if (s.has('location')) return 'Matériel';
-  if (s.has('magasin')) return 'Stock';
-  return 'Stock';
-}
-
-export const EQUIPMENT_CATEGORIES = [
-  'chaises', 'chaises_presidentielles', 'tables', 'treteaux', 'baches',
-  'chapiteaux', 'sonorisation', 'vaisselle', 'decoration', 'autres',
-] as const;
-
-export const EQUIPMENT_CATEGORY_LABELS: Record<string, string> = {
-  chaises: 'Chaises',
-  chaises_presidentielles: 'Chaises présidentielles',
-  tables: 'Tables',
-  treteaux: 'Tréteaux',
-  baches: 'Bâches',
-  chapiteaux: 'Chapiteaux',
-  sonorisation: 'Sonorisation',
-  vaisselle: 'Vaisselle',
-  decoration: 'Décoration',
-  autres: 'Autres',
-};
-
-export const RENTAL_STATUS_LABELS: Record<string, string> = {
-  draft: 'Brouillon',
-  confirmed: 'Confirmée',
-  out: 'En sortie',
-  returned: 'Retournée',
-  cancelled: 'Annulée',
-};
-
-
-/** Libellés métier cohérents par type d'établissement */
-export interface BusinessUI {
-  productSingular: string;
-  productPlural: string;
+export type BusinessUI = {
+  productWord: string;
+  productWordPlural: string;
   inventoryTitle: string;
   inventorySubtitle: string;
   posTitle: string;
-  posSubtitle: string;
-  stockAlert: string;
-  categories: string[];
-  unitDefault: string;
-  salesLabel: string;
   shortcutInventory: string;
   emptyProducts: string;
-}
+};
 
 export const BUSINESS_UI: Record<BusinessType, BusinessUI> = {
   maquis: {
-    productSingular: 'Boisson / article',
-    productPlural: 'Boissons & grillades',
-    inventoryTitle: 'Inventaire maquis',
-    inventorySubtitle: 'Boissons, casiers et grillades',
+    productWord: 'boisson',
+    productWordPlural: 'boissons',
+    inventoryTitle: 'Inventaire boissons',
+    inventorySubtitle: 'Stock, casiers, arrivages',
     posTitle: 'Caisse maquis',
-    posSubtitle: 'Vente rapide au comptoir',
-    stockAlert: 'Boissons en rupture',
-    categories: ['Bière', 'Soda', 'Eau', 'Vin', 'Spiritueux', 'Énergie', 'Grillade', 'Accompagnement', 'Autre'],
-    unitDefault: 'bouteille',
-    salesLabel: 'Ventes',
     shortcutInventory: 'Boissons',
-    emptyProducts: 'Aucune boisson en stock. Importez un catalogue ou ajoutez des produits.',
-  },
-  restaurant: {
-    productSingular: 'Plat / boisson',
-    productPlural: 'Carte & boissons',
-    inventoryTitle: 'Inventaire restaurant',
-    inventorySubtitle: 'Plats, accompagnements et boissons',
-    posTitle: 'Caisse restaurant',
-    posSubtitle: 'Encaissement table / comptoir',
-    stockAlert: 'Rupture cuisine ou bar',
-    categories: ['Entrée', 'Plat', 'Grillade', 'Accompagnement', 'Dessert', 'Bière', 'Soda', 'Eau', 'Vin', 'Autre'],
-    unitDefault: 'portion',
-    salesLabel: 'Ventes',
-    shortcutInventory: 'Carte',
-    emptyProducts: 'Aucun plat ni boisson. Importez la carte ou ajoutez des produits.',
-  },
-  magasin: {
-    productSingular: 'Produit',
-    productPlural: 'Produits',
-    inventoryTitle: 'Inventaire magasin',
-    inventorySubtitle: 'Références, quantités et seuils',
-    posTitle: 'Caisse magasin',
-    posSubtitle: 'Vente au détail',
-    stockAlert: 'Produits sous seuil',
-    categories: ['Alimentaire', 'Hygiène', 'Électronique', 'Divers', 'Autre'],
-    unitDefault: 'pièce',
-    salesLabel: 'Ventes',
-    shortcutInventory: 'Stock',
-    emptyProducts: 'Aucun produit. Ajoutez vos références magasin.',
-  },
-  boutique: {
-    productSingular: 'Article',
-    productPlural: 'Articles',
-    inventoryTitle: 'Stock boutique',
-    inventorySubtitle: 'Collections et tailles',
-    posTitle: 'Caisse boutique',
-    posSubtitle: 'Vente d’articles',
-    stockAlert: 'Articles en rupture',
-    categories: ['Homme', 'Femme', 'Enfant', 'Accessoire', 'Autre'],
-    unitDefault: 'pièce',
-    salesLabel: 'Ventes',
-    shortcutInventory: 'Articles',
-    emptyProducts: 'Aucun article boutique.',
-  },
-  superette: {
-    productSingular: 'Produit',
-    productPlural: 'Rayons',
-    inventoryTitle: 'Inventaire supérette',
-    inventorySubtitle: 'Rayons et réassort',
-    posTitle: 'Caisse supérette',
-    posSubtitle: 'Encaissement rapide',
-    stockAlert: 'Rayons à réapprovisionner',
-    categories: ['Épicerie', 'Frais', 'Boissons', 'Hygiène', 'Autre'],
-    unitDefault: 'pièce',
-    salesLabel: 'Ventes',
-    shortcutInventory: 'Rayons',
-    emptyProducts: 'Aucun produit en rayon.',
-  },
-  quincaillerie: {
-    productSingular: 'Article',
-    productPlural: 'Matériaux & outillage',
-    inventoryTitle: 'Stock quincaillerie',
-    inventorySubtitle: 'Matériaux, outils et consommables',
-    posTitle: 'Caisse quincaillerie',
-    posSubtitle: 'Vente matériaux et outils',
-    stockAlert: 'Articles techniques bas',
-    categories: ['Outillage', 'Quincaillerie', 'Électricité', 'Plomberie', 'Peinture', 'Autre'],
-    unitDefault: 'pièce',
-    salesLabel: 'Ventes',
-    shortcutInventory: 'Matériaux',
-    emptyProducts: 'Aucun article quincaillerie.',
+    emptyProducts: 'Aucune boisson en stock.',
   },
   location_event: {
-    productSingular: 'Matériel',
-    productPlural: 'Matériel de location',
+    productWord: 'matériel',
+    productWordPlural: 'matériels',
     inventoryTitle: 'Parc matériel',
-    inventorySubtitle: 'Chaises, tables, sono…',
-    posTitle: 'Caisse location',
-    posSubtitle: 'Encaissement location',
-    stockAlert: 'Matériel indisponible',
-    categories: ['Chaises', 'Tables', 'Chapiteaux', 'Sono', 'Décoration', 'Autre'],
-    unitDefault: 'unité',
-    salesLabel: 'Locations',
+    inventorySubtitle: 'Location et disponibilités',
+    posTitle: 'Location',
     shortcutInventory: 'Matériel',
-    emptyProducts: 'Aucun matériel. Ajoutez le parc location.',
-  },
-  btp: {
-    productSingular: 'Matériau',
-    productPlural: 'Matériaux BTP',
-    inventoryTitle: 'Catalogue matériaux',
-    inventorySubtitle: 'Prix unitaires et catégories chantier',
-    posTitle: 'Devis & factures',
-    posSubtitle: 'Documents BTP',
-    reportTitle: 'Suivi chantier',
-    emptyProducts: 'Aucun matériau. Ajoutez ciment, fer, main-d\'œuvre…',
-  },
-  depot: {
-    productSingular: 'Boisson (gros)',
-    productPlural: 'Catalogue dépôt',
-    inventoryTitle: 'Stock dépôt',
-    inventorySubtitle: 'Casiers, cartons et lots en gros',
-    posTitle: 'Livraisons',
-    posSubtitle: 'Bons de livraison maquis / bars',
-    stockAlert: 'Rupture stock dépôt',
-    categories: ['Bière', 'Soda', 'Eau', 'Énergie', 'Vin', 'Spiritueux', 'Alcool', 'Autre'],
-    unitDefault: 'bouteille',
-    salesLabel: 'Livraisons',
-    shortcutInventory: 'Stock dépôt',
-    emptyProducts: 'Aucun produit en stock dépôt. Ajoutez le catalogue gros.',
+    emptyProducts: 'Aucun matériel enregistré.',
   },
   complexe: {
-    productSingular: 'Article / service',
-    productPlural: 'Services & stock',
-    inventoryTitle: 'Inventaire établissement',
-    inventorySubtitle: 'Boissons, restauration et fournitures multi-services',
-    posTitle: 'Caisse établissement',
-    posSubtitle: 'Encaissement selon vos services',
-    stockAlert: 'Ruptures multi-services',
-    categories: ['Chambre', 'Bière', 'Soda', 'Eau', 'Plat', 'Grillade', 'Service', 'Autre'],
-    unitDefault: 'unité',
-    salesLabel: 'Ventes',
-    shortcutInventory: 'Stock',
-    emptyProducts: 'Aucun article. Ajoutez le stock des services (bar, resto, etc.).',
-  },
-  complexe_hotelier: {
-    productSingular: 'Article / service',
-    productPlural: 'Services & stock',
-    inventoryTitle: 'Stock complexe hôtelier',
-    inventorySubtitle: 'Bar, resto, housekeeping, boutique',
+    productWord: 'article',
+    productWordPlural: 'articles',
+    inventoryTitle: 'Stock établissement',
+    inventorySubtitle: 'Services cochés (bar, resto, chambres…)',
     posTitle: 'Caisse',
-    posSubtitle: 'Encaissement multi-services',
-    stockAlert: 'Ruptures',
-    categories: ['Bière', 'Soda', 'Eau', 'Plat', 'Spiritueux', 'Entretien', 'Spa', 'Autre'],
-    unitDefault: 'unité',
-    salesLabel: 'Ventes',
     shortcutInventory: 'Stock',
-    emptyProducts: 'Aucun article en stock.',
+    emptyProducts: 'Aucun produit enregistré.',
   },
 };
 
@@ -520,81 +179,93 @@ export function getBusinessUI(type: string | null | undefined): BusinessUI {
   return BUSINESS_UI[normalizeBusinessType(type)];
 }
 
-/** Libellés de menu adaptés au métier */
 export function menuLabelFor(path: string, type: BusinessType): string | null {
   const ui = BUSINESS_UI[type];
-  const isCommerce = ['boutique', 'magasin', 'superette', 'quincaillerie'].includes(type);
-  const isFnb = type === 'maquis' || type === 'restaurant';
   const map: Record<string, string> = {
     '/inventory': ui.inventoryTitle,
     '/pos': ui.posTitle,
-    '/inventory/scan': type === 'location_event' ? 'Scan matériel' : isCommerce ? 'Scan produits' : 'Scan inventaire',
-    '/orders': type === 'location_event'
-      ? 'Commandes location'
-      : type === 'restaurant'
-        ? 'Commandes salle'
-        : type === 'maquis'
-          ? 'Ventes / commandes'
-          : isCommerce
-            ? 'Historique ventes'
-            : 'Commandes',
-    '/kitchen': type === 'restaurant' ? 'Cuisine' : type === 'maquis' ? 'Grill / Bar' : 'Préparation',
-    '/tables': type === 'restaurant' ? 'Tables' : type === 'maquis' ? 'Espaces' : 'Espaces',
-    '/customers': type === 'location_event' ? 'Clients location' : isCommerce ? 'Clients' : 'Clients',
-    '/purchases': isCommerce || type === 'depot' ? 'Achats' : 'Achats',
+    '/inventory/scan': type === 'location_event' ? 'Scan matériel' : 'Scan inventaire',
+    '/orders': type === 'location_event' ? 'Commandes location' : 'Commandes',
+    '/kitchen': type === 'maquis' ? 'Grill / Bar' : 'Cuisine',
+    '/tables': type === 'maquis' ? 'Espaces' : 'Tables',
+    '/customers': 'Clients',
+    '/purchases': 'Achats',
     '/suppliers': 'Fournisseurs',
-    '/documents': type === 'quincaillerie' || type === 'btp' ? 'Devis & factures' : 'Documents',
-    '/live-sales': isFnb ? 'Ventes journée' : 'Ventes du jour',
+    '/documents': 'Documents',
+    '/live-sales': 'Ventes journée',
   };
   return map[path] ?? null;
 }
 
-/** Vocabulaire métier pour libellés UI */
 export function orderWord(type: BusinessType): string {
-  if (type === 'restaurant' || type === 'maquis') return 'Commande';
   if (type === 'location_event') return 'Location';
-  if (type === 'complexe_hotelier' || type === 'complexe') return 'Réservation';
-  if (['boutique', 'magasin', 'superette', 'quincaillerie', 'depot'].includes(type)) return 'Vente';
-  return 'Opération';
+  if (type === 'complexe') return 'Opération';
+  return 'Commande';
 }
 
-export function isCommerceType(type: BusinessType): boolean {
-  return ['boutique', 'magasin', 'superette', 'quincaillerie'].includes(type);
+export function isCommerceType(_type: BusinessType): boolean {
+  return false;
 }
 
 export function isFnbType(type: BusinessType): boolean {
-  return type === 'maquis' || type === 'restaurant';
+  return type === 'maquis';
 }
 
-
+/** Mappe toute ancienne valeur DB vers un des 3 types */
 export function normalizeBusinessType(raw: string | null | undefined): BusinessType {
   const v = (raw || '').toLowerCase().trim();
-  if (v === 'maquis' || v === 'bar' || v === 'cafe' || v === 'café') return 'maquis';
+  if (v === 'maquis' || v === 'bar' || v === 'cafe' || v === 'café' || v === 'pharmacie') return 'maquis';
   if (v === 'location_event' || v === 'location' || v === 'event' || v === 'rental') return 'location_event';
   if (
-    v === 'complexe' || v === 'complexe_hotelier' || v === 'etablissement' || v === 'établissement'
-    || v === 'residence' || v === 'résidence' || v === 'hotel' || v === 'hôtel'
-    || v === 'hotelier' || v === 'hotellerie' || v === 'hôtelier'
-  ) return 'complexe';
-  if (v in { magasin: 1, boutique: 1, superette: 1, quincaillerie: 1, depot: 1, commerce: 1, store: 1, shop: 1, supermarche: 1 }) return 'magasin';
-  if (v === 'restaurant' || v === 'resto' || v === 'restauration') return 'restaurant';
-  if (v === 'btp' || v === 'batidevis' || v === 'construction' || v === 'chantier' || v === 'devis') return 'magasin';
-  if (v === 'pharmacie') return 'maquis';
+    v === 'complexe' ||
+    v === 'complexe_hotelier' ||
+    v === 'etablissement' ||
+    v === 'établissement' ||
+    v === 'residence' ||
+    v === 'résidence' ||
+    v === 'hotel' ||
+    v === 'hôtel' ||
+    v === 'hotelier' ||
+    v === 'hotellerie' ||
+    v === 'hôtelier' ||
+    v === 'restaurant' ||
+    v === 'resto' ||
+    v === 'restauration' ||
+    v === 'magasin' ||
+    v === 'boutique' ||
+    v === 'superette' ||
+    v === 'quincaillerie' ||
+    v === 'depot' ||
+    v === 'commerce' ||
+    v === 'store' ||
+    v === 'shop' ||
+    v === 'supermarche' ||
+    v === 'btp' ||
+    v === 'batidevis' ||
+    v === 'construction' ||
+    v === 'chantier' ||
+    v === 'devis'
+  ) {
+    return 'complexe';
+  }
   if ((BUSINESS_TYPES as string[]).includes(v)) return v as BusinessType;
   return 'maquis';
 }
 
-export function isDepot(type: string | null | undefined): boolean {
-  return normalizeBusinessType(type) === 'depot';
+export function isDepot(_type: string | null | undefined): boolean {
+  return false;
 }
-
 
 export function isLocationEvent(type: string | null | undefined): boolean {
   return normalizeBusinessType(type) === 'location_event';
 }
 
-export function isBtp(type: string | null | undefined): boolean {
-  return normalizeBusinessType(type) === 'btp';
+export function isBtp(_type: string | null | undefined): boolean {
+  return false;
+}
+
+export function isEtablissementType(type: BusinessType | string | null | undefined): boolean {
+  return normalizeBusinessType(type) === 'complexe';
 }
 
 export function applyBusinessTheme(type: BusinessType) {
@@ -620,15 +291,8 @@ export function buildWhatsAppLink(phone: string | null | undefined, message: str
   return `https://wa.me/${normalized}?text=${encodeURIComponent(message)}`;
 }
 
-
 export function buildSmsLink(phone: string | null | undefined, message: string): string {
   if (!phone) return '';
   const digits = phone.replace(/\D/g, '');
   return `sms:${digits}?body=${encodeURIComponent(message)}`;
-}
-
-
-export function isEtablissementType(type: BusinessType | string | null | undefined): boolean {
-  const t = normalizeBusinessType(type);
-  return t === 'complexe' || t === 'complexe_hotelier';
 }
