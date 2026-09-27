@@ -28,6 +28,7 @@ export default function DepotDeliveries() {
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(false);
   const [detail, setDetail] = useState<{ delivery: DepotDelivery; items: DepotDeliveryItem[] } | null>(null);
+  const [returnEdits, setReturnEdits] = useState<Record<string, { qty_returned: string; qty_broken: string }>>({});
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState({
     client_id: '',
@@ -129,7 +130,48 @@ export default function DepotDeliveries() {
   async function openDetail(d: DepotDelivery) {
     const items = await listDeliveryItems(d.id);
     setDetail({ delivery: d, items });
+    const edits: Record<string, { qty_returned: string; qty_broken: string }> = {};
+    for (const it of items) {
+      if (!it.id) continue;
+      edits[it.id] = {
+        qty_returned: String((it as any).qty_returned ?? 0),
+        qty_broken: String((it as any).qty_broken ?? 0),
+      };
+    }
+    setReturnEdits(edits);
   }
+
+  async function saveLineReturns() {
+    if (!detail) return;
+    setBusy(true);
+    const items = detail.items
+      .filter((it) => it.id)
+      .map((it) => ({
+        id: it.id as string,
+        qty_returned: Number(returnEdits[it.id!]?.qty_returned) || 0,
+        qty_broken: Number(returnEdits[it.id!]?.qty_broken) || 0,
+      }));
+    let retAmt = 0;
+    let brkAmt = 0;
+    for (const it of detail.items) {
+      if (!it.id) continue;
+      const r = Number(returnEdits[it.id]?.qty_returned) || 0;
+      const b = Number(returnEdits[it.id]?.qty_broken) || 0;
+      retAmt += r * Number(it.unit_price || 0);
+      brkAmt += b * Number(it.unit_price || 0);
+    }
+    await recordDeliveryReturn({
+      delivery_id: detail.delivery.id,
+      items,
+      returned_amount: retAmt,
+      breakage_amount: brkAmt,
+    });
+    setBusy(false);
+    alert('Retours / casses enregistrés par ligne');
+    await openDetail(detail.delivery);
+    await load();
+  }
+
 
   async function advance(d: DepotDelivery, next: string) {
     if (next === 'delivered' && !confirm('Confirmer la livraison ? Le stock dépôt sera diminué et le maquis lié (si présent) sera crédité.')) {
@@ -328,13 +370,55 @@ export default function DepotDeliveries() {
             <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${statusColor(detail.delivery.status)}`}>
               {DELIVERY_STATUS_LABELS[detail.delivery.status] || detail.delivery.status}
             </span>
-            <ul className="space-y-1 text-sm">
+            <ul className="space-y-2 text-sm">
               {detail.items.map((it, i) => (
-                <li key={it.id || i} className="flex justify-between text-stone-300">
-                  <span>
-                    {it.product_name} × {it.qty}
-                  </span>
-                  <span>{Number(it.line_total || 0).toLocaleString('fr-FR')} F</span>
+                <li key={it.id || i} className="rounded-xl border border-stone-800 p-2 space-y-1">
+                  <div className="flex justify-between text-stone-300">
+                    <span>
+                      {it.product_name} × {it.qty}
+                    </span>
+                    <span>{Number(it.line_total || 0).toLocaleString('fr-FR')} F</span>
+                  </div>
+                  {(detail.delivery.status === 'delivered' || detail.delivery.status === 'in_transit') && it.id && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="text-[10px] text-stone-500">
+                        Retour
+                        <input
+                          type="number"
+                          min={0}
+                          className="input-field mt-0.5 text-sm"
+                          value={returnEdits[it.id]?.qty_returned ?? '0'}
+                          onChange={(e) =>
+                            setReturnEdits((prev) => ({
+                              ...prev,
+                              [it.id!]: {
+                                qty_returned: e.target.value,
+                                qty_broken: prev[it.id!]?.qty_broken ?? '0',
+                              },
+                            }))
+                          }
+                        />
+                      </label>
+                      <label className="text-[10px] text-stone-500">
+                        Casse
+                        <input
+                          type="number"
+                          min={0}
+                          className="input-field mt-0.5 text-sm"
+                          value={returnEdits[it.id]?.qty_broken ?? '0'}
+                          onChange={(e) =>
+                            setReturnEdits((prev) => ({
+                              ...prev,
+                              [it.id!]: {
+                                qty_returned: prev[it.id!]?.qty_returned ?? '0',
+                                qty_broken: e.target.value,
+                              },
+                            }))
+                          }
+                        />
+                      </label>
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>
@@ -373,27 +457,9 @@ export default function DepotDeliveries() {
                   type="button"
                   className="btn-secondary text-sm"
                   disabled={busy}
-                  onClick={async () => {
-                    const returned = prompt('Quantité totale retournée (toutes lignes, approx) ?', '0');
-                    const broken = prompt('Quantité cassée ?', '0');
-                    if (returned == null) return;
-                    setBusy(true);
-                    await recordDeliveryReturn({
-                      delivery_id: detail.delivery.id,
-                      items: detail.items.map((it) => ({
-                        id: it.id as string,
-                        qty_returned: Number(returned) || 0,
-                        qty_broken: Number(broken) || 0,
-                      })),
-                      returned_amount: (Number(returned) || 0) * 0,
-                      breakage_amount: (Number(broken) || 0) * 0,
-                    });
-                    setBusy(false);
-                    alert('Retours / casses enregistrés');
-                    await openDetail(detail.delivery);
-                  }}
+                  onClick={() => void saveLineReturns()}
                 >
-                  Enregistrer retours / casses
+                  Enregistrer retours / casses (par ligne)
                 </button>
               )}
               <button type="button" className="btn-ghost" onClick={() => setDetail(null)}>

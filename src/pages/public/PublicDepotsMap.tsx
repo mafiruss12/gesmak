@@ -6,6 +6,7 @@ import { EmptyState } from '@/components/ui';
 export default function PublicDepotsMap() {
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState<any | null>(null);
 
   useEffect(() => {
     listPublicDepots()
@@ -28,10 +29,22 @@ export default function PublicDepotsMap() {
         />
       )}
       <ul className="space-y-3">
+        {selected?.public_lat != null && selected?.public_lng != null && (
+          <div className="rounded-2xl overflow-hidden border border-stone-800 h-48 mb-3">
+            <iframe
+              title="Carte dépôt"
+              className="w-full h-full border-0"
+              loading="lazy"
+              src={`https://www.openstreetmap.org/export/embed.html?bbox=${Number(selected.public_lng) - 0.03}%2C${Number(selected.public_lat) - 0.03}%2C${Number(selected.public_lng) + 0.03}%2C${Number(selected.public_lat) + 0.03}&layer=mapnik&marker=${selected.public_lat}%2C${selected.public_lng}`}
+            />
+          </div>
+        )}
         {rows.map((r) => (
           <li key={r.id} className="rounded-2xl border border-stone-800 p-4">
-            <div className="font-semibold">{r.name}</div>
-            {r.public_zone && <div className="text-sm text-stone-400">Zone : {r.public_zone}</div>}
+            <button type="button" className="w-full text-left" onClick={() => setSelected(r)}>
+              <div className="font-semibold">{r.name}</div>
+              {r.public_zone && <div className="text-sm text-stone-400">Zone : {r.public_zone}</div>}
+            </button>
             {r.public_phone && (
               <a href={`tel:${r.public_phone}`} className="text-sm text-sky-400 flex items-center gap-1 mt-1">
                 <Phone size={14} /> {r.public_phone}
@@ -44,7 +57,7 @@ export default function PublicDepotsMap() {
                 target="_blank"
                 rel="noreferrer"
               >
-                Voir sur la carte
+                Google Maps
               </a>
             )}
           </li>

@@ -13,12 +13,15 @@ export default function DepotTracking() {
   const [points, setPoints] = useState<any[]>([]);
   const [tracking, setTracking] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [mapPoint, setMapPoint] = useState<{ lat: number; lng: number } | null>(null);
   const timer = useRef<number | null>(null);
 
   const load = useCallback(async () => {
     if (!depotId) return;
     setTours(await listDepotTours(depotId));
-    setPoints(await latestTrackingByTour(depotId));
+    const pts = await latestTrackingByTour(depotId);
+    setPoints(pts);
+    if (pts[0]) setMapPoint({ lat: Number(pts[0].lat), lng: Number(pts[0].lng) });
   }, [depotId]);
 
   useEffect(() => {
@@ -118,6 +121,17 @@ export default function DepotTracking() {
       </button>
       {msg && <p className="text-sm text-amber-400">{msg}</p>}
 
+      {mapPoint && (
+        <div className="rounded-2xl overflow-hidden border border-stone-800 h-56 bg-stone-900">
+          <iframe
+            title="Carte suivi"
+            className="w-full h-full border-0"
+            loading="lazy"
+            referrerPolicy="no-referrer-when-downgrade"
+            src={`https://www.openstreetmap.org/export/embed.html?bbox=${mapPoint.lng - 0.02}%2C${mapPoint.lat - 0.02}%2C${mapPoint.lng + 0.02}%2C${mapPoint.lat + 0.02}&layer=mapnik&marker=${mapPoint.lat}%2C${mapPoint.lng}`}
+          />
+        </div>
+      )}
       <h2 className="font-semibold text-stone-200">Positions récentes</h2>
       {points.length === 0 ? (
         <EmptyState icon={<MapPin size={40} />} title="Aucune position" message="Lancez une tournée et activez le GPS livreur." />
@@ -125,19 +139,25 @@ export default function DepotTracking() {
         <ul className="space-y-2">
           {points.map((p) => (
             <li key={p.id} className="card p-3 text-sm">
-              <div className="font-medium">
-                Tournée {String(p.tour_id).slice(0, 8)}…
-              </div>
-              <div className="text-stone-400">
-                {Number(p.lat).toFixed(5)}, {Number(p.lng).toFixed(5)}
-              </div>
+              <button
+                type="button"
+                className="w-full text-left"
+                onClick={() => setMapPoint({ lat: Number(p.lat), lng: Number(p.lng) })}
+              >
+                <div className="font-medium">
+                  Tournée {String(p.tour_id).slice(0, 8)}…
+                </div>
+                <div className="text-stone-400">
+                  {Number(p.lat).toFixed(5)}, {Number(p.lng).toFixed(5)}
+                </div>
+              </button>
               <a
                 className="text-xs text-sky-400"
                 href={`https://www.google.com/maps?q=${p.lat},${p.lng}`}
                 target="_blank"
                 rel="noreferrer"
               >
-                Ouvrir la carte
+                Google Maps
               </a>
               <div className="text-[10px] text-stone-500">{new Date(p.recorded_at).toLocaleString('fr-FR')}</div>
             </li>
