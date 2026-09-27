@@ -43,6 +43,8 @@ import Suppliers from '@/pages/Suppliers';
 import Purchases from '@/pages/Purchases';
 import Customers from '@/pages/Customers';
 import Tables from '@/pages/Tables';
+import MenuCarte from '@/pages/restaurant/MenuCarte';
+import Reservations from '@/pages/restaurant/Reservations';
 import Orders from '@/pages/Orders';
 import Kitchen from '@/pages/Kitchen';
 import PlanGate from '@/components/PlanGate';
@@ -181,6 +183,8 @@ function ProtectedRoutes() {
         <Route path="/pos" element={<RedirectToReportTab tab="caisse" />} />
         <Route path="/caisse" element={<Navigate to="/pos" replace />} />
         <Route path="/orders" element={<Orders />} />
+        <Route path="/menu-carte" element={<MenuCarte />} />
+        <Route path="/reservations" element={<Reservations />} />
         <Route path="/kitchen" element={<PlanGate feature="kitchen" label="Cuisine / Grill"><Kitchen /></PlanGate>} />
         <Route path="/inventory" element={<Inventaire />} />
         <Route path="/depot/clients" element={<DepotClients />} />

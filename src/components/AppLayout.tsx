@@ -1,6 +1,6 @@
 import { type ReactNode, useState, useEffect , useRef} from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, ShoppingCart, Package, Camera, ClipboardCheck, QrCode, Users, Building2, Beer, LogOut, Menu, X, UserCog, ClipboardList, Calculator, BarChart3, Truck, UserCircle, Calendar, UtensilsCrossed, Bell, Settings, Sparkles, Receipt, Wallet, MessageCircle, FileText, Crown, Brain, Sun, Moon, Wrench } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Package, Camera, ClipboardCheck, QrCode, Users, Building2, Beer, LogOut, Menu, X, UserCog, ClipboardList, Calculator, BarChart3, Truck, UserCircle, Calendar, CalendarDays, UtensilsCrossed, Bell, Settings, Sparkles, Receipt, Wallet, MessageCircle, FileText, Crown, Brain, Sun, Moon, Wrench } from 'lucide-react';
 import DailyReportGate from '@/components/DailyReportGate';
 import OwnerReportReminder from '@/components/OwnerReportReminder';
 import ReportDelayNotifier from '@/components/ReportDelayNotifier';
@@ -58,6 +58,8 @@ const NAV_SECTIONS: NavSection[] = [
       { to: '/live-sales', label: 'Ventes journée', icon: <ShoppingCart size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'cashier', 'employee'] },
       { to: '/point-manuel', label: 'Point manuel', icon: <ClipboardList size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'cashier', 'employee'] },
       { to: '/orders', label: 'Commandes', icon: <Receipt size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'cashier', 'employee'] },
+      { to: '/menu-carte', label: 'Carte', icon: <Receipt size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager'] },
+      { to: '/reservations', label: 'Réservations', icon: <CalendarDays size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'cashier'] },
       { to: '/kitchen', label: 'Cuisine / Bar', icon: <UtensilsCrossed size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'employee'] },
       { to: '/guide', label: 'Guide démarrage', icon: <Sparkles size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'cashier', 'employee'] },
     ] },
@@ -321,6 +323,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
       // Modules hôtel uniquement pour complexe hôtelier
       if (HOTEL_ONLY.has(item.to) && bizType !== 'complexe') return false;
+        if ((item.to === '/menu-carte' || item.to === '/reservations') && bizType !== 'restaurant' && !(bizType === 'complexe' && estServices.includes('restaurant'))) return false;
+        if (bizType === 'restaurant' && (item.to === '/kits' || item.to === '/stock-transfer')) return false;
 
       const roleForMenu = effectiveRole || member.role;
       if (['super_admin', 'admin', 'owner', 'manager'].includes(roleForMenu)) {
@@ -348,7 +352,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     // Maquis / bar : renommer Cuisine
     if ((bizType === 'maquis') && section.label === 'Principal') {
       items = items.map((item) =>
-        item.to === '/kitchen' ? { ...item, label: 'Grill / Bar' } : item
+        item.to === '/kitchen' ? { ...item, label: bizType === 'maquis' ? 'Grill / Bar' : 'Cuisine' } : item
       );
     }
     // Établissement multi-services : libellés selon services cochés
@@ -487,7 +491,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   // Type inconnu : ne pas bloquer toute l'app — fallback type "maquis"
   const knownTypes = new Set([
-    'maquis', 'location_event', 'complexe',
+    'maquis', 'restaurant', 'location_event', 'complexe',
   ]);
   const rawType = (activeEstablishment?.type || cachedEstPayload?.type || '').toLowerCase().trim();
   // Ancien écran "choose-type" désactivé pour éviter le spam récursif chez tous les users

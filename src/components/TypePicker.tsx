@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Beer, CalendarDays, Loader2, Check, Building2 } from 'lucide-react';
+import { Beer, CalendarDays, Loader2, Check, Building2, UtensilsCrossed } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { seedDefaultStockForEstablishment } from '@/lib/seedDefaultStock';
@@ -23,6 +23,7 @@ export const ESTABLISHMENT_SERVICES: { id: string; label: string; hint: string }
 
 const ICONS: Record<BusinessType, typeof Beer> = {
   maquis: Beer,
+  restaurant: UtensilsCrossed,
   location_event: CalendarDays,
   complexe: Building2,
 };

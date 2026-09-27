@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   LayoutGrid, Printer, Plus, Trash2, Users, CheckCircle2, Calendar, UserCircle,
 } from 'lucide-react';
@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/auth';
 import type { RestaurantTable, Member } from '@/lib/types';
 import { Modal, EmptyState, Badge } from '@/components/ui';
 import { orderUrl, qrImageUrl, parseQrConfig, type QrConfig } from '@/lib/qrBranding';
+import { openOrderForTable } from '@/lib/restaurant';
 
 type TableRow = RestaurantTable & {
   server_id?: string | null;
@@ -15,7 +16,8 @@ type TableRow = RestaurantTable & {
 };
 
 export default function Tables() {
-  const { member, activeEstablishment } = useAuth();
+  const navigate = useNavigate();
+  const { member, user, activeEstablishment } = useAuth();
   const estId = activeEstablishment?.id || member?.establishment_id || null;
   const orderBase = typeof window !== 'undefined' ? `${window.location.origin}/commander/${estId}` : '';
   const [tables, setTables] = useState<TableRow[]>([]);
@@ -81,9 +83,25 @@ export default function Tables() {
   }
 
   async function cycleStatus(t: TableRow) {
-    const next: Record<string, string> = { free: 'occupied', occupied: 'reserved', reserved: 'free' };
+    const next: Record<string, string> = { free: 'occupied', occupied: 'reserved', reserved: 'free', cleaning: 'free' };
     await supabase.from('restaurant_tables').update({ status: next[t.status] || 'free' }).eq('id', t.id);
     await load();
+  }
+
+  async function startOrder(t: TableRow) {
+    if (!estId || !user?.id) return;
+    if (!confirm(`Ouvrir une commande pour la table ${t.number} ?`)) return;
+    try {
+      const orderId = await openOrderForTable({
+        estId,
+        tableId: t.id,
+        tableNumber: String(t.number),
+        userId: user.id,
+      });
+      navigate(`/orders?order=${orderId}&table=${t.number}`);
+    } catch (e: any) {
+      alert(e?.message || 'Impossible d’ouvrir la commande');
+    }
   }
 
   async function assignServer(table: TableRow, userId: string | null) {
@@ -200,7 +218,8 @@ export default function Tables() {
                   <Trash2 size={14} />
                 </button>
               </div>
-              <button type="button" onClick={() => void cycleStatus(t)} className="w-full pt-1">
+              <button type="button" onClick={() => void cycleStatus(t)}
+                  onDoubleClick={() => void startOrder(t)} className="w-full pt-1">
                 <div className="text-3xl font-bold font-display text-stone-100 mb-1">{t.number}</div>
                 <div className="flex items-center justify-center gap-1 text-sm text-stone-400 mb-2">
                   <Users size={12} /> {t.seats}
@@ -295,7 +314,7 @@ export default function Tables() {
             </div>
           </div>
           <p className="text-xs text-stone-500">
-            Cliquez sur une table pour changer son statut (Libre → Occupée → Réservée). Icône 👤 pour assigner un serveur.
+            Cliquez = statut · Double-clic = ouvrir commande · 👤 = serveur (Libre → Occupée → Réservée). Icône 👤 pour assigner un serveur.
           </p>
           <button type="button" onClick={() => void save()} className="btn-primary w-full">
             Ajouter

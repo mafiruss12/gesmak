@@ -382,7 +382,12 @@ export default function Dashboard() {
   }
 
   const shortcuts =
-    bizType === 'maquis' ? [
+    bizType === 'restaurant' ? [
+      { to: '/tables', label: 'Salle', icon: LayoutDashboard },
+      { to: '/menu-carte', label: 'Carte', icon: Receipt },
+      { to: '/kitchen', label: 'Cuisine', icon: UtensilsCrossed },
+      { to: '/reservations', label: 'Réservations', icon: Receipt },
+    ] : bizType === 'maquis' ? [
       { to: '/live-sales', label: 'Ventes journée', icon: ShoppingCart },
       { to: '/pos', label: ui.posTitle, icon: ShoppingCart },
       { to: '/inventory', label: ui.shortcutInventory, icon: Package },

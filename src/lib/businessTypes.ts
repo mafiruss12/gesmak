@@ -1,19 +1,21 @@
 import type { Role } from './types';
 
 /** Uniquement les 3 types créables / utilisés */
-export type BusinessType = 'maquis' | 'location_event' | 'complexe';
+export type BusinessType = 'maquis' | 'restaurant' | 'location_event' | 'complexe';
 
-export const BUSINESS_TYPES: BusinessType[] = ['maquis', 'location_event', 'complexe'];
+export const BUSINESS_TYPES: BusinessType[] = ['maquis', 'restaurant', 'location_event', 'complexe'];
 export const BUSINESS_TYPES_SELECTABLE: BusinessType[] = BUSINESS_TYPES;
 
 export const BUSINESS_LABELS: Record<BusinessType, string> = {
   maquis: 'Maquis',
+  restaurant: 'Restaurant',
   location_event: 'Location événementielle',
   complexe: 'Établissement',
 };
 
 export const BUSINESS_DESCRIPTIONS: Record<BusinessType, string> = {
   maquis: 'Boissons, grills et gestion de caisse au quotidien',
+  restaurant: 'Salle, carte, cuisine, réservations et encaissement',
   location_event: 'Chaises, tables, bâches, sono — mariages et cérémonies',
   complexe:
     'Un lieu multi-services : maquis, restaurant, chambres, boutique… — vous cochez ce que vous proposez',
@@ -29,6 +31,13 @@ export const BUSINESS_THEMES: Record<
     accent: '#C47A12',
     label: 'Crème & Ambre',
     gradient: 'from-amber-500/20 to-orange-600/5',
+  },
+  restaurant: {
+    primary: '#ef4444',
+    primarySoft: 'rgba(239, 68, 68, 0.16)',
+    accent: '#b91c1c',
+    label: 'Rouge resto',
+    gradient: 'from-red-500/20 to-rose-700/5',
   },
   location_event: {
     primary: '#8b5cf6',
@@ -54,6 +63,14 @@ export const MENU_BY_TYPE: Record<BusinessType, string[]> = {
     '/expenses', '/mes-employes', '/calendar', '/daily-report', '/cloture', '/patron',
     '/statistics', '/reports', '/accounting', '/ai', '/ai-train', '/chat',
     '/notifications', '/settings',
+  ],
+  restaurant: [
+    '/dashboard', '/tables', '/orders', '/kitchen', '/menu-carte', '/reservations',
+    '/pos', '/print-qr', '/menu-qr', '/mon-service',
+    '/inventory', '/inventory/scan', '/purchases', '/customers',
+    '/expenses', '/mes-employes', '/calendar', '/daily-report', '/cloture',
+    '/statistics', '/reports', '/accounting', '/ai', '/chat',
+    '/notifications', '/settings', '/guide',
   ],
   location_event: [
     '/dashboard', '/rent/equipment', '/rent/clients', '/rent/orders',
@@ -155,6 +172,15 @@ export const BUSINESS_UI: Record<BusinessType, BusinessUI> = {
     shortcutInventory: 'Boissons',
     emptyProducts: 'Aucune boisson en stock.',
   },
+  restaurant: {
+    productWord: 'plat',
+    productWordPlural: 'plats',
+    inventoryTitle: 'Stock cuisine',
+    inventorySubtitle: 'Ingrédients et produits liés à la carte',
+    posTitle: 'Caisse restaurant',
+    shortcutInventory: 'Stock',
+    emptyProducts: 'Aucun produit en stock.',
+  },
   location_event: {
     productWord: 'matériel',
     productWordPlural: 'matériels',
@@ -186,7 +212,7 @@ export function menuLabelFor(path: string, type: BusinessType): string | null {
     '/pos': ui.posTitle,
     '/inventory/scan': type === 'location_event' ? 'Scan matériel' : 'Scan inventaire',
     '/orders': type === 'location_event' ? 'Commandes location' : 'Commandes',
-    '/kitchen': type === 'maquis' ? 'Grill / Bar' : 'Cuisine',
+    '/kitchen': type === 'maquis' ? 'Grill / Bar' : type === 'restaurant' ? 'Cuisine' : 'Cuisine',
     '/tables': type === 'maquis' ? 'Espaces' : 'Tables',
     '/customers': 'Clients',
     '/purchases': 'Achats',
@@ -208,13 +234,14 @@ export function isCommerceType(_type: BusinessType): boolean {
 }
 
 export function isFnbType(type: BusinessType): boolean {
-  return type === 'maquis';
+  return type === 'maquis' || type === 'restaurant';
 }
 
 /** Mappe toute ancienne valeur DB vers un des 3 types */
 export function normalizeBusinessType(raw: string | null | undefined): BusinessType {
   const v = (raw || '').toLowerCase().trim();
   if (v === 'maquis' || v === 'bar' || v === 'cafe' || v === 'café' || v === 'pharmacie') return 'maquis';
+  if (v === 'restaurant' || v === 'resto' || v === 'restauration') return 'restaurant';
   if (v === 'location_event' || v === 'location' || v === 'event' || v === 'rental') return 'location_event';
   if (
     v === 'complexe' ||
@@ -228,9 +255,6 @@ export function normalizeBusinessType(raw: string | null | undefined): BusinessT
     v === 'hotelier' ||
     v === 'hotellerie' ||
     v === 'hôtelier' ||
-    v === 'restaurant' ||
-    v === 'resto' ||
-    v === 'restauration' ||
     v === 'magasin' ||
     v === 'boutique' ||
     v === 'superette' ||
