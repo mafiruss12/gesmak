@@ -11,7 +11,7 @@ import { toWhatsAppNumber } from '@/lib/login';
 import { getBusinessUI } from '@/lib/businessTypes';
 import { convertDevisToFacture } from '@/lib/opsHub';
 
-type DocType = 'devis' | 'facture';
+type DocType = 'devis' | 'facture' | 'rapport';
 type DocLine = { label: string; qty: number; unit_price: number };
 
 interface BizDoc {
@@ -37,7 +37,7 @@ interface BizDoc {
 const emptyLine = (): DocLine => ({ label: '', qty: 1, unit_price: 0 });
 
 function nextNumber(type: DocType) {
-  const prefix = type === 'devis' ? 'DEV' : 'FAC';
+  const prefix = type === 'devis' ? 'DEV' : type === 'facture' ? 'FAC' : 'RAPP';
   const d = new Date();
   return `${prefix}-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}-${Math.floor(1000 + Math.random() * 9000)}`;
 }
@@ -204,7 +204,7 @@ table{width:100%;border-collapse:collapse;margin-top:16px}
 td,th{padding:8px;border-bottom:1px solid #334155;font-size:14px}
 .muted{color:#94a3b8;font-size:13px}
 </style></head><body><div class="card">
-<h1>${d.doc_type === 'devis' ? 'DEVIS' : 'FACTURE'} ${d.number}</h1>
+<h1>${d.doc_type === 'devis' ? 'DEVIS' : d.doc_type === 'facture' ? 'FACTURE' : 'RAPPORT'} ${d.number}</h1>
 <p class="muted">${activeEstablishment?.name || ''} · ${ui.productPlural}</p>
 <p><strong>Client :</strong> ${d.client_name}<br/>
 ${d.client_phone ? 'Tél : ' + d.client_phone + '<br/>' : ''}
@@ -254,13 +254,15 @@ ${d.notes ? `<p class="muted">${d.notes}</p>` : ''}
           <p className="text-xs text-stone-500 mt-1">Synchronisé avec caisse · rapport du jour · clôture Z</p>
           <p className="text-stone-400 text-sm">Modifiables · thème orange / bleu · WhatsApp wa.me/225</p>
         </div>
+        {tab !== 'rapport' && (
         <button type="button" onClick={openCreate} className="btn-primary flex items-center gap-2">
           <Plus size={18} /> Nouveau {tab}
         </button>
+        )}
       </div>
 
       <div className="flex gap-2 mb-5">
-        {(['devis', 'facture'] as DocType[]).map((t) => (
+        {(['devis', 'facture', 'rapport'] as DocType[]).map((t) => (
           <button
             key={t}
             type="button"
@@ -271,7 +273,7 @@ ${d.notes ? `<p class="muted">${d.notes}</p>` : ''}
                 : 'border-stone-700 text-stone-400 hover:bg-stone-800'
             }`}
           >
-            {t === 'devis' ? 'Devis' : 'Factures'}
+            {t === 'devis' ? 'Devis' : t === 'facture' ? 'Factures' : 'Rapports journaliers'}
           </button>
         ))}
       </div>
@@ -279,8 +281,8 @@ ${d.notes ? `<p class="muted">${d.notes}</p>` : ''}
       {list.length === 0 ? (
         <EmptyState
           icon={<FileText size={48} />}
-          title={tab === 'devis' ? 'Aucun devis' : 'Aucune facture'}
-          message="Créez un document, modifiez les lignes, puis envoyez par WhatsApp."
+          title={tab === 'devis' ? 'Aucun devis' : tab === 'facture' ? 'Aucune facture' : 'Aucun rapport journalier'}
+          message={tab === 'rapport' ? 'Les rapports validés depuis Rapport du jour apparaissent ici automatiquement.' : 'Créez un document, modifiez les lignes, puis envoyez par WhatsApp.'}
         />
       ) : (
         <div className="space-y-3">
@@ -308,6 +310,21 @@ ${d.notes ? `<p class="muted">${d.notes}</p>` : ''}
                 <button type="button" className="p-2.5 rounded-lg text-stone-300 hover:bg-stone-800" onClick={() => openEdit(d)}>
                   <Pencil size={18} />
                 </button>
+                    {d.doc_type === 'rapport' && d.notes && (
+                      <button
+                        type="button"
+                        className="btn-secondary text-xs px-2 py-1"
+                        onClick={() => {
+                          const w = window.open('', '_blank');
+                          if (w) {
+                            w.document.write(d.notes || '');
+                            w.document.close();
+                          }
+                        }}
+                      >
+                        Voir / Imprimer
+                      </button>
+                    )}
                     {d.doc_type === 'devis' && d.status !== 'converted' && (
                       <button type="button" className="btn-secondary text-xs px-2 py-1" onClick={() => void convertToFacture(d)}>
                         → Facture

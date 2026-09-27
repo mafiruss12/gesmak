@@ -1199,6 +1199,37 @@ export default function DailyReportPage({ embedded = false }: { embedded?: boole
 
     setSent(true);
     setStockDeducted(deducted || stockDeducted);
+
+    // Archive PDF/rapport dans Documents (business_documents)
+    try {
+      const html = buildReportHtml();
+      const estName = activeEstablishment?.name || 'Établissement';
+      const lines = soldLines.map((l) => ({
+        label: `${l.name} × ${l.qty}`,
+        qty: l.qty,
+        unit_price: l.price,
+      }));
+      await supabase.from('business_documents').insert({
+        establishment_id: estId,
+        doc_type: 'rapport',
+        number: `RAPP-${date.replace(/-/g, '')}`,
+        client_name: estName,
+        title: `Rapport journalier — ${estName} — ${date}`,
+        lines,
+        subtotal: theoretical,
+        tax_rate: 0,
+        total: theoretical,
+        notes: html.slice(0, 50000),
+        status: 'archived',
+        theme: 'rapport',
+        issued_at: new Date().toISOString(),
+        report_date: date,
+        created_by: member?.user_id || null,
+      });
+    } catch (e) {
+      console.warn('archive rapport documents', e);
+    }
+
     playTone(match ? 'ok' : 'warn');
     // Rappel oral court
     speakFrench(match ? 'Rapport envoyé. Caisse correcte.' : `Rapport envoyé. Attention, écart de ${Math.round(Math.abs(diff))} francs.`);
