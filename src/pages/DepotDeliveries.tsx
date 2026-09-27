@@ -8,6 +8,7 @@ import {
   createDepotDelivery,
   setDeliveryStatus,
   listDeliveryItems,
+  recordDeliveryReturn,
   DELIVERY_STATUS_LABELS,
   type DepotClient,
   type DepotDelivery,
@@ -366,6 +367,34 @@ export default function DepotDeliveries() {
                   <Package size={14} /> Stock dépôt mis à jour
                   {detail.delivery.status === 'delivered' ? ' (et maquis lié si configuré)' : ''}
                 </p>
+              )}
+              {(detail.delivery.status === 'delivered' || detail.delivery.status === 'in_transit') && (
+                <button
+                  type="button"
+                  className="btn-secondary text-sm"
+                  disabled={busy}
+                  onClick={async () => {
+                    const returned = prompt('Quantité totale retournée (toutes lignes, approx) ?', '0');
+                    const broken = prompt('Quantité cassée ?', '0');
+                    if (returned == null) return;
+                    setBusy(true);
+                    await recordDeliveryReturn({
+                      delivery_id: detail.delivery.id,
+                      items: detail.items.map((it) => ({
+                        id: it.id as string,
+                        qty_returned: Number(returned) || 0,
+                        qty_broken: Number(broken) || 0,
+                      })),
+                      returned_amount: (Number(returned) || 0) * 0,
+                      breakage_amount: (Number(broken) || 0) * 0,
+                    });
+                    setBusy(false);
+                    alert('Retours / casses enregistrés');
+                    await openDetail(detail.delivery);
+                  }}
+                >
+                  Enregistrer retours / casses
+                </button>
               )}
               <button type="button" className="btn-ghost" onClick={() => setDetail(null)}>
                 Fermer

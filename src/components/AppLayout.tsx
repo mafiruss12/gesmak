@@ -80,6 +80,8 @@ const NAV_SECTIONS: NavSection[] = [
       { to: '/depot/tours', label: 'Tournées', icon: <Truck size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager'] },
       { to: '/depot/creances', label: 'Créances', icon: <Wallet size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager'] },
       { to: '/depot/tracking', label: 'Suivi GPS', icon: <Truck size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'employee'] },
+      { to: '/depot/consignes', label: 'Consignes', icon: <Package size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager'] },
+      { to: '/depot/prices', label: 'Tarifs clients', icon: <Wallet size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager'] },
     ] },
   {
     label: 'Finances',

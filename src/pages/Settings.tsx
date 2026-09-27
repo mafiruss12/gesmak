@@ -581,6 +581,7 @@ async function saveProfile() {
           <p className="text-xs font-semibold uppercase tracking-wide text-stone-500 px-1 mb-2">Établissement & application</p>
           <div className="rounded-2xl border border-stone-800 bg-stone-900/80 overflow-hidden">
             <SettingsRow icon={<Building2 size={20} />} title="Infos établissement" subtitle="Nom, adresse, contacts" onClick={() => setOpenPanel('est')} />
+            <SettingsRow icon={<MapPin size={20} />} title="Annuaire public (dépôt)" subtitle="Apparaître sur /public/depots" onClick={() => setOpenPanel('public_depot')} />
             <SettingsRow icon={<MapPin size={20} />} title="Position GPS" subtitle="Localisation" onClick={() => setOpenPanel('gps')} />
             <SettingsRow icon={<Palette size={20} />} title="Apparence" subtitle="Mode jour / sombre" onClick={() => setOpenPanel('theme')} />
             <SettingsRow icon={<RefreshCw size={20} />} title="Mises à jour" subtitle="Version de l’app" onClick={() => setOpenPanel('update')} />
@@ -1070,7 +1071,12 @@ async function saveProfile() {
         </div>
         )}
 
-        {openPanel === 'gps' && (
+        
+      {openPanel === 'public_depot' && (
+        <PublicDepotPanel onClose={() => setOpenPanel(null)} />
+      )}
+
+      {openPanel === 'gps' && (
         <div className="card space-y-3">
           <h2 className="text-lg font-semibold text-sky-300 flex items-center gap-2">
             <MapPin size={18} /> Position GPS
@@ -1091,5 +1097,55 @@ async function saveProfile() {
       </div>
     </div>
     </>
+  );
+}
+
+
+function PublicDepotPanel({ onClose }: { onClose: () => void }) {
+  const { activeEstablishment, member, refresh } = useAuth();
+  const [visible, setVisible] = useState(!!(activeEstablishment as any)?.public_visible);
+  const [zone, setZone] = useState(String((activeEstablishment as any)?.public_zone || ''));
+  const [phone, setPhone] = useState(String((activeEstablishment as any)?.public_phone || ''));
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const estId = activeEstablishment?.id || member?.establishment_id;
+
+  async function save() {
+    if (!estId) return;
+    setBusy(true);
+    const { error } = await supabase
+      .from('establishments')
+      .update({
+        public_visible: visible,
+        public_zone: zone || null,
+        public_phone: phone || null,
+      })
+      .eq('id', estId);
+    setBusy(false);
+    if (error) setMsg(error.message);
+    else {
+      setMsg('Enregistré');
+      try { await refresh?.(); } catch { /* */ }
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center p-4">
+      <div className="w-full max-w-md rounded-2xl bg-stone-900 border border-stone-700 p-4 space-y-3">
+        <h2 className="font-bold text-lg">Annuaire public des grossistes</h2>
+        <p className="text-xs text-stone-400">Opt-in : votre dépôt peut apparaître sur /public/depots (sans données sensibles).</p>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={visible} onChange={(e) => setVisible(e.target.checked)} />
+          Visible publiquement
+        </label>
+        <input className="input w-full" placeholder="Zone couverte (ex. Abobo, Yopougon)" value={zone} onChange={(e) => setZone(e.target.value)} />
+        <input className="input w-full" placeholder="Téléphone public" value={phone} onChange={(e) => setPhone(e.target.value)} />
+        {msg && <p className="text-sm text-amber-400">{msg}</p>}
+        <div className="flex gap-2">
+          <button type="button" className="btn-secondary flex-1" onClick={onClose}>Fermer</button>
+          <button type="button" className="btn-primary flex-1" disabled={busy} onClick={() => void save()}>Enregistrer</button>
+        </div>
+      </div>
+    </div>
   );
 }

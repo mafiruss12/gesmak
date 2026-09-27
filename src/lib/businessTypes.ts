@@ -83,7 +83,7 @@ export const MENU_BY_TYPE: Record<BusinessType, string[]> = {
   ],
   depot: [
     '/dashboard', '/depot/clients', '/depot/deliveries', '/depot/tours',
-    '/depot/creances', '/depot/tracking', '/depot/consignes',
+    '/depot/creances', '/depot/tracking', '/depot/consignes', '/depot/prices',
     '/inventory', '/inventory/scan', '/purchases', '/suppliers',
     '/expenses', '/mes-employes', '/daily-report', '/statistics', '/reports', '/accounting',
     '/ai', '/chat', '/notifications', '/settings', '/guide',

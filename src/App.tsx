@@ -22,6 +22,8 @@ import DepotDeliveries from '@/pages/DepotDeliveries';
 import DepotTours from '@/pages/depot/DepotTours';
 import DepotCreances from '@/pages/depot/DepotCreances';
 import DepotTracking from '@/pages/depot/DepotTracking';
+import DepotConsignes from '@/pages/depot/DepotConsignes';
+import DepotPrices from '@/pages/depot/DepotPrices';
 import PublicDepotsMap from '@/pages/public/PublicDepotsMap';
 import LiveDaySales from '@/pages/LiveDaySales';
 import MonService from '@/pages/MonService';
@@ -197,7 +199,8 @@ function ProtectedRoutes() {
         <Route path="/depot/tours" element={<DepotTours />} />
         <Route path="/depot/creances" element={<DepotCreances />} />
         <Route path="/depot/tracking" element={<DepotTracking />} />
-        <Route path="/depot/consignes" element={<DepotClients />} />
+        <Route path="/depot/consignes" element={<DepotConsignes />} />
+        <Route path="/depot/prices" element={<DepotPrices />} />
         <Route path="/inventory/scan" element={<ScanInventaire />} />
         <Route path="/inventaire" element={<Navigate to="/inventory" replace />} />
         <Route path="/point-manuel" element={<PointManuel />} />
