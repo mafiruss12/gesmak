@@ -137,29 +137,23 @@ function DashboardSwitch() {
 
 function ProtectedRoutes() {
   const { user, member, loading, needsAccess } = useAuth();
-  // Filet court uniquement si boot session reste bloqué (réseau mort)
-  const [bootTimedOut, setBootTimedOut] = useState(false);
-  useEffect(() => {
-    if (!loading) {
-      setBootTimedOut(false);
-      return;
-    }
-    const t = window.setTimeout(() => setBootTimedOut(true), 4000);
-    return () => window.clearTimeout(t);
-  }, [loading]);
 
   if (!isSupabaseConfigured) return <ConfigError />;
 
-  // Spinner session UNIQUEMENT au tout début, max 4s — jamais d’écran « établissement »
-  if (loading && !user && !bootTimedOut) {
+  // Pendant le boot auth (getSession au refresh) : rester sur spinner.
+  // Ne JAMAIS envoyer vers /login tant que loading === true
+  // (c’était la cause de la « déconnexion » à chaque actualisation — régression bootTimedOut).
+  if (loading && !user) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-[#F5F5F5] px-6 text-center">
         <Loader2 className="animate-spin text-[#FF7900]" size={32} />
-        <p className="text-sm font-medium text-stone-700">Connexion…</p>
+        <p className="text-sm font-medium text-stone-700">Restauration de la session…</p>
+        <p className="text-xs text-stone-500 max-w-xs">Ne fermez pas la page.</p>
       </div>
     );
   }
 
+  // Session lue : pas d’utilisateur = vraiment déconnecté
   if (!user) return <Navigate to="/" replace />;
 
   try {

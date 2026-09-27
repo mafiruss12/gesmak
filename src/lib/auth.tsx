@@ -65,8 +65,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return member.role;
   })();
   const [myEstablishments, setMyEstablishments] = useState<MyEstablishment[]>([]);
-  // Init synchrone : au refresh l'établissement est connu immédiatement (pas d'attente réseau)
-  const [activeEstablishment, setActiveEstablishment] = useState<MyEstablishment | null>(null);
+  // Init synchrone depuis localStorage → menu immédiatement au refresh
+  const [activeEstablishment, setActiveEstablishment] = useState<MyEstablishment | null>(() => {
+    try {
+      const raw = localStorage.getItem('mm_active_est');
+      if (!raw) return null;
+      const p = JSON.parse(raw);
+      if (p?.id) return { id: p.id, name: p.name || '', type: p.type || 'maquis' } as MyEstablishment;
+    } catch { /* */ }
+    return null;
+  });
 
   /** Nettoie le cache établissement (évite de coller un maquis d'un autre compte) */
   function clearEstablishmentCache() {
@@ -660,6 +668,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           session = data?.session ?? null;
         } catch (e) {
           console.error('getSession', e);
+        }
+        // Race connue PKCE : getSession peut être null un instant avant INITIAL_SESSION
+        if (!session) {
+          await new Promise((r) => setTimeout(r, 450));
+          try {
+            const { data } = await supabase.auth.getSession();
+            session = data?.session ?? null;
+          } catch { /* */ }
         }
         // Session absente mais refresh token présent → un seul essai
         if (!session) {
