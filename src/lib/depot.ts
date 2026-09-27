@@ -13,6 +13,11 @@ export type DepotClient = {
   notes?: string | null;
   status?: string | null;
   created_at?: string;
+  lat?: number | null;
+  lng?: number | null;
+  credit_limit?: number | null;
+  payment_days?: number | null;
+  price_tier?: string | null;
 };
 
 export type DepotDelivery = {
@@ -164,4 +169,141 @@ export async function listMaquisEstablishments(): Promise<{ id: string; name: st
     .limit(200);
   if (error) return [];
   return (data || []).map((e: { id: string; name: string }) => ({ id: e.id, name: e.name }));
+}
+
+export type DepotTour = {
+  id: string;
+  depot_id: string;
+  tour_date: string;
+  zone?: string | null;
+  driver_user_id?: string | null;
+  driver_name?: string | null;
+  vehicle_label?: string | null;
+  status: string;
+  notes?: string | null;
+};
+
+export async function listDepotTours(depotId: string, fromDate?: string) {
+  let q = supabase
+    .from('depot_tours')
+    .select('*')
+    .eq('depot_id', depotId)
+    .order('tour_date', { ascending: false })
+    .limit(50);
+  if (fromDate) q = q.gte('tour_date', fromDate);
+  const { data, error } = await q;
+  if (error) {
+    console.error('listDepotTours', error);
+    return [] as DepotTour[];
+  }
+  return (data || []) as DepotTour[];
+}
+
+export async function upsertDepotTour(
+  payload: Partial<DepotTour> & { depot_id: string; tour_date: string },
+): Promise<{ ok: boolean; id?: string; error?: string }> {
+  if (payload.id) {
+    const { error } = await supabase.from('depot_tours').update(payload).eq('id', payload.id);
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, id: payload.id };
+  }
+  const { data, error } = await supabase.from('depot_tours').insert(payload).select('id').single();
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, id: data?.id };
+}
+
+export async function assignDeliveriesToTour(tourId: string, deliveryIds: string[]) {
+  for (let i = 0; i < deliveryIds.length; i++) {
+    await supabase
+      .from('depot_deliveries')
+      .update({ tour_id: tourId, sequence_order: i + 1, status: 'prepared' })
+      .eq('id', deliveryIds[i]);
+  }
+}
+
+export async function pushTrackingPoint(input: {
+  tour_id: string;
+  depot_id: string;
+  driver_user_id: string;
+  lat: number;
+  lng: number;
+  status?: string;
+}) {
+  const { error } = await supabase.from('delivery_tracking').insert({
+    tour_id: input.tour_id,
+    depot_id: input.depot_id,
+    driver_user_id: input.driver_user_id,
+    lat: input.lat,
+    lng: input.lng,
+    status: input.status || 'moving',
+  });
+  if (error) return { ok: false as const, error: error.message };
+  return { ok: true as const };
+}
+
+export async function latestTrackingByTour(depotId: string) {
+  const { data, error } = await supabase
+    .from('delivery_tracking')
+    .select('*')
+    .eq('depot_id', depotId)
+    .order('recorded_at', { ascending: false })
+    .limit(200);
+  if (error) return [];
+  // keep latest per tour
+  const map = new Map<string, (typeof data)[0]>();
+  for (const row of data || []) {
+    if (!map.has(row.tour_id)) map.set(row.tour_id, row);
+  }
+  return Array.from(map.values());
+}
+
+export async function listReceivables(depotId: string) {
+  const { data, error } = await supabase
+    .from('depot_deliveries')
+    .select('*, depot_clients(name, phone, credit_limit, payment_days, balance)')
+    .eq('depot_id', depotId)
+    .order('created_at', { ascending: false })
+    .limit(200);
+  if (error) return [];
+  return (data || []).filter((d) => Number(d.total_amount || 0) > Number(d.paid_amount || 0));
+}
+
+export async function recordDeliveryReturn(input: {
+  delivery_id: string;
+  items: { id: string; qty_returned?: number; qty_broken?: number }[];
+  returned_amount?: number;
+  breakage_amount?: number;
+}) {
+  for (const it of input.items) {
+    await supabase
+      .from('depot_delivery_items')
+      .update({
+        qty_returned: it.qty_returned ?? 0,
+        qty_broken: it.qty_broken ?? 0,
+      })
+      .eq('id', it.id);
+  }
+  await supabase
+    .from('depot_deliveries')
+    .update({
+      returned_amount: input.returned_amount ?? 0,
+      breakage_amount: input.breakage_amount ?? 0,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', input.delivery_id);
+  return { ok: true as const };
+}
+
+export async function listPublicDepots() {
+  const { data, error } = await supabase
+    .from('establishments')
+    .select('id, name, public_zone, public_lat, public_lng, public_phone, type')
+    .eq('public_visible', true)
+    .in('type', ['depot', 'grossiste']);
+  if (error) {
+    // fallback without filter if column missing on client cache
+    console.error(error);
+    return [];
+  }
+  return data || [];
 }

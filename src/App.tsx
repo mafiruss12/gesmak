@@ -19,6 +19,10 @@ import Inventaire from '@/pages/Inventaire';
 import ScanInventaire from '@/pages/ScanInventaire';
 import DepotClients from '@/pages/DepotClients';
 import DepotDeliveries from '@/pages/DepotDeliveries';
+import DepotTours from '@/pages/depot/DepotTours';
+import DepotCreances from '@/pages/depot/DepotCreances';
+import DepotTracking from '@/pages/depot/DepotTracking';
+import PublicDepotsMap from '@/pages/public/PublicDepotsMap';
 import LiveDaySales from '@/pages/LiveDaySales';
 import MonService from '@/pages/MonService';
 import PrintTableQR from '@/pages/PrintTableQR';
@@ -187,8 +191,13 @@ function ProtectedRoutes() {
         <Route path="/reservations" element={<Reservations />} />
         <Route path="/kitchen" element={<PlanGate feature="kitchen" label="Cuisine / Grill"><Kitchen /></PlanGate>} />
         <Route path="/inventory" element={<Inventaire />} />
+        <Route path="/public/depots" element={<PublicDepotsMap />} />
         <Route path="/depot/clients" element={<DepotClients />} />
         <Route path="/depot/deliveries" element={<DepotDeliveries />} />
+        <Route path="/depot/tours" element={<DepotTours />} />
+        <Route path="/depot/creances" element={<DepotCreances />} />
+        <Route path="/depot/tracking" element={<DepotTracking />} />
+        <Route path="/depot/consignes" element={<DepotClients />} />
         <Route path="/inventory/scan" element={<ScanInventaire />} />
         <Route path="/inventaire" element={<Navigate to="/inventory" replace />} />
         <Route path="/point-manuel" element={<PointManuel />} />

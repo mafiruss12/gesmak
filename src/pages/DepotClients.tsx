@@ -25,6 +25,10 @@ export default function DepotClients() {
     payment_terms: 'cash',
     linked_establishment_id: '',
     notes: '',
+    credit_limit: '',
+    payment_days: '0',
+    lat: '',
+    lng: '',
   });
 
   async function load() {
@@ -89,7 +93,11 @@ export default function DepotClients() {
       linked_establishment_id: form.linked_establishment_id || null,
       notes: form.notes.trim() || null,
       status: 'active',
-    });
+      credit_limit: Number((form as any).credit_limit) || 0,
+      payment_days: Number((form as any).payment_days) || 0,
+      lat: (form as any).lat ? Number((form as any).lat) : null,
+      lng: (form as any).lng ? Number((form as any).lng) : null,
+    } as any);
     if (!r.ok) {
       alert(r.error || 'Erreur');
       return;

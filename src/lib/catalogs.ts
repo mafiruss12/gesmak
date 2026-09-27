@@ -194,6 +194,7 @@ const RESTAURANT: SeedProduct[] = [
 const BY_TYPE: Record<BusinessType, SeedProduct[]> = {
   maquis: MAQUIS,
   restaurant: MAQUIS,
+  depot: MAQUIS,
   location_event: [],
   complexe: MAQUIS,
 };
@@ -208,6 +209,7 @@ export function catalogLabel(type: string | null | undefined): string {
   const map: Record<BusinessType, string> = {
     maquis: 'Catalogue maquis (boissons)',
     restaurant: 'Catalogue restaurant',
+    depot: 'Catalogue dépôt / gros',
     location_event: 'Catalogue location',
     complexe: 'Catalogue établissement',
   };

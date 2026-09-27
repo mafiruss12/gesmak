@@ -1,0 +1,1 @@
+-- Module grossiste/dépôt : tournées, GPS, tarifs, consignes, colonnes clients (appliqué via Management API)

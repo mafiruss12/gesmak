@@ -402,7 +402,12 @@ export default function Dashboard() {
   }
 
   const shortcuts =
-    bizType === 'restaurant' ? [
+    bizType === 'depot' ? [
+      { to: '/depot/deliveries', label: 'Livraisons', icon: Truck },
+      { to: '/depot/clients', label: 'Clients', icon: Users },
+      { to: '/depot/tours', label: 'Tournées', icon: Truck },
+      { to: '/depot/creances', label: 'Créances', icon: DollarSign },
+    ] : bizType === 'restaurant' ? [
       { to: '/tables', label: 'Salle', icon: LayoutDashboard },
       { to: '/menu-carte', label: 'Carte', icon: Receipt },
       { to: '/kitchen', label: 'Cuisine', icon: UtensilsCrossed },

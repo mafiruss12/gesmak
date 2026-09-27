@@ -1,14 +1,15 @@
 import type { Role } from './types';
 
 /** Types créables : maquis, restaurant, location, établissement */
-export type BusinessType = 'maquis' | 'restaurant' | 'location_event' | 'complexe';
+export type BusinessType = 'maquis' | 'restaurant' | 'location_event' | 'depot' | 'complexe';
 
-export const BUSINESS_TYPES: BusinessType[] = ['maquis', 'restaurant', 'location_event', 'complexe'];
+export const BUSINESS_TYPES: BusinessType[] = ['maquis', 'restaurant', 'location_event', 'depot', 'complexe'];
 export const BUSINESS_TYPES_SELECTABLE: BusinessType[] = BUSINESS_TYPES;
 
 export const BUSINESS_LABELS: Record<BusinessType, string> = {
   maquis: 'Maquis',
   restaurant: 'Restaurant',
+  depot: 'Grossiste / Dépôt',
   location_event: 'Location événementielle',
   complexe: 'Établissement',
 };
@@ -16,6 +17,7 @@ export const BUSINESS_LABELS: Record<BusinessType, string> = {
 export const BUSINESS_DESCRIPTIONS: Record<BusinessType, string> = {
   maquis: 'Boissons, grills et gestion de caisse au quotidien',
   restaurant: 'Salle, carte, cuisine, réservations et encaissement',
+  depot: 'Clients revendeurs, livraisons, tournées, créances et suivi GPS',
   location_event: 'Chaises, tables, bâches, sono — mariages et cérémonies',
   complexe:
     'Un lieu multi-services : maquis, restaurant, chambres, boutique… — vous cochez ce que vous proposez',
@@ -38,6 +40,13 @@ export const BUSINESS_THEMES: Record<
     accent: '#b91c1c',
     label: 'Rouge resto',
     gradient: 'from-red-500/20 to-rose-700/5',
+  },
+  depot: {
+    primary: '#0ea5e9',
+    primarySoft: 'rgba(14, 165, 233, 0.16)',
+    accent: '#0369a1',
+    label: 'Bleu dépôt',
+    gradient: 'from-sky-500/20 to-blue-700/5',
   },
   location_event: {
     primary: '#8b5cf6',
@@ -71,6 +80,13 @@ export const MENU_BY_TYPE: Record<BusinessType, string[]> = {
     '/expenses', '/mes-employes', '/calendar', '/daily-report', '/cloture',
     '/statistics', '/reports', '/accounting', '/ai', '/chat',
     '/notifications', '/settings', '/guide',
+  ],
+  depot: [
+    '/dashboard', '/depot/clients', '/depot/deliveries', '/depot/tours',
+    '/depot/creances', '/depot/tracking', '/depot/consignes',
+    '/inventory', '/inventory/scan', '/purchases', '/suppliers',
+    '/expenses', '/mes-employes', '/daily-report', '/statistics', '/reports', '/accounting',
+    '/ai', '/chat', '/notifications', '/settings', '/guide',
   ],
   location_event: [
     '/dashboard', '/rent/equipment', '/rent/clients', '/rent/orders',
@@ -191,6 +207,18 @@ export const BUSINESS_UI: Record<BusinessType, BusinessUI> = {
     categories: ['Entrée', 'Plat', 'Dessert', 'Boisson', 'Ingrédient', 'Autre'],
     unitDefault: 'unité',
   },
+  depot: {
+    productWord: 'référence',
+    productWordPlural: 'références',
+    productSingular: 'référence',
+    inventoryTitle: 'Stock dépôt (gros)',
+    inventorySubtitle: 'Cartons, palettes, consignes',
+    posTitle: 'Caisse dépôt',
+    shortcutInventory: 'Stock gros',
+    emptyProducts: 'Aucun produit en stock dépôt.',
+    categories: ['Bière', 'Boisson', 'Eau', 'Spiritueux', 'Casier', 'Autre'],
+    unitDefault: 'carton',
+  },
   location_event: {
     productWord: 'matériel',
     productWordPlural: 'matériels',
@@ -258,6 +286,7 @@ export function normalizeBusinessType(raw: string | null | undefined): BusinessT
   const v = (raw || '').toLowerCase().trim();
   if (v === 'maquis' || v === 'bar' || v === 'cafe' || v === 'café' || v === 'pharmacie') return 'maquis';
   if (v === 'restaurant' || v === 'resto' || v === 'restauration') return 'restaurant';
+  if (v === 'depot' || v === 'grossiste' || v === 'grossiste_depot' || v === 'grossiste_depot_de_boisson') return 'depot';
   if (v === 'location_event' || v === 'location' || v === 'event' || v === 'rental') return 'location_event';
   if (
     v === 'complexe' ||
@@ -275,7 +304,6 @@ export function normalizeBusinessType(raw: string | null | undefined): BusinessT
     v === 'boutique' ||
     v === 'superette' ||
     v === 'quincaillerie' ||
-    v === 'depot' ||
     v === 'commerce' ||
     v === 'store' ||
     v === 'shop' ||
@@ -292,8 +320,8 @@ export function normalizeBusinessType(raw: string | null | undefined): BusinessT
   return 'maquis';
 }
 
-export function isDepot(_type: string | null | undefined): boolean {
-  return false;
+export function isDepot(type: string | null | undefined): boolean {
+  return normalizeBusinessType(type) === 'depot';
 }
 
 export function isLocationEvent(type: string | null | undefined): boolean {

@@ -77,6 +77,9 @@ const NAV_SECTIONS: NavSection[] = [
       { to: '/customers', label: 'Clients', icon: <UserCircle size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'cashier'] },
       { to: '/depot/clients', label: 'Clients dépôt', icon: <Users size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager'] },
       { to: '/depot/deliveries', label: 'Livraisons dépôt', icon: <Truck size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'cashier'] },
+      { to: '/depot/tours', label: 'Tournées', icon: <Truck size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager'] },
+      { to: '/depot/creances', label: 'Créances', icon: <Wallet size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager'] },
+      { to: '/depot/tracking', label: 'Suivi GPS', icon: <Truck size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'employee'] },
     ] },
   {
     label: 'Finances',
@@ -323,6 +326,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
       // Modules hôtel uniquement pour complexe hôtelier
       if (HOTEL_ONLY.has(item.to) && bizType !== 'complexe') return false;
+        if (item.to.startsWith('/depot') && bizType !== 'depot') return false;
         if ((item.to === '/menu-carte' || item.to === '/reservations') && bizType !== 'restaurant' && !(bizType === 'complexe' && estServices.includes('restaurant'))) return false;
         if (bizType === 'restaurant' && (item.to === '/kits' || item.to === '/stock-transfer')) return false;
 
@@ -491,7 +495,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   // Type inconnu : ne pas bloquer toute l'app — fallback type "maquis"
   const knownTypes = new Set([
-    'maquis', 'restaurant', 'location_event', 'complexe',
+    'maquis', 'restaurant', 'location_event', 'depot', 'complexe',
   ]);
   const rawType = (activeEstablishment?.type || cachedEstPayload?.type || '').toLowerCase().trim();
   // Ancien écran "choose-type" désactivé pour éviter le spam récursif chez tous les users
