@@ -1339,9 +1339,8 @@ export default function DailyReportPage({ embedded = false }: { embedded?: boole
       <div className="flex gap-2 text-xs">
         {[
           { n: 1 as const, label: 'Boissons vendues' },
-          { n: 2 as const, label: 'Preuve photo' },
-          { n: 3 as const, label: 'Caisse / Mobile Money' },
-          { n: 4 as const, label: 'Envoi' },
+          { n: 2 as const, label: 'Caisse / Mobile Money' },
+          { n: 3 as const, label: 'Envoi' },
         ].map((s) => (
           <button
             key={s.n}
@@ -1444,119 +1443,16 @@ export default function DailyReportPage({ embedded = false }: { embedded?: boole
                 return;
               }
               setStep(2);
-              void loadReportProofs();
             }}
           >
-            Continuer → Preuve photo
+            Continuer → Caisse
           </button>
         </div>
       )}
 
       
+
       {step === 2 && (
-        <div className="space-y-4">
-          <div className="card space-y-2">
-            <p className="text-sm font-medium text-stone-200 flex items-center gap-2">
-              <Camera className="text-amber-400" size={18} /> Preuve des boissons vendues
-            </p>
-            <p className="text-xs text-stone-400">
-              Prenez une ou plusieurs photos comme preuve (casiers, bouteilles sorties, ticket…). Le propriétaire pourra les voir.
-            </p>
-            <div className="text-xs text-stone-500 space-y-1 max-h-28 overflow-y-auto">
-              {soldLines.map((l) => (
-                <div key={l.product_id} className="flex justify-between">
-                  <span>{l.name}</span>
-                  <span className="text-amber-200/90">× {l.qty}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <label className={`btn-primary flex items-center justify-center gap-2 min-h-[52px] cursor-pointer ${proofBusy ? 'opacity-60 pointer-events-none' : ''}`}>
-              <Camera size={18} /> {proofBusy ? 'Envoi…' : 'Prendre une photo'}
-              <input
-                type="file"
-                accept="image/*"
-                capture="environment"
-                className="sr-only"
-                disabled={proofBusy}
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  e.target.value = '';
-                  void handleProofFile(f);
-                }}
-              />
-            </label>
-            <label className={`btn-secondary flex items-center justify-center gap-2 min-h-[52px] cursor-pointer ${proofBusy ? 'opacity-60 pointer-events-none' : ''}`}>
-              <ImageIcon size={18} /> Choisir dans la galerie
-              <input
-                type="file"
-                accept="image/*"
-                className="sr-only"
-                disabled={proofBusy}
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  e.target.value = '';
-                  void handleProofFile(f);
-                }}
-              />
-            </label>
-            <p className="text-[11px] text-stone-500 text-center">
-              Autorisez l&apos;accès caméra / photos si le téléphone le demande.
-            </p>
-          </div>
-
-          {(geminiBusy || geminiHint) && (
-            <p className="text-sm text-sky-200/90 bg-sky-500/10 border border-sky-500/30 rounded-xl px-3 py-2">
-              {geminiBusy ? 'Gemini analyse la photo…' : geminiHint}
-            </p>
-          )}
-          {reportProofs.length === 0 ? (
-            <p className="text-sm text-amber-200/80 bg-amber-500/10 border border-amber-500/30 rounded-xl px-3 py-2">
-              Photo obligatoire : prenez au moins une photo des boissons vendues pour continuer.
-            </p>
-          ) : (
-            <ul className="grid grid-cols-2 gap-2">
-              {reportProofs.map((ph) => (
-                <li key={ph.id} className="relative rounded-xl overflow-hidden border border-stone-800">
-                  <img src={ph.image_url} alt="" className="w-full h-28 object-cover" />
-                  <button
-                    type="button"
-                    className="absolute top-1 right-1 rounded-lg bg-black/70 text-red-300 text-[10px] px-2 py-1"
-                    onClick={() => void removeReportProof(ph.id)}
-                  >
-                    Suppr.
-                  </button>
-                  {ph.note && <p className="text-[10px] text-stone-400 p-1 truncate">{ph.note}</p>}
-                </li>
-              ))}
-            </ul>
-          )}
-
-          <div className="flex gap-2">
-            <button type="button" className="btn-secondary min-h-[48px]" onClick={() => setStep(1)}>
-              ← Boissons
-            </button>
-            <button
-              type="button"
-              className="btn-primary flex-1 min-h-[48px] text-base"
-              onClick={() => {
-                if (reportProofs.length === 0) {
-                  alert('Photo obligatoire : prenez au moins une photo des boissons vendues avant de continuer.');
-                  return;
-                }
-                setStep(3);
-              }}
-            >
-              Continuer → Caisse
-            </button>
-          </div>
-        </div>
-      )}
-
-
-      {step === 3 && (
         <div className="space-y-4">
           <div className="card space-y-2">
             <p className="text-sm text-stone-400">Récap ventes</p>
@@ -1640,17 +1536,17 @@ export default function DailyReportPage({ embedded = false }: { embedded?: boole
           </button>
 
           <div className="flex gap-2">
-            <button type="button" className="btn-secondary min-h-[48px]" onClick={() => setStep(2)}>
-              ← Preuve photo
+            <button type="button" className="btn-secondary min-h-[48px]" onClick={() => setStep(1)}>
+              ← Boissons
             </button>
-            <button type="button" className="btn-primary flex-1 min-h-[48px] text-base" onClick={() => { playTone(match ? 'ok' : 'warn'); setStep(4); }}>
+            <button type="button" className="btn-primary flex-1 min-h-[48px] text-base" onClick={() => { playTone(match ? 'ok' : 'warn'); setStep(3); }}>
               Continuer → Envoi
             </button>
           </div>
         </div>
       )}
 
-      {step === 4 && (
+      {step === 3 && (
         <div className="space-y-4">
           <div className="card space-y-3">
             <div className="flex justify-between text-sm">
