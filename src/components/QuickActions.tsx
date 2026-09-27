@@ -40,7 +40,7 @@ function actionsFor(type: BusinessType): Action[] {
         { to: '/rent/packs', label: 'Packs', sub: 'Kits événement', icon: <Package size={22} />, color: '#a855f7', bg: 'rgba(168,85,247,0.15)' },
         { to: '/daily-report', label: 'Rapport du jour', sub: 'Synthèse', icon: <FileText size={22} />, color: '#ef4444', bg: 'rgba(239,68,68,0.15)' },
       ];
-    case 'btp':
+    case 'complexe':
       return [
         { to: '/btp/documents', label: 'Nouveau devis', sub: 'Devis / facture', icon: <FileText size={22} />, color: '#0ea5e9', bg: 'rgba(14,165,233,0.18)' },
         { to: '/btp/clients', label: 'Clients', sub: 'Chantiers', icon: <Users size={22} />, color: '#22c55e', bg: 'rgba(34,197,94,0.15)' },

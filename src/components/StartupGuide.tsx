@@ -31,7 +31,7 @@ type CheckCtx = {
 };
 
 function stepsFor(type: BusinessType): Step[] {
-  if (type === 'btp') {
+  if (type === 'complexe' && false) {
     return [
       {
         id: 'est',
