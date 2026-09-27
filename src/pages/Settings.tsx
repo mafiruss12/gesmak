@@ -13,6 +13,7 @@ import {
 } from '@/lib/biometric';
 import { supabase } from '@/lib/supabase';
 import { orderSoundEnabled, setOrderSoundEnabled } from '@/lib/orderAlerts';
+import { registerPushToken, isPushConfigured } from '@/lib/push';
 import { seedDefaultStockForEstablishment } from '@/lib/seedDefaultStock';
 import { useAuth } from '@/lib/auth';
 import { PLAN, PLANS, getSubscriptionState, getEffectivePlan, getPlanLimits, getPlanDisplayTitle, getActivePlanLimits, formatPlanLimitsLine, isOnTrial, paymentInstructions, paymentWhatsAppLink } from '@/lib/subscription';
@@ -612,6 +613,20 @@ async function saveProfile() {
                 const muted = localStorage.getItem('mm_order_sound_ok') === '0';
                 setOrderSoundEnabled(muted);
                 window.alert(muted ? 'Son des commandes activé' : 'Son des commandes coupé (la popup reste affichée)');
+              }}
+            />
+            <SettingsRow
+              icon={<Bell size={20} />}
+              title="Notifications push (FCM)"
+              subtitle="Activer les alertes même hors de l’app"
+              onClick={async () => {
+                const uid = member?.user_id;
+                if (!uid) { window.alert('Connectez-vous d’abord'); return; }
+                const r = await registerPushToken({
+                  userId: uid,
+                  establishmentId: activeEstablishment?.id || member?.establishment_id,
+                });
+                window.alert(r.ok ? 'Notifications push activées' : (r.error || 'Échec — configurez Firebase / FCM'));
               }}
             />
           </div>

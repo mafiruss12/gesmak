@@ -3,6 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, ShoppingCart, Package, Camera, ClipboardCheck, QrCode, Users, Building2, Beer, LogOut, Menu, X, UserCog, ClipboardList, Calculator, BarChart3, Truck, UserCircle, Calendar, CalendarDays, UtensilsCrossed, Bell, Settings, Sparkles, Receipt, Wallet, MessageCircle, FileText, Crown, Brain, Sun, Moon, Wrench } from 'lucide-react';
 import DailyReportGate from '@/components/DailyReportGate';
 import OrderRealtimeAlert from '@/components/OrderRealtimeAlert';
+import { registerPushToken } from '@/lib/push';
 import OwnerReportReminder from '@/components/OwnerReportReminder';
 import ReportDelayNotifier from '@/components/ReportDelayNotifier';
 import PermissionsOnboarding from '@/components/PermissionsOnboarding';
@@ -150,6 +151,16 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const { member, user, loading, signOut, myEstablishments, activeEstablishment, switchEstablishment, refresh, effectiveRole, viewAsRole, setViewAsRole } = useAuth();
 
   // Pas de déconnexion automatique par inactivité (règle métier)
+  useEffect(() => {
+    const role = member?.role;
+    const uid = user?.id;
+    const eid = activeEstablishment?.id || member?.establishment_id;
+    if (!uid || !role) return;
+    if (!['owner', 'manager', 'cashier', 'admin', 'super_admin'].includes(role)) return;
+    void registerPushToken({ userId: uid, establishmentId: eid });
+  }, [user?.id, member?.role, member?.establishment_id, activeEstablishment?.id]);
+
+
   useEffect(() => {
     return startPrefetchInterval(
       () => activeEstablishment?.id || member?.establishment_id,

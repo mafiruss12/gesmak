@@ -8,6 +8,7 @@ import {
   estimateWaitMinutes,
   ORDER_STATUS_CLIENT,
 } from '@/lib/orderAlerts';
+import { triggerOrderPush } from '@/lib/push';
 
 type Est = {
   id: string;
@@ -270,6 +271,7 @@ export default function PublicTableOrder() {
           });
         }
         setLastOrderId(o2.id);
+        void triggerOrderPush(o2.id, estId);
       } else {
         for (const l of lines) {
           await supabase.from('order_items').insert({
@@ -282,6 +284,7 @@ export default function PublicTableOrder() {
           });
         }
         setLastOrderId(order.id);
+        void triggerOrderPush(order.id, estId);
       }
 
       if (tableId) {
