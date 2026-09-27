@@ -7,7 +7,8 @@ import {
 import { Link } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
-import { formatFCFA, todayISO } from '@/lib/format';
+import { formatFCFA, todayISO } from '@/lib/format'
+import { loadRestaurantDayStats, type RestaurantDayStats } from '@/lib/restaurantStats';
 import { loadBeverageProfitForRange, loadBeverageProfitFromReports, loadFondsCommerce, mondayOfISO, dateDaysAgo, monthStartISO } from '@/lib/beverageProfit';
 import { StatCard, EmptyState } from '@/components/ui';
 import { BarChart, Sparkline } from '@/components/MiniChart';
@@ -113,6 +114,25 @@ export default function Dashboard() {
       : [];
   const theme = BUSINESS_THEMES[bizType];
   const ui = getBusinessUI(bizType);
+  const [restoStats, setRestoStats] = useState<RestaurantDayStats | null>(null);
+  useEffect(() => {
+    const id = activeEstablishment?.id || member?.establishment_id || null;
+    if (bizType !== 'restaurant' || !id) {
+      setRestoStats(null);
+      return;
+    }
+    let cancelled = false;
+    loadRestaurantDayStats(id)
+      .then((s) => {
+        if (!cancelled) setRestoStats(s);
+      })
+      .catch(() => {
+        if (!cancelled) setRestoStats(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [bizType, activeEstablishment?.id, member?.establishment_id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -597,6 +617,44 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+
+      {bizType === 'restaurant' && restoStats && (
+        <section className="card p-4 space-y-3 mb-4">
+          <h2 className="font-semibold text-stone-100">Restaurant · aujourd&apos;hui</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
+            <div className="rounded-xl bg-stone-800/50 p-2">
+              <div className="text-lg font-bold text-amber-300">{restoStats.ordersCount}</div>
+              <div className="text-[10px] text-stone-400">Commandes encaissées</div>
+            </div>
+            <div className="rounded-xl bg-stone-800/50 p-2">
+              <div className="text-lg font-bold text-amber-300">{formatFCFA(restoStats.revenue)}</div>
+              <div className="text-[10px] text-stone-400">CA jour</div>
+            </div>
+            <div className="rounded-xl bg-stone-800/50 p-2">
+              <div className="text-lg font-bold text-amber-300">{formatFCFA(restoStats.avgTicket)}</div>
+              <div className="text-[10px] text-stone-400">Ticket moyen</div>
+            </div>
+            <div className="rounded-xl bg-stone-800/50 p-2">
+              <div className="text-lg font-bold text-amber-300">{Math.round(restoStats.occupancyRate * 100)}%</div>
+              <div className="text-[10px] text-stone-400">Occupation ({restoStats.tablesOccupied}/{restoStats.tablesTotal})</div>
+            </div>
+          </div>
+          {restoStats.topDishes.length > 0 && (
+            <div>
+              <p className="text-xs text-stone-400 mb-1">Plats les plus vendus</p>
+              <ul className="text-sm space-y-1">
+                {restoStats.topDishes.map((d) => (
+                  <li key={d.name} className="flex justify-between gap-2">
+                    <span className="truncate">{d.name}</span>
+                    <span className="text-stone-400 shrink-0">{d.qty} · {formatFCFA(d.revenue)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </section>
+      )}
+
         {shortcuts.map((s) => {
           const Icon = s.icon;
           return (
