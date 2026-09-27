@@ -9,7 +9,7 @@ import type { Order, OrderItem } from '@/lib/types';
 import { ORDER_STATUS_LABELS } from '@/lib/types';
 import { formatFCFA, formatTime } from '@/lib/format';
 import { EmptyState, Badge } from '@/components/ui';
-import { closeTableOrders, type ClosePay } from '@/lib/tableClose';
+import { closeTableOrders, closeOrderLinesPartial, type ClosePay } from '@/lib/tableClose';
 import {
   loadServerCandidates,
   suggestServers,
@@ -52,6 +52,9 @@ export default function Kitchen() {
   const prevPending = useRef(0);
   const [closeFor, setCloseFor] = useState<OrderWithItems | null>(null);
   const [pay, setPay] = useState<ClosePay>('cash');
+  const [splitMode, setSplitMode] = useState(false);
+  const [splitIds, setSplitIds] = useState<string[]>([]);
+
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [alertArmed, setAlertArmed] = useState(false);
@@ -181,7 +184,7 @@ export default function Kitchen() {
       ready: 'ready',
     };
     if (o.status === 'ready') {
-      setCloseFor(o);
+      openClose(o);
       setPay('cash');
       return;
     }
@@ -204,23 +207,54 @@ export default function Kitchen() {
     if (!closeFor || !estId) return;
     setBusy(true);
     setMsg(null);
-    const res = await closeTableOrders({
-      establishmentId: estId,
-      orderIds: [closeFor.id],
-      tableId: closeFor.table_id,
-      payment: pay,
-      paidAmount: Number(closeFor.total) || 0,
-      pushToLiveSales: true,
-    });
+    let res: { ok: boolean; error?: string };
+    if (splitMode && splitIds.length > 0) {
+      res = await closeOrderLinesPartial({
+        establishmentId: estId,
+        orderId: closeFor.id,
+        tableId: closeFor.table_id,
+        itemIds: splitIds,
+        payment: pay,
+        pushToLiveSales: true,
+      });
+    } else {
+      res = await closeTableOrders({
+        establishmentId: estId,
+        orderIds: [closeFor.id],
+        tableId: closeFor.table_id,
+        payment: pay,
+        paidAmount: Number(closeFor.total) || 0,
+        pushToLiveSales: true,
+      });
+    }
     setBusy(false);
     if (!res.ok) {
       setMsg(res.error || 'Erreur clôture');
       return;
     }
     setCloseFor(null);
-    setMsg('Table/commande clôturée · stock mis à jour · vente enregistrée');
+    setSplitMode(false);
+    setSplitIds([]);
+    setMsg(
+      splitMode
+        ? 'Partie de l’addition encaissée · stock mis à jour'
+        : 'Table/commande clôturée · stock mis à jour · vente enregistrée',
+    );
     await load();
   }
+
+  async function setItemStatus(itemId: string, status: string) {
+    await supabase.from('order_items').update({ status }).eq('id', itemId);
+    await load();
+  }
+
+  function openClose(o: OrderWithItems) {
+    setCloseFor(o);
+    setSplitMode(false);
+    setSplitIds([]);
+    setPay('cash');
+  }
+
 
   if (loading) {
     return <div className="flex justify-center py-20 text-stone-400">Chargement cuisine…</div>;
@@ -338,14 +372,35 @@ export default function Kitchen() {
                   {ORDER_STATUS_LABELS[o.status] || o.status}
                 </Badge>
               </div>
-              <ul className="text-sm text-stone-200 space-y-1 mb-3">
+              <ul className="text-sm text-stone-200 space-y-2 mb-3">
                 {(o.items || []).map((it) => (
-                  <li key={it.id} className="flex justify-between gap-2">
+                  <li key={it.id} className="flex flex-wrap justify-between gap-2 items-center">
                     <span>
                       {it.product_name} × {it.qty}
+                      <span className="text-[10px] text-stone-500 ml-1">{it.status || 'pending'}</span>
                     </span>
-                    <span className="font-mono text-amber-300/90">
-                      {formatFCFA(it.qty * Number(it.unit_price))}
+                    <span className="flex items-center gap-1">
+                      <span className="font-mono text-amber-300/90">
+                        {formatFCFA(it.qty * Number(it.unit_price))}
+                      </span>
+                      {it.status !== 'served' && it.status !== 'ready' && (
+                        <button
+                          type="button"
+                          className="text-[10px] px-1.5 py-0.5 rounded bg-stone-800 text-stone-300"
+                          onClick={() => void setItemStatus(it.id, 'ready')}
+                        >
+                          Prêt
+                        </button>
+                      )}
+                      {it.status === 'ready' && (
+                        <button
+                          type="button"
+                          className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-900/50 text-emerald-300"
+                          onClick={() => void setItemStatus(it.id, 'served')}
+                        >
+                          Servi
+                        </button>
+                      )}
                     </span>
                   </li>
                 ))}
@@ -449,8 +504,62 @@ export default function Kitchen() {
               Paiement + décrément stock + enregistrement vente journée
             </p>
             <p className="text-2xl font-bold text-amber-300">
-              {formatFCFA(Number(closeFor.total) || 0)}
+              {formatFCFA(
+                splitMode && splitIds.length
+                  ? (closeFor.items || [])
+                      .filter((it) => splitIds.includes(it.id))
+                      .reduce((s, it) => s + Number(it.qty) * Number(it.unit_price), 0)
+                  : Number(closeFor.total) || 0,
+              )}
             </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className={`flex-1 py-2 rounded-xl text-xs font-semibold ${
+                  !splitMode ? 'bg-amber-500 text-stone-950' : 'bg-stone-800 text-stone-300'
+                }`}
+                onClick={() => {
+                  setSplitMode(false);
+                  setSplitIds([]);
+                }}
+              >
+                Addition complète
+              </button>
+              <button
+                type="button"
+                className={`flex-1 py-2 rounded-xl text-xs font-semibold ${
+                  splitMode ? 'bg-amber-500 text-stone-950' : 'bg-stone-800 text-stone-300'
+                }`}
+                onClick={() => setSplitMode(true)}
+              >
+                Scission (par plats)
+              </button>
+            </div>
+            {splitMode && (
+              <div className="space-y-1 max-h-40 overflow-y-auto border border-stone-700 rounded-xl p-2">
+                {(closeFor.items || [])
+                  .filter((it) => it.status !== 'served')
+                  .map((it) => (
+                    <label key={it.id} className="flex items-center gap-2 text-sm text-stone-200">
+                      <input
+                        type="checkbox"
+                        checked={splitIds.includes(it.id)}
+                        onChange={(e) => {
+                          setSplitIds((prev) =>
+                            e.target.checked ? [...prev, it.id] : prev.filter((x) => x !== it.id),
+                          );
+                        }}
+                      />
+                      <span className="flex-1">
+                        {it.product_name} × {it.qty}
+                      </span>
+                      <span className="text-amber-300">
+                        {formatFCFA(Number(it.qty) * Number(it.unit_price))}
+                      </span>
+                    </label>
+                  ))}
+              </div>
+            )}
             <div className="flex gap-2">
               {(
                 [
@@ -478,7 +587,7 @@ export default function Kitchen() {
               <button
                 type="button"
                 className="btn-primary flex-1 min-h-[44px] flex items-center justify-center gap-2"
-                disabled={busy}
+                disabled={busy || (splitMode && splitIds.length === 0)}
                 onClick={() => void confirmClose()}
               >
                 {busy ? <Loader2 className="animate-spin" size={16} /> : <Wallet size={16} />}

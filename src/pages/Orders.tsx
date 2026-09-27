@@ -65,6 +65,7 @@ export default function Orders() {
   const [assignOrderId, setAssignOrderId] = useState<string | null>(null);
   const [assignBusy, setAssignBusy] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [appendOrderId, setAppendOrderId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!estId) {
@@ -102,10 +103,14 @@ export default function Orders() {
     void load();
   }, [load]);
 
-  // Deep-link depuis Tables (double-clic)
+  // Deep-link depuis Tables (double-clic) ou ajout sur commande existante
   useEffect(() => {
     const tid = searchParams.get('table');
     const oid = searchParams.get('order');
+    if (oid) {
+      setAppendOrderId(oid);
+      setModalOpen(true);
+    }
     if (tid && tables.length) {
       const t = tables.find((x) => String(x.number) === tid || x.id === tid);
       if (t) {
@@ -155,56 +160,93 @@ export default function Orders() {
     if (!estId || cart.length === 0) return;
     setBusy(true);
     try {
-      const table = tables.find((t) => t.id === tableId);
-      const { data: order, error } = await supabase
-        .from('orders')
-        .insert({
-          establishment_id: estId,
-          table_id: tableId || null,
-          table_number: table ? String(table.number) : null,
-          status: 'pending',
-          order_type: orderType,
-          total: cartTotal,
-          notes: notes || null,
-          source: 'staff',
-          created_by: user?.id || null,
-        })
-        .select('id')
-        .maybeSingle();
-      if (error || !order?.id) {
-        alert(error?.message || 'Création impossible');
-        return;
-      }
-      for (const i of cart) {
-        if (i.kind === 'product') {
-          await supabase.from('order_items').insert({
-            order_id: order.id,
-            product_id: i.product.id,
-            product_name: i.product.name,
-            qty: i.qty,
-            unit_price: i.product.price,
-            status: 'pending',
-          });
-        } else {
-          await supabase.from('order_items').insert({
-            order_id: order.id,
-            product_id: i.item.linked_product_id || null,
-            product_name: i.item.name,
-            qty: i.qty,
-            unit_price: i.item.price,
-            status: 'pending',
-            menu_item_id: i.item.id,
-            selected_options: [],
-            notes: i.notes || null,
-          });
+      let orderId = appendOrderId;
+      if (orderId) {
+        // Ajout sur commande ouverte
+        for (const i of cart) {
+          if (i.kind === 'product') {
+            await supabase.from('order_items').insert({
+              order_id: orderId,
+              product_id: i.product.id,
+              product_name: i.product.name,
+              qty: i.qty,
+              unit_price: i.product.price,
+              status: 'pending',
+            });
+          } else {
+            await supabase.from('order_items').insert({
+              order_id: orderId,
+              product_id: i.item.linked_product_id || null,
+              product_name: i.item.name,
+              qty: i.qty,
+              unit_price: i.item.price,
+              status: 'pending',
+              menu_item_id: i.item.id,
+              selected_options: [],
+              notes: i.notes || null,
+            });
+          }
         }
-      }
-      if (tableId) {
-        await supabase.from('restaurant_tables').update({ status: 'occupied' }).eq('id', tableId);
+        const { data: items } = await supabase
+          .from('order_items')
+          .select('qty, unit_price')
+          .eq('order_id', orderId);
+        const total = (items || []).reduce((s, it) => s + Number(it.qty) * Number(it.unit_price), 0);
+        await supabase.from('orders').update({ total, status: 'pending' }).eq('id', orderId);
+      } else {
+        const table = tables.find((t) => t.id === tableId);
+        const { data: order, error } = await supabase
+          .from('orders')
+          .insert({
+            establishment_id: estId,
+            table_id: tableId || null,
+            table_number: table ? String(table.number) : null,
+            status: 'pending',
+            order_type: orderType,
+            total: cartTotal,
+            notes: notes || null,
+            source: 'staff',
+            created_by: user?.id || null,
+          })
+          .select('id')
+          .maybeSingle();
+        if (error || !order?.id) {
+          alert(error?.message || 'Création impossible');
+          return;
+        }
+        orderId = order.id;
+        for (const i of cart) {
+          if (i.kind === 'product') {
+            await supabase.from('order_items').insert({
+              order_id: order.id,
+              product_id: i.product.id,
+              product_name: i.product.name,
+              qty: i.qty,
+              unit_price: i.product.price,
+              status: 'pending',
+            });
+          } else {
+            await supabase.from('order_items').insert({
+              order_id: order.id,
+              product_id: i.item.linked_product_id || null,
+              product_name: i.item.name,
+              qty: i.qty,
+              unit_price: i.item.price,
+              status: 'pending',
+              menu_item_id: i.item.id,
+              selected_options: [],
+              notes: i.notes || null,
+            });
+          }
+        }
+        if (tableId) {
+          await supabase.from('restaurant_tables').update({ status: 'occupied' }).eq('id', tableId);
+        }
       }
       setCart([]);
       setNotes('');
       setTableId('');
+      setAppendOrderId(null);
       setModalOpen(false);
       setSearchParams({});
       await load();
@@ -377,7 +419,7 @@ export default function Orders() {
         </ul>
       )}
 
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Nouvelle commande">
+      <Modal open={modalOpen} onClose={() => { setModalOpen(false); setAppendOrderId(null); }} title={appendOrderId ? "Ajouter à la commande" : "Nouvelle commande"}>
         <div className="space-y-3 max-h-[70vh] overflow-y-auto">
           <label className="block text-xs text-stone-400">
             Type
@@ -521,7 +563,7 @@ export default function Orders() {
                 disabled={busy}
                 onClick={() => void createOrder()}
               >
-                {busy ? 'Envoi…' : 'Créer la commande'}
+                {busy ? 'Envoi…' : appendOrderId ? 'Ajouter les plats' : 'Créer la commande'}
               </button>
             </div>
           )}
