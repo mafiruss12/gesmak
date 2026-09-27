@@ -115,7 +115,21 @@ export async function registerPushToken(opts: {
     const messaging = getMessaging(app);
     const vapid = import.meta.env.VITE_FIREBASE_VAPID_KEY as string | undefined;
 
-    const token = await getToken(messaging, vapid ? { vapidKey: vapid } : undefined);
+    let swReg: ServiceWorkerRegistration | undefined;
+    try {
+      swReg = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+      await navigator.serviceWorker.ready;
+    } catch (e) {
+      console.warn('[push] SW register', e);
+    }
+    const token = await getToken(
+      messaging,
+      vapid
+        ? { vapidKey: vapid, serviceWorkerRegistration: swReg }
+        : swReg
+          ? { serviceWorkerRegistration: swReg }
+          : undefined,
+    );
     if (!token) return { ok: false, error: 'Token FCM vide' };
 
     const ok = await saveToken(opts.userId, opts.establishmentId || null, token, 'web');
