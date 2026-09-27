@@ -367,6 +367,17 @@ export function buildSmsLink(phone: string | null | undefined, message: string):
 
 
 /** Location événementielle — statuts commande */
+
+export function inventoryLabelForServices(services: string[]): string {
+  const s = new Set(services || []);
+  if (s.has('restaurant') && (s.has('maquis') || s.has('magasin'))) return 'Stock';
+  if (s.has('restaurant')) return 'Carte';
+  if (s.has('maquis')) return 'Boissons';
+  if (s.has('location')) return 'Matériel';
+  if (s.has('magasin')) return 'Stock';
+  return 'Stock';
+}
+
 export const RENTAL_STATUS_LABELS: Record<string, string> = {
   draft: 'Brouillon',
   quoted: 'Devis',
