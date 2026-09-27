@@ -20,6 +20,11 @@ import {
 import AdminEstablishmentsMap from '@/components/AdminEstablishmentsMap';
 import { seedDefaultStockForEstablishment } from '@/lib/seedDefaultStock';
 import {
+  BUSINESS_TYPES_SELECTABLE,
+  BUSINESS_LABELS,
+  type BusinessType,
+} from '@/lib/businessTypes';
+import {
   listAllPendingRequests,
   approvePaymentRequest,
   rejectPaymentRequest,
@@ -1827,10 +1832,14 @@ function DirectAccessForm({ establishments, onDone }: { establishments: Establis
   const [password, setPassword] = useState(() => generatePassword());
   const [role, setRole] = useState<Role>('owner');
   const [estId, setEstId] = useState('');
+  const [newEstName, setNewEstName] = useState('');
+  const [newEstType, setNewEstType] = useState<BusinessType>('maquis');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<{ login: string; password: string } | null>(null);
   const [copied, setCopied] = useState(false);
+
+  const creatingNewEst = estId === '__new__';
 
   function autoGenerate() {
     const newLogin = generateLogin(fullName || role, role);
@@ -1852,8 +1861,16 @@ function DirectAccessForm({ establishments, onDone }: { establishments: Establis
   }
 
   async function submit() {
-    if (!login.trim() || !password || !estId || !member) {
-      setError('Identifiant, mot de passe et établissement sont obligatoires');
+    if (!login.trim() || !password || !member) {
+      setError('Identifiant et mot de passe sont obligatoires');
+      return;
+    }
+    if (!creatingNewEst && !estId) {
+      setError('Choisissez un établissement ou créez-en un nouveau');
+      return;
+    }
+    if (creatingNewEst && !newEstName.trim()) {
+      setError('Indiquez le nom du nouvel établissement');
       return;
     }
     if (password.length < 6) {
@@ -1862,9 +1879,8 @@ function DirectAccessForm({ establishments, onDone }: { establishments: Establis
     }
     setLoading(true);
     setError(null);
+    let createdEstId: string | null = null;
     try {
-      const authEmail = toAuthEmail(login);
-
       const { data: sessionData } = await supabase.auth.getSession();
       const adminSession = sessionData.session;
       if (!adminSession) {
@@ -1873,68 +1889,149 @@ function DirectAccessForm({ establishments, onDone }: { establishments: Establis
         return;
       }
 
+      let targetEstId = estId;
+
+      // 1) Créer l'établissement si demandé
+      if (creatingNewEst) {
+        const { data: estRow, error: estErr } = await supabase
+          .from('establishments')
+          .insert({
+            name: newEstName.trim(),
+            type: newEstType,
+            created_by: member.user_id,
+            owner_user_id: role === 'owner' ? null : member.user_id,
+          })
+          .select('id')
+          .single();
+        if (estErr || !estRow?.id) {
+          setError(estErr?.message || 'Création établissement impossible');
+          setLoading(false);
+          return;
+        }
+        createdEstId = estRow.id;
+        targetEstId = estRow.id;
+        try {
+          await seedDefaultStockForEstablishment(estRow.id, newEstType);
+        } catch {
+          /* non bloquant */
+        }
+      }
+
+      const authEmail = toAuthEmail(login);
+
+      // 2) Créer le compte
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: authEmail,
         password,
-        options: { data: { full_name: fullName, login: login.trim() } } });
+        options: { data: { full_name: fullName, login: login.trim() } },
+      });
 
       if (signUpError) {
         setError(
           signUpError.message.includes('already') || signUpError.message.includes('registered')
             ? 'Cet identifiant est déjà utilisé'
-            : signUpError.message
+            : signUpError.message,
         );
+        // rollback établissement orphelin
+        if (createdEstId) {
+          await supabase.from('establishments').delete().eq('id', createdEstId);
+        }
         await supabase.auth.setSession({
           access_token: adminSession.access_token,
-          refresh_token: adminSession.refresh_token });
+          refresh_token: adminSession.refresh_token,
+        });
         setLoading(false);
         return;
       }
 
       await supabase.auth.setSession({
         access_token: adminSession.access_token,
-        refresh_token: adminSession.refresh_token });
+        refresh_token: adminSession.refresh_token,
+      });
 
-      if (data.user) {
-        const { data: existing } = await supabase
-          .from('members')
-          .select('id')
-          .eq('user_id', data.user.id)
-          .maybeSingle();
+      if (!data.user) {
+        if (createdEstId) await supabase.from('establishments').delete().eq('id', createdEstId);
+        setError('Compte non créé');
+        setLoading(false);
+        return;
+      }
 
-        const payload = {
-          full_name: fullName || null,
-          role,
-          establishment_id: estId,
-          status: 'active' as const,
-          email: authEmail };
+      // Si propriétaire du nouvel établissement, rattacher ownership
+      if (createdEstId && role === 'owner') {
+        await supabase
+          .from('establishments')
+          .update({ owner_user_id: data.user.id, created_by: data.user.id })
+          .eq('id', createdEstId);
+      }
 
-        if (existing) {
-          const { error: updateError } = await supabase.from('members').update(payload).eq('user_id', data.user.id);
-          if (updateError) {
-            setError(updateError.message);
-            setLoading(false);
-            return;
-          }
-        } else {
-          const { error: insertError } = await supabase.from('members').insert({
-            user_id: data.user.id,
-            ...payload });
-          if (insertError) {
-            setError(insertError.message);
-            setLoading(false);
-            return;
-          }
+      // 3) members + member_establishments
+      const { data: existing } = await supabase
+        .from('members')
+        .select('id')
+        .eq('user_id', data.user.id)
+        .maybeSingle();
+
+      const payload = {
+        full_name: fullName || null,
+        role,
+        establishment_id: targetEstId,
+        status: 'active' as const,
+        email: authEmail,
+      };
+
+      if (existing) {
+        const { error: updateError } = await supabase.from('members').update(payload).eq('user_id', data.user.id);
+        if (updateError) {
+          setError(updateError.message);
+          if (createdEstId) await supabase.from('establishments').delete().eq('id', createdEstId);
+          setLoading(false);
+          return;
+        }
+      } else {
+        const { error: insertError } = await supabase.from('members').insert({
+          user_id: data.user.id,
+          ...payload,
+        });
+        if (insertError) {
+          setError(insertError.message);
+          if (createdEstId) await supabase.from('establishments').delete().eq('id', createdEstId);
+          setLoading(false);
+          return;
         }
       }
 
-      // Restaurer encore la session admin (signUp peut la réécraser via onAuthStateChange)
+      const { error: meErr } = await supabase.from('member_establishments').upsert(
+        {
+          user_id: data.user.id,
+          establishment_id: targetEstId,
+          role,
+          status: 'active',
+        },
+        { onConflict: 'user_id,establishment_id' },
+      );
+      if (meErr) {
+        setError(meErr.message);
+        setLoading(false);
+        return;
+      }
+
       await supabase.auth.setSession({
         access_token: adminSession.access_token,
-        refresh_token: adminSession.refresh_token });
+        refresh_token: adminSession.refresh_token,
+      });
 
-      setCreated({ login: login.trim().includes('@') ? login.trim() : login.trim().toLowerCase(), password });
+      setCreated({
+        login: login.trim().includes('@') ? login.trim() : login.trim().toLowerCase(),
+        password,
+      });
     } catch (e: any) {
+      if (createdEstId) {
+        try {
+          await supabase.from('establishments').delete().eq('id', createdEstId);
+        } catch {
+          /* */
+        }
+      }
       setError(e?.message || 'Une erreur est survenue');
     } finally {
       setLoading(false);
@@ -1960,11 +2057,18 @@ function DirectAccessForm({ establishments, onDone }: { establishments: Establis
           </div>
         </div>
         <button onClick={copyCredentials} className="btn-secondary w-full flex items-center justify-center gap-2">
-          {copied ? <><Check size={18} /> Copié !</> : <><Copy size={18} /> Copier identifiant + mot de passe</>}
+          {copied ? (
+            <>
+              <Check size={18} /> Copié !
+            </>
+          ) : (
+            <>
+              <Copy size={18} /> Copier identifiant + mot de passe
+            </>
+          )}
         </button>
         <button
           onClick={async () => {
-            // Recharge la page pour restaurer proprement la session Super Admin
             onDone();
             window.location.href = '/dashboard';
           }}
@@ -1999,7 +2103,11 @@ function DirectAccessForm({ establishments, onDone }: { establishments: Establis
       <div>
         <div className="flex items-center justify-between mb-1">
           <label className="label mb-0">Identifiant (login)</label>
-          <button type="button" onClick={autoGenerate} className="text-xs text-primary-400 flex items-center gap-1 hover:text-primary-300">
+          <button
+            type="button"
+            onClick={autoGenerate}
+            className="text-xs text-primary-400 flex items-center gap-1 hover:text-primary-300"
+          >
             <RefreshCw size={12} /> Générer login + mot de passe
           </button>
         </div>
@@ -2011,9 +2119,7 @@ function DirectAccessForm({ establishments, onDone }: { establishments: Establis
           placeholder="ex: gerant01 ou jean@gmail.com"
           autoComplete="off"
         />
-        <p className="text-xs text-stone-500 mt-1">
-          Pas besoin d&apos;email réel — un simple nom suffit.
-        </p>
+        <p className="text-xs text-stone-500 mt-1">Pas besoin d&apos;email réel — un simple nom suffit.</p>
       </div>
 
       <div>
@@ -2039,20 +2145,27 @@ function DirectAccessForm({ establishments, onDone }: { establishments: Establis
 
       <div>
         <label className="label">Rôle</label>
-        <p className="text-xs text-stone-500 mb-1">Super Admin → Admin → Propriétaire → Gérant → Caissier → Employé</p>
+        <p className="text-xs text-stone-500 mb-1">
+          Super Admin → Admin → Propriétaire → Gérant → Caissier → Employé
+        </p>
         <select value={role} onChange={(e) => setRole(e.target.value as Role)} className="input-field">
           {(['admin', 'owner', 'manager', 'cashier', 'employee'] as Role[]).map((r) => (
-              <option key={r} value={r}>
-                {ROLE_LABELS[r]}
-              </option>
-            ))}
+            <option key={r} value={r}>
+              {ROLE_LABELS[r]}
+            </option>
+          ))}
         </select>
       </div>
 
       <div>
         <label className="label">Établissement</label>
-        <select value={estId} onChange={(e) => setEstId(e.target.value)} className="input-field">
+        <select
+          value={estId}
+          onChange={(e) => setEstId(e.target.value)}
+          className="input-field"
+        >
           <option value="">— Choisir —</option>
+          <option value="__new__">+ Créer un nouvel établissement</option>
           {establishments.map((est) => (
             <option key={est.id} value={est.id}>
               {est.name}
@@ -2061,13 +2174,38 @@ function DirectAccessForm({ establishments, onDone }: { establishments: Establis
         </select>
       </div>
 
+      {creatingNewEst && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 space-y-3">
+          <p className="text-xs text-amber-200/90 font-medium">Nouvel établissement</p>
+          <div>
+            <label className="label">Nom de l&apos;établissement</label>
+            <input
+              className="input-field"
+              value={newEstName}
+              onChange={(e) => setNewEstName(e.target.value)}
+              placeholder="Ex. Chez Awa — Maquis"
+            />
+          </div>
+          <div>
+            <label className="label">Type</label>
+            <select
+              className="input-field"
+              value={newEstType}
+              onChange={(e) => setNewEstType(e.target.value as BusinessType)}
+            >
+              {BUSINESS_TYPES_SELECTABLE.map((t) => (
+                <option key={t} value={t}>
+                  {BUSINESS_LABELS[t]}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      )}
+
       <button onClick={submit} disabled={loading} className="btn-primary w-full flex items-center justify-center gap-2">
         {loading ? <Loader2 className="animate-spin" size={18} /> : <KeyRound size={18} />} Créer le compte
       </button>
-
-
-
-
     </div>
   );
 }
