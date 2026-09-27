@@ -7,7 +7,7 @@ import {
 import { Link } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
-import { formatFCFA, todayISO } from '@/lib/format';
+import { formatFCFA, todayISO } from '@/lib/format'
 import { loadRestaurantDayStats, type RestaurantDayStats } from '@/lib/restaurantStats';
 import { loadBeverageProfitForRange, loadBeverageProfitFromReports, loadFondsCommerce, mondayOfISO, dateDaysAgo, monthStartISO } from '@/lib/beverageProfit';
 import { StatCard, EmptyState } from '@/components/ui';
@@ -73,7 +73,7 @@ interface DashboardData {
 }
 
 export default function Dashboard() {
-  const { member, activeEstablishment, refresh, effectiveRole } = useAuth();
+  const { member, activeEstablishment, effectiveRole, refresh} = useAuth();
   const role = String(effectiveRole || member?.role || '');
   const canSeeFinance = ['super_admin', 'admin', 'owner'].includes(role);
   const estIdInit = activeEstablishment?.id || member?.establishment_id || null;
@@ -364,15 +364,15 @@ export default function Dashboard() {
 
   const estId = activeEstablishment?.id || member?.establishment_id || cachedEstId;
 
-  // Pas d’écran bloquant ni bouton Actualiser : retry auto établissement
+  // Retry auto établissement — aucun bouton manuel
   useEffect(() => {
     if (estId) return;
     let n = 0;
     const t = window.setInterval(() => {
       n += 1;
       void refresh?.();
-      if (n >= 6) window.clearInterval(t);
-    }, 800);
+      if (n >= 8) window.clearInterval(t);
+    }, 600);
     return () => window.clearInterval(t);
   }, [estId, refresh]);
 
@@ -737,72 +737,3 @@ export default function Dashboard() {
     </div>
   );
 }
-;
-import { Link } from 'react-router-dom';
-import { supabase } from '@/lib/supabase';
-import { useAuth } from '@/lib/auth';
-import { formatFCFA, todayISO } from '@/lib/format';
-import { loadRestaurantDayStats, type RestaurantDayStats } from '@/lib/restaurantStats';
-import { loadBeverageProfitForRange, loadBeverageProfitFromReports, loadFondsCommerce, mondayOfISO, dateDaysAgo, monthStartISO } from '@/lib/beverageProfit';
-import { StatCard, EmptyState } from '@/components/ui';
-import { BarChart, Sparkline } from '@/components/MiniChart';
-import {
-  normalizeBusinessType,
-  getEstablishmentServices,
-  BUSINESS_LABELS,
-  BUSINESS_THEMES,
-  type BusinessType,
-  getBusinessUI,
-} from '@/lib/businessTypes';
-import type { Sale, Order } from '@/lib/types';
-import type { BeveragePeriodReport } from '@/lib/beverageProfit';
-import OwnerReportCalendar from '@/components/OwnerReportCalendar';
-import QuickActions from '@/components/QuickActions';
-import StartupGuide from '@/components/StartupGuide';
-import ExchangeRatesCard from '@/components/ExchangeRatesCard';
-import SectorNews from '@/components/SectorNews';
-import OwnerSitesBar from '@/components/OwnerSitesBar';
-
-function DashLink({ to, children, className = '' }: { to: string; children: ReactNode; className?: string }) {
-  return (
-    <Link
-      to={to}
-      className={`block rounded-2xl transition-all hover:ring-2 hover:ring-amber-500/40 hover:scale-[1.01] active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-amber-400/50 ${className}`}
-    >
-      {children}
-    </Link>
-  );
-}
-
-
-interface DashboardData {
-  todaySales: number;
-  todayExpenses: number;
-  todayProfit: number;
-  weekSalesTotal: number;
-  lowStockCount: number;
-  employeeCount: number;
-  activeOrders: number;
-  freeTables: number;
-  occupiedTables: number;
-  weeklyData: { label: string; value: number }[];
-  weekValues: number[];
-  recentSales: Sale[];
-  activeOrdersList: Order[];
-  topProducts: { name: string; revenue: number }[];
-  aiAlerts: string[];
-  dataPartial: boolean;
-  monthSales: number;
-  monthExpenses: number;
-  monthPurchases: number;
-  monthProfit: number;
-  stockValue: number;
-  todayCogs: number;
-  weekExpenses: number;
-  weekPurchases: number;
-  weekProfit: number;
-  bevToday: BeveragePeriodReport;
-  bevWeek: BeveragePeriodReport;
-  bevMonth: BeveragePeriodReport;
-}
-
