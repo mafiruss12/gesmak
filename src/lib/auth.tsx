@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 import { toAuthEmail } from './login';
@@ -57,6 +57,47 @@ function readLocalSupabaseSession(): { session: Session; user: User } | null {
   return null;
 }
 
+const MEMBER_CACHE_PREFIX = 'mm_member:';
+
+/** Profil membre mémorisé (par utilisateur) : le menu/rôle s'affiche tout de suite au F5. */
+function readCachedMember(uid: string | undefined): Member | null {
+  try {
+    if (!uid || typeof localStorage === 'undefined') return null;
+    const raw = localStorage.getItem(MEMBER_CACHE_PREFIX + uid);
+    if (!raw) return null;
+    const m = JSON.parse(raw) as Member;
+    return m?.user_id === uid && m.establishment_id ? m : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedMember(m: Member | null) {
+  try {
+    if (!m?.user_id || !m.establishment_id) return;
+    localStorage.setItem(MEMBER_CACHE_PREFIX + m.user_id, JSON.stringify(m));
+  } catch {
+    /* */
+  }
+}
+
+/** Purge totale de la session locale (déconnexion explicite). */
+function clearLocalAuthStorage() {
+  try {
+    const keys: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k) continue;
+      if ((k.startsWith('sb-') && k.includes('auth-token')) || k.startsWith(MEMBER_CACHE_PREFIX)) {
+        keys.push(k);
+      }
+    }
+    keys.forEach((k) => localStorage.removeItem(k));
+  } catch {
+    /* */
+  }
+}
+
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -64,7 +105,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const _bootLocal = typeof window !== 'undefined' ? readLocalSupabaseSession() : null;
   const [session, setSession] = useState<Session | null>(_bootLocal?.session ?? null);
   const [user, setUser] = useState<User | null>(_bootLocal?.user ?? null);
-  const [member, setMember] = useState<Member | null>(null);
+  const [member, setMember] = useState<Member | null>(() => readCachedMember(_bootLocal?.user?.id));
   const [accessRequest, setAccessRequest] = useState<AccessRequest | null>(null);
   const [loading, setLoading] = useState(!_bootLocal?.user);
   const [needsAccess, setNeedsAccess] = useState(false);
@@ -85,6 +126,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (v && ['manager', 'cashier', 'employee'].includes(v)) setViewAsRoleState(v);
     } catch { /* */ }
   }, []);
+
+  const userRef = useRef<User | null>(null);
+  const memberRef = useRef<Member | null>(null);
+  const explicitSignOutRef = useRef(false);
+  const inflightRef = useRef<{ uid: string; p: Promise<Member> } | null>(null);
+  userRef.current = user;
+  memberRef.current = member;
+
+  useEffect(() => {
+    writeCachedMember(member);
+  }, [member]);
 
   const effectiveRole: Member['role'] | null = (() => {
     if (!member) return null;
@@ -650,6 +702,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 
 
+  const loadRef = useRef(loadMemberData);
+  loadRef.current = loadMemberData;
+
+  /** Un seul chargement du profil à la fois par utilisateur (évite les rafales d'appels RPC/PATCH). */
+  const loadMemberDataOnce = useCallback((u: User): Promise<Member> => {
+    const cur = inflightRef.current;
+    if (cur && cur.uid === u.id) return cur.p;
+    const p: Promise<Member> = loadRef.current(u).finally(() => {
+      if (inflightRef.current?.p === p) inflightRef.current = null;
+    });
+    inflightRef.current = { uid: u.id, p };
+    return p;
+  }, []);
+
   useEffect(() => {
     let mounted = true;
     let memberLoadSeq = 0;
@@ -658,7 +724,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const seq = ++memberLoadSeq;
       try {
         // JAMAIS de Promise.race timeout : un réseau lent ≠ compte nouveau
-        await loadMemberData(u);
+        await loadMemberDataOnce(u);
       } catch (e) {
         console.error('ensureMember', e);
         if (mounted && seq === memberLoadSeq) {
@@ -734,7 +800,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (event === 'SIGNED_OUT') {
         // Faux positif fréquent : refresh token en course / double onglet.
         // Si le token est encore en localStorage, ne pas déconnecter l'UI.
-        const still = readLocalSupabaseSession();
+        const still = explicitSignOutRef.current ? null : readLocalSupabaseSession();
         if (still?.user) {
           setSession(still.session);
           setUser(still.user);
@@ -779,8 +845,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
             return;
           }
+          // supabase-js ré-émet SIGNED_IN au retour sur l'onglet : profil déjà connu → rien à recharger.
+          if (
+            event === 'SIGNED_IN' &&
+            memberRef.current?.user_id === newSession.user.id &&
+            memberRef.current.establishment_id
+          ) {
+            return;
+          }
           // Ne pas rebloquer loading : signIn() a déjà posé user/session.
-          // ensureMember en fond uniquement (évite spinner login infini).
           void ensureMember(newSession.user).catch((e) =>
             console.warn('SIGNED_IN ensureMember', e),
           );
@@ -809,6 +882,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { error: 'Identifiant invalide (e-mail ou login simple sans espaces).' };
       }
       const email = toAuthEmail(login);
+      explicitSignOutRef.current = false;
       setLoading(true);
 
       // Auth seul — timeout 12s (mobile 4G parfois lent vers Supabase)
@@ -871,13 +945,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (k === 'mm_active_est' || k === 'mm_est_ids') toRemove.push(k);
           if (k.startsWith('mm_active_est:') && k !== keep) toRemove.push(k);
           if (k.startsWith('mm_est_ids:') && k !== keepIds) toRemove.push(k);
+          if (k.startsWith(MEMBER_CACHE_PREFIX) && k !== MEMBER_CACHE_PREFIX + signedUser.id) toRemove.push(k);
         }
         toRemove.forEach((k) => localStorage.removeItem(k));
       } catch { /* */ }
 
       setLoading(false);
       // Profil membre en fond — ne bloque jamais le bouton
-      void loadMemberData(signedUser).catch((e) => {
+      void loadMemberDataOnce(signedUser).catch((e) => {
         console.warn('background loadMemberData', e);
         void (async () => {
           try {
@@ -903,6 +978,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function signUp(login: string, password: string, fullName: string) {
+    explicitSignOutRef.current = false;
     clearEstablishmentCache();
     setActiveEstablishment(null);
     setMyEstablishments([]);
@@ -1019,7 +1095,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function signOut() {
+    explicitSignOutRef.current = true;
+    inflightRef.current = null;
     clearEstablishmentCache();
+    clearLocalAuthStorage();
     setSession(null);
     setUser(null);
     setMember(null);
@@ -1035,20 +1114,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         new Promise((r) => setTimeout(r, 1500)),
       ]);
     } catch { /* réseau : état déjà vidé */ }
+    // Si le signOut réseau a expiré, le jeton resterait en localStorage et la session reviendrait au F5
+    clearLocalAuthStorage();
   }
 
   /* Déconnexion auto désactivée : session jusqu'au bouton Déconnexion */
 
 
-  async function refresh() {
-    if (user) {
-      try {
-        await loadMemberData(user);
-      } catch (e) {
-        console.error('refresh', e);
-      }
+  // Identité stable : les composants qui l'ont en dépendance d'effet ne se ré-exécutent plus à chaque rendu.
+  const refresh = useCallback(async () => {
+    const u = userRef.current;
+    if (!u) return;
+    try {
+      await loadMemberDataOnce(u);
+    } catch (e) {
+      console.error('refresh', e);
     }
-  }
+  }, [loadMemberDataOnce]);
 
   
   // Présence admin : dernière activité

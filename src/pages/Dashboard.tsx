@@ -1,5 +1,5 @@
 import AdMarquee from '@/components/AdMarquee';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   TrendingUp, DollarSign, Package, Users, AlertTriangle, Receipt, ShoppingCart,
   UtensilsCrossed, LayoutDashboard, Truck, ArrowRight, Loader2,
@@ -364,17 +364,19 @@ export default function Dashboard() {
 
   const estId = activeEstablishment?.id || member?.establishment_id || cachedEstId;
 
-  // Retry auto établissement — aucun bouton manuel
+  // Retry auto établissement — refresh via ref pour ne pas relancer l'effet à chaque rendu
+  const refreshRef = useRef(refresh);
+  refreshRef.current = refresh;
   useEffect(() => {
     if (estId) return;
     let n = 0;
     const t = window.setInterval(() => {
       n += 1;
-      void refresh?.();
+      void refreshRef.current?.();
       if (n >= 8) window.clearInterval(t);
     }, 600);
     return () => window.clearInterval(t);
-  }, [estId, refresh]);
+  }, [estId]);
 
   if (!estId) {
     return (
