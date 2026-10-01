@@ -218,7 +218,27 @@ export default function DailyReportPage({ embedded = false }: { embedded?: boole
   }
 
   async function load() {
-    if (!estId) {
+    // Même résolution que l'Inventaire : auth + cache local si member pas encore hydraté
+    let resolvedEst =
+      estId ||
+      activeEstablishment?.id ||
+      member?.establishment_id ||
+      null;
+    if (!resolvedEst) {
+      try {
+        const uid = member?.user_id;
+        const raw =
+          (uid && localStorage.getItem(`mm_active_est:${uid}`)) ||
+          localStorage.getItem('mm_active_est');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed?.id) resolvedEst = String(parsed.id);
+        }
+      } catch {
+        /* */
+      }
+    }
+    if (!resolvedEst) {
       setProducts([]);
       setLoadError(null);
       setLoading(false);
@@ -228,57 +248,102 @@ export default function DailyReportPage({ embedded = false }: { embedded?: boole
     setLoadError(null);
     try {
       let prodErr: { message?: string } | null = null;
-      let prods: Product[] | null = null;
-      // Jusqu’à 3 essais : session/RLS parfois pas prête juste après navigation
-      for (let attempt = 0; attempt < 3; attempt++) {
-        const res = await supabase
+      let list: Product[] = [];
+
+      // 1) RPC sécurisée (même chemin que Inventaire — contourne RLS fragiles)
+      try {
+        const rpc = await supabase.rpc('list_products_for_est', { p_est_id: resolvedEst });
+        if (!rpc.error && Array.isArray(rpc.data) && rpc.data.length > 0) {
+          list = rpc.data as Product[];
+        } else if (rpc.error) {
+          console.warn('list_products_for_est', rpc.error);
+          prodErr = rpc.error;
+        }
+      } catch (e) {
+        console.warn('rpc products daily report', e);
+      }
+
+      // 2) Select direct + retries (session/RLS parfois pas prête)
+      if (list.length === 0) {
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const res = await supabase
+            .from('products')
+            .select(
+              'id,establishment_id,name,category,price,cost,stock,min_stock,unit,casier_size,image_url,units_per_package,consigne_unit,empty_bottles',
+            )
+            .eq('establishment_id', resolvedEst)
+            .order('name');
+          const prods = (res.data as Product[] | null) ?? null;
+          prodErr = res.error;
+          if (!prodErr && prods && prods.length > 0) {
+            list = prods;
+            break;
+          }
+          if (!prodErr && prods && prods.length === 0) break;
+          await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+        }
+      }
+
+      // 3) Select * dernier recours
+      if (list.length === 0) {
+        const res2 = await supabase
           .from('products')
-          .select('id,establishment_id,name,category,price,cost,stock,min_stock,unit,casier_size,image_url,units_per_package')
-          .eq('establishment_id', estId)
+          .select('*')
+          .eq('establishment_id', resolvedEst)
           .order('name');
-        prods = (res.data as Product[] | null) ?? null;
-        prodErr = res.error;
-        if (!prodErr && prods && prods.length > 0) break;
-        if (!prodErr && prods && prods.length === 0) break;
-        await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+        if (!res2.error && res2.data?.length) {
+          list = res2.data as Product[];
+          prodErr = null;
+        } else if (res2.error) {
+          prodErr = res2.error;
+        }
       }
 
       const { data: existing } = await supabase
         .from('daily_reports')
         .select('*')
-        .eq('establishment_id', estId)
+        .eq('establishment_id', resolvedEst)
         .eq('date', date)
         .maybeSingle();
 
-      if (prodErr) {
+      if (prodErr && list.length === 0) {
         console.error('products load', prodErr);
         setLoadError(prodErr.message || 'Impossible de charger les boissons (droits ou réseau).');
+      } else {
+        setLoadError(null);
       }
 
-      let list = (prods ?? []) as Product[];
-      // Fallback offline cache (uniquement si liste non vide en cache)
+      // 4) Cache offline — clés alignées Inventaire + ancienne clé rapport
       if (!list.length) {
         try {
-          const cached = await cacheGet<Product[]>(`products_${estId}`);
-          if (cached?.length) {
-            list = cached;
-            if (prodErr) setLoadError(null);
+          for (const key of [`products:${resolvedEst}`, `products_${resolvedEst}`]) {
+            const cached = await cacheGet<Product[]>(key);
+            if (cached?.length) {
+              list = cached;
+              setLoadError(null);
+              break;
+            }
           }
         } catch {
           /* */
         }
       } else {
         try {
-          await cacheSet(`products_${estId}`, list);
+          await cacheSet(`products:${resolvedEst}`, list);
+          await cacheSet(`products_${resolvedEst}`, list);
         } catch {
           /* */
         }
       }
       void ensureProductImageCatalog();
-      setProducts(applyDefaultImagesToProducts(list) as Product[]);
+      setProducts(
+        applyDefaultImagesToProducts(list).sort((a, b) =>
+          (a.name || '').localeCompare(b.name || '', 'fr', { sensitivity: 'base' }),
+        ) as Product[],
+      );
       // Prefill POS : quantités caisse du jour si rapport pas encore saisi
       try {
-        const ops = await loadDayOpsSummary(estId, date);
+        const ops = await loadDayOpsSummary(resolvedEst, date);
         if (!existing && ops.byProduct.length) {
           const map: Record<string, string> = {};
           for (const line of ops.byProduct) {
@@ -294,7 +359,7 @@ export default function DailyReportPage({ embedded = false }: { embedded?: boole
 
 
       try {
-        const owner = await getOwnerContacts(estId);
+        const owner = await getOwnerContacts(resolvedEst);
         setOwnerPhone(owner?.owner_phone || null);
       } catch {
         setOwnerPhone(null);
