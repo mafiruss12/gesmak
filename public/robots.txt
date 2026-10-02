@@ -1,6 +1,42 @@
+# Stock Manager AI — SEO contrôlé
+# Public : accueil + pages vitrine
+# Privé : app connectée (dashboard, stock, caisse, etc.)
+
 User-agent: *
 Allow: /
+Allow: /mes-projets.html
+
+Disallow: /dashboard
+Disallow: /inventory
+Disallow: /inventaire
+Disallow: /daily-report
+Disallow: /reports
+Disallow: /pos
+Disallow: /caisse
+Disallow: /cloture
+Disallow: /settings
+Disallow: /admin
+Disallow: /employees
+Disallow: /mes-employes
+Disallow: /accounting
+Disallow: /expenses
+Disallow: /purchases
+Disallow: /suppliers
+Disallow: /customers
+Disallow: /chat
+Disallow: /notifications
+Disallow: /subscription
+Disallow: /patron
+Disallow: /hotel
+Disallow: /restaurant
+Disallow: /depot
+Disallow: /rent
+Disallow: /btp
+Disallow: /scan
+Disallow: /statistics
+Disallow: /orders
+Disallow: /calendar
+Disallow: /guide
+Disallow: /api/
 
 Sitemap: https://stock-manager-ktp.vercel.app/sitemap.xml
-Sitemap: https://maquis-mananger.vercel.app/sitemap.xml
-Sitemap: https://ktp-immobilier.vercel.app/sitemap.xml
