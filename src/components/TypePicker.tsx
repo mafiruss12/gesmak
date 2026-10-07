@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Beer, CalendarDays, Loader2, Check, Building2, UtensilsCrossed, Warehouse } from 'lucide-react';
+import { Beer, CalendarDays, Loader2, Check, Building2, UtensilsCrossed, Warehouse, LogOut } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { seedDefaultStockForEstablishment } from '@/lib/seedDefaultStock';
@@ -36,12 +36,24 @@ interface Props {
   defaultName?: string;
 }
 
+function friendlyCreateError(raw: string): string {
+  const m = (raw || '').toLowerCase();
+  if (m.includes('row-level security') || m.includes('violates') || m.includes('42501')) {
+    return "Impossible de créer l'établissement (permission base de données). Déconnectez-vous puis réessayez, ou contactez le support.";
+  }
+  if (m.includes('network') || m.includes('fetch')) {
+    return 'Problème de connexion. Vérifiez votre réseau et réessayez.';
+  }
+  return raw || 'Erreur lors de la création.';
+}
+
 export default function TypePicker({ mode, onDone, defaultName = '' }: Props) {
-  const { member, user, refresh } = useAuth();
+  const { member, user, refresh, signOut } = useAuth();
   const [selected, setSelected] = useState<BusinessType | null>(null);
   const [selectedServices, setSelectedServices] = useState<string[]>(['maquis']);
   const [name, setName] = useState(defaultName);
   const [loading, setLoading] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function submit() {
@@ -161,10 +173,21 @@ export default function TypePicker({ mode, onDone, defaultName = '' }: Props) {
       // Évite de rester bloqué sur l'écran si refresh async
       window.location.assign('/dashboard');
     } catch (e: any) {
-      setError(e?.message || 'Erreur');
+      setError(friendlyCreateError(e?.message || 'Erreur'));
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleSignOut() {
+    if (signingOut) return;
+    setSigningOut(true);
+    try {
+      await signOut();
+    } catch {
+      /* état local déjà vidé dans signOut */
+    }
+    window.location.assign('/');
   }
 
   return (
@@ -275,12 +298,22 @@ export default function TypePicker({ mode, onDone, defaultName = '' }: Props) {
 
         <button
           onClick={submit}
-          disabled={!selected || loading}
+          disabled={!selected || loading || signingOut}
           className="btn-primary w-full flex items-center justify-center gap-2"
           style={selected ? { backgroundColor: BUSINESS_THEMES[selected].primary } : undefined}
         >
           {loading ? <Loader2 className="animate-spin" size={18} /> : null}
           Continuer
+        </button>
+
+        <button
+          type="button"
+          onClick={() => void handleSignOut()}
+          disabled={signingOut || loading}
+          className="mt-3 w-full flex items-center justify-center gap-2 text-sm text-stone-500 hover:text-stone-800 py-2.5 rounded-xl border border-stone-200 bg-white/80"
+        >
+          {signingOut ? <Loader2 className="animate-spin" size={16} /> : <LogOut size={16} />}
+          Se déconnecter
         </button>
       </div>
     </div>
