@@ -409,8 +409,7 @@
     {
       "source": "/(.*)",
       "destination": "https://stock-manager-ai.pages.dev/$1",
-      "permanent": true,
-      "statusCode": 308
+      "permanent": true
     }
   ]
 }
