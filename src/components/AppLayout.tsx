@@ -511,6 +511,18 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           <button type="button" className="btn-secondary" onClick={() => refresh()}>
             Réessayer
           </button>
+          <button
+            type="button"
+            className="btn-ghost text-sm text-stone-400"
+            onClick={async () => {
+              try {
+                await signOut();
+              } catch { /* */ }
+              window.location.assign('/');
+            }}
+          >
+            Se déconnecter
+          </button>
         </div>
       </div>
     );
