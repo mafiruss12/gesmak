@@ -6,7 +6,7 @@ export const GITHUB_OWNER = 'mafiruss12';
 export const GITHUB_REPO = 'maquis-manager-ai-a-jour';
 export const GITHUB_RELEASES_API = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`;
 export const GITHUB_RELEASES_PAGE = `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases`;
-export const WEB_APP_URL = 'https://maquis-mananger.vercel.app';
+export const WEB_APP_URL = 'https://stock-manager-ai.pages.dev';
 export const VERSION_JSON_URL = `${WEB_APP_URL}/version.json`;
 
 export function parseVersion(v: string): number[] {

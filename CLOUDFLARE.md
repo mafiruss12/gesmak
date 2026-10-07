@@ -1,27 +1,12 @@
-# Déploiement Cloudflare Pages — Stock Manager AI
+# Cloudflare Pages — sans Vercel
 
-## Build
-- Commande : `npm run build`
-- Dossier de sortie : `dist`
-- Node : 18 ou 20
+Production: https://stock-manager-ai.pages.dev
 
-## Variables d'environnement (Production)
-- `VITE_SUPABASE_URL`
-- `VITE_SUPABASE_ANON_KEY`
+## Variables (Pages → Settings → Environment variables)
+Front: VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
+API: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, CRON_SECRET, INTERNAL_API_SECRET
+Optionnel: WA_TOKEN, WA_PHONE_NUMBER_ID, AT_USERNAME, AT_API_KEY, CINETPAY_API_KEY, CINETPAY_SITE_ID
 
-(et toute autre variable `VITE_*` déjà utilisée sur Vercel)
-
-## SPA
-- `public/_redirects` : toutes les routes → `index.html`
-- `public/_headers` : sécurité + cache assets
-
-## API / Crons
-Les routes `api/` (Vercel) ne sont pas migrées automatiquement.
-Rappels journaliers / WhatsApp / CinetPay restent à migrer vers Pages Functions ou Workers si besoin.
-
-## Créer le projet
-1. https://dash.cloudflare.com → Workers & Pages → Create → Pages → Connect to Git
-2. Repo : mafiruss12/stock-manager-ai (branche main)
-3. Build command : npm run build
-4. Output : dist
-5. Ajouter les variables d'env puis Deploy
+## Crons (cron-job.org gratuit)
+- https://stock-manager-ai.pages.dev/api/cron/daily-report-reminder  Header Authorization: Bearer CRON_SECRET  0 21 * * *
+- https://stock-manager-ai.pages.dev/api/cron/weekly-profit-report  même header  0 7 * * 1
