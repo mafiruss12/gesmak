@@ -110,10 +110,10 @@ function ConfigError() {
       <div className="max-w-md w-full bg-stone-900 border border-red-500/40 rounded-2xl p-6 text-center">
         <h1 className="text-xl font-bold text-red-400 mb-3">Configuration manquante</h1>
         <p className="text-stone-300 text-sm mb-4">
-          Les variables Supabase ne sont pas configurées sur Vercel.
+          Les variables Supabase ne sont pas configurées sur Cloudflare Pages (rebuild avec VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).
         </p>
         <div className="text-left bg-stone-800 rounded-xl p-4 text-sm text-stone-300 space-y-2">
-          <p>1. Va dans Vercel → ton projet → <strong>Settings → Environment Variables</strong></p>
+          <p>1. Va dans Cloudflare Pages → ton projet → <strong>Settings → Environment variables, puis rebuild</strong></p>
           <p>2. Ajoute :</p>
           <p className="font-mono text-xs text-amber-300">VITE_SUPABASE_URL</p>
           <p className="font-mono text-xs text-amber-300">VITE_SUPABASE_ANON_KEY</p>
