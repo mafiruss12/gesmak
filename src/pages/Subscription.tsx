@@ -75,10 +75,10 @@ export default function SubscriptionPage() {
         if (v.ok) {
           setStatus(`Paiement confirmé (${v.amount_fcfa?.toLocaleString('fr-FR') || '—'} F). Abonnement en cours d’activation…`);
           // Appelle activate côté serveur
-          await fetch('/api/paystack/activate', {
+          await fetch('/api/paystack/verify', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ reference: ref }),
+            body: JSON.stringify({ reference: ref, activate: true }),
           }).catch(() => null);
           setStatus(`Paiement confirmé (${v.amount_fcfa?.toLocaleString('fr-FR') || '—'} F). Rechargez la page si le forfait n’est pas encore à jour.`);
         } else {
