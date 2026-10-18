@@ -43,13 +43,19 @@ export default function SubscriptionGate() {
             {state.message}
           </span>
           {(state.status === 'past_due' || (state.daysLeft != null && state.daysLeft <= 7)) && (
+            <Link
+              to="/subscription"
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-sky-600 text-white text-xs font-medium"
+            >
+              Payer / Forfaits
+            </Link>
             <a
               href={wa}
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-600 text-white text-xs font-medium"
             >
-              <MessageCircle size={14} /> Payer WhatsApp
+              <MessageCircle size={14} /> WhatsApp
             </a>
           )}
         </div>
@@ -66,6 +72,12 @@ export default function SubscriptionGate() {
             <pre className="text-xs text-stone-400 whitespace-pre-wrap bg-stone-950/50 rounded-xl p-3 border border-stone-800">
               {paymentInstructions()}
             </pre>
+            <Link
+              to="/subscription"
+              className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-sky-600 text-white font-medium"
+            >
+              Voir les forfaits et payer (Paystack)
+            </Link>
             <a
               href={wa}
               target="_blank"
