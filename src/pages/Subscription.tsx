@@ -12,6 +12,8 @@ import {
 import {
   PAYMENT_METHODS,
   listPeriods,
+  initPaystackCheckout,
+  isPaystackConfigured,
 } from '@/lib/payments';
 import { createPaymentRequest, listMyPendingRequests } from '@/lib/paymentRequests';
 
@@ -54,6 +56,43 @@ export default function SubscriptionPage() {
     { months: 6, label: '6 mois' },
     { months: 12, label: '1 an' },
   ];
+
+
+  async function payPaystack() {
+    if (!activeEstablishment) {
+      setMsg('Choisissez un établissement.');
+      return;
+    }
+    const email = (user as any)?.email || prompt('Email pour le reçu Paystack') || '';
+    if (!email || !String(email).includes('@')) {
+      setMsg('Email requis pour payer avec Paystack.');
+      return;
+    }
+    setBusy(true);
+    setMsg(null);
+    try {
+      const amount = priceForMonths(months);
+      const res = await initPaystackCheckout({
+        amount,
+        email: String(email),
+        description: `Abonnement ${targetPlan.label} — ${months} mois — ${activeEstablishment.name || ''}`,
+        metadata: {
+          establishment_id: activeEstablishment.id,
+          plan: targetPlan.id,
+          months,
+        },
+      });
+      if (res.error || !res.authorization_url) {
+        setMsg(res.error || 'Paystack indisponible. Vérifiez PAYSTACK_SECRET_KEY sur le serveur.');
+        return;
+      }
+      window.location.href = res.authorization_url;
+    } catch (e: any) {
+      setMsg(e?.message || 'Erreur Paystack');
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function payWhatsApp() {
     if (!activeEstablishment?.id || !member?.user_id) {
@@ -241,6 +280,15 @@ export default function SubscriptionPage() {
           {busy ? <Loader2 className="animate-spin" size={18} /> : <MessageCircle size={18} />}
           Payer via WhatsApp (validation manuelle)
         </button>
+        <button
+          type="button"
+          disabled={busy || !activeEstablishment}
+          className="w-full rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-semibold py-3 px-4 flex items-center justify-center gap-2 min-h-[48px] disabled:opacity-50"
+          onClick={() => void payPaystack()}
+        >
+          {busy ? <Loader2 className="animate-spin" size={18} /> : null}
+          Payer avec Paystack (carte / Mobile Money)
+        </button>
         {!activeEstablishment && (
           <p className="text-xs text-amber-700 dark:text-amber-300">Choisissez un établissement pour finaliser le paiement.</p>
         )}
@@ -258,7 +306,8 @@ export default function SubscriptionPage() {
         <ul className="space-y-1 list-disc list-inside">
           <li>Votre forfait actuel est toujours affiché en vert ci-dessus.</li>
           <li>Sélectionnez un autre forfait pour upgrader ou renouveler.</li>
-          <li>Paiement Mobile Money / Wave via WhatsApp — activation après confirmation.</li>
+          <li>Paystack (carte / Orange / MTN / Moov) — paiement en ligne sécurisé.</li>
+          <li>WhatsApp — validation manuelle si besoin.</li>
           <li>Pas de CinetPay / Tiun : inscription et accès simplifiés.</li>
         </ul>
         {member?.role && (
