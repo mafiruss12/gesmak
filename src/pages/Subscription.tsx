@@ -7,7 +7,7 @@ import { useAuth } from '@/lib/auth';
 import {
   PLAN, PLANS, getSubscriptionState, getEffectivePlan, getPlanLimits,
   getPlanDisplayTitle, getActivePlanLimits, formatPlanLimitsLine, isOnTrial,
-  priceForMonths, type PlanTier,
+  priceForMonths, priceForPlanMonths, type PlanTier,
 } from '@/lib/subscription';
 import {
   PAYMENT_METHODS,
@@ -18,7 +18,7 @@ import {
 import { createPaymentRequest, listMyPendingRequests } from '@/lib/paymentRequests';
 
 export default function SubscriptionPage() {
-  const { member, activeEstablishment } = useAuth();
+  const { member, activeEstablishment, session } = useAuth();
   const [months, setMonths] = useState(1);
   const [method, setMethod] = useState('whatsapp');
   const [selectedTier, setSelectedTier] = useState<PlanTier | null>(null);
@@ -50,6 +50,57 @@ export default function SubscriptionPage() {
     });
   }, [activeEstablishment?.id]);
 
+  // Retour Paystack : ?paystack=1&reference=... ou reference seule
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const fromPs = params.get('paystack') === '1' || params.has('reference');
+    if (!fromPs) return;
+    const ref =
+      params.get('reference') ||
+      params.get('trxref') ||
+      (() => { try { return sessionStorage.getItem('sm_paystack_ref'); } catch { return null; } })();
+    if (!ref) {
+      setStatus('Retour Paystack sans référence — contactez le support avec la capture du paiement.');
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setBusy(true);
+      setStatus('Vérification du paiement Paystack…');
+      try {
+        const { verifyPaystackPayment } = await import('@/lib/payments');
+        const v = await verifyPaystackPayment(ref);
+        if (cancelled) return;
+        if (v.ok) {
+          setStatus(`Paiement confirmé (${v.amount_fcfa?.toLocaleString('fr-FR') || '—'} F). Abonnement en cours d’activation…`);
+          // Appelle activate côté serveur
+          await fetch('/api/paystack/activate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reference: ref }),
+          }).catch(() => null);
+          setStatus(`Paiement confirmé (${v.amount_fcfa?.toLocaleString('fr-FR') || '—'} F). Rechargez la page si le forfait n’est pas encore à jour.`);
+        } else {
+          setStatus(v.error || `Paiement non confirmé (statut: ${v.status || 'inconnu'}).`);
+        }
+      } catch (e: unknown) {
+        if (!cancelled) setStatus(e instanceof Error ? e.message : 'Erreur de vérification');
+      } finally {
+        if (!cancelled) setBusy(false);
+        try {
+          const url = new URL(window.location.href);
+          url.searchParams.delete('paystack');
+          url.searchParams.delete('reference');
+          url.searchParams.delete('trxref');
+          window.history.replaceState({}, '', url.pathname + url.search);
+        } catch { /* */ }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+
   const periods = listPeriods?.() ?? [
     { months: 1, label: '1 mois' },
     { months: 3, label: '3 mois' },
@@ -59,36 +110,53 @@ export default function SubscriptionPage() {
 
 
   async function payPaystack() {
-    if (!activeEstablishment) {
-      setMsg('Choisissez un établissement.');
+    if (!activeEstablishment?.id) {
+      setStatus('Choisissez un établissement.');
       return;
     }
-    const email = (user as any)?.email || prompt('Email pour le reçu Paystack') || '';
-    if (!email || !String(email).includes('@')) {
-      setMsg('Email requis pour payer avec Paystack.');
+    const email =
+      (session as { user?: { email?: string } } | null)?.user?.email ||
+      (member as { email?: string } | null)?.email ||
+      '';
+    const finalEmail =
+      email && String(email).includes('@')
+        ? String(email)
+        : (typeof window !== 'undefined' ? window.prompt('Email pour le reçu Paystack') || '' : '');
+    if (!finalEmail || !String(finalEmail).includes('@')) {
+      setStatus('Email requis pour payer avec Paystack.');
       return;
     }
     setBusy(true);
-    setMsg(null);
+    setStatus(null);
     try {
-      const amount = priceForMonths(months);
+      // Montant = plan choisi × durée (identique à l’affichage)
+      const payAmount = priceForPlanMonths(targetTier, months);
+      const ref = `SM-${activeEstablishment.id.slice(0, 8)}-${targetTier}-${months}-${Date.now()}`;
       const res = await initPaystackCheckout({
-        amount,
-        email: String(email),
+        amount: payAmount,
+        email: String(finalEmail).trim(),
+        reference: ref.slice(0, 50),
         description: `Abonnement ${targetPlan.label} — ${months} mois — ${activeEstablishment.name || ''}`,
+        callback_url: `${window.location.origin}/subscription?paystack=1`,
         metadata: {
           establishment_id: activeEstablishment.id,
-          plan: targetPlan.id,
+          plan_tier: targetTier,
           months,
+          user_id: member?.user_id || '',
+          // format legacy pour webhook: est|months|user
+          custom_meta: `${activeEstablishment.id}|${months}|${member?.user_id || ''}|${targetTier}`,
         },
       });
       if (res.error || !res.authorization_url) {
-        setMsg(res.error || 'Paystack indisponible. Vérifiez PAYSTACK_SECRET_KEY sur le serveur.');
+        setStatus(res.error || 'Paystack indisponible. Vérifiez PAYSTACK_SECRET_KEY sur le serveur.');
         return;
       }
+      if (res.reference) {
+        try { sessionStorage.setItem('sm_paystack_ref', res.reference); } catch { /* */ }
+      }
       window.location.href = res.authorization_url;
-    } catch (e: any) {
-      setMsg(e?.message || 'Erreur Paystack');
+    } catch (e: unknown) {
+      setStatus(e instanceof Error ? e.message : 'Erreur Paystack');
     } finally {
       setBusy(false);
     }
@@ -306,9 +374,9 @@ export default function SubscriptionPage() {
         <ul className="space-y-1 list-disc list-inside">
           <li>Votre forfait actuel est toujours affiché en vert ci-dessus.</li>
           <li>Sélectionnez un autre forfait pour upgrader ou renouveler.</li>
-          <li>Paystack (carte / Orange / MTN / Moov) — paiement en ligne sécurisé.</li>
-          <li>WhatsApp — validation manuelle si besoin.</li>
-          <li>Pas de CinetPay / Tiun : inscription et accès simplifiés.</li>
+          <li><strong>Paystack</strong> : carte ou Mobile Money — activation automatique après paiement.</li>
+          <li><strong>WhatsApp</strong> : validation manuelle par l’admin (Wave/MTN/Orange hors app).</li>
+          <li>Le montant affiché est toujours celui du forfait choisi × la durée.</li>
         </ul>
         {member?.role && (
           <p className="pt-1 text-stone-500">Connecté en tant que : {member.role}</p>
