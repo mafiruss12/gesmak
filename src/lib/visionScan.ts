@@ -1,6 +1,7 @@
 /**
  * Reconnaissance d'images via Gemini Vision (déjà branché Stock Manager).
- * Clé : VITE_GEMINI_API_KEY (Vercel) ou localStorage gemini_api_key
+ * Clé : uniquement serveur (Cloudflare GEMINI_API_KEY via /api/gemini/proxy).
+ * Option locale de secours : localStorage gemini_api_key (déconseillé).
  *
  * Usages :
  * - inventaire / liste / objet
@@ -15,7 +16,7 @@ import {
   guessCategoryFromName,
 } from './inventoryScan';
 
-const MODEL = 'gemini-3.6-flash';
+const MODEL = 'gemini-2.0-flash';
 
 export type VisionScanMode = 'auto' | 'list' | 'object' | 'receipt' | 'casier';
 
@@ -30,7 +31,8 @@ function getApiKey(): string | null {
 }
 
 export function hasVisionApi(): boolean {
-  return !!getApiKey();
+  // Proxy serveur toujours tenté ; clé locale = secours hors proxy
+  return true;
 }
 
 export function setLocalGeminiKey(key: string) {
@@ -160,49 +162,94 @@ async function callGemini(
   prompt: string,
   onProgress?: (pct: number, status: string) => void,
 ): Promise<string> {
-  const key = getApiKey();
-  if (!key) throw new Error('Clé Gemini manquante (VITE_GEMINI_API_KEY ou clé locale)');
-
   onProgress?.(15, 'Préparation image…');
   const small = await shrinkImage(image);
   const { mime, data } = await blobToBase64(small);
   onProgress?.(40, 'Analyse Gemini…');
 
-  // Clés Auth (AQ.) + anciennes (AIza) : header x-goog-api-key recommandé
+  // 1) Proxy serveur (recommandé)
+  try {
+    let authHeader = '';
+    try {
+      const { supabase } = await import('./supabase');
+      const { data: sess } = await supabase.auth.getSession();
+      if (sess?.session?.access_token) {
+        authHeader = `Bearer ${sess.session.access_token}`;
+      }
+    } catch { /* */ }
+
+    const res = await fetch('/api/gemini/proxy', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(authHeader ? { Authorization: authHeader } : {}),
+      },
+      body: JSON.stringify({
+        prompt,
+        model: MODEL,
+        mime,
+        image: data,
+        temperature: 0.15,
+        maxOutputTokens: 4096,
+      }),
+    });
+    const raw = await res.text();
+    if (res.ok) {
+      onProgress?.(90, 'Réponse reçue…');
+      try {
+        const j = JSON.parse(raw);
+        const text =
+          j?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text || '').join('') ||
+          j?.text ||
+          '';
+        if (text) return String(text);
+      } catch {
+        if (raw) return raw;
+      }
+    }
+    // si 503 (clé absente) → fallback local
+    if (res.status !== 503 && res.status !== 401) {
+      throw new Error(`Gemini proxy ${res.status}: ${raw.slice(0, 180)}`);
+    }
+  } catch (e) {
+    if (e instanceof Error && e.message.startsWith('Gemini proxy')) throw e;
+  }
+
+  // 2) Secours local (déconseillé — à retirer une fois GEMINI_API_KEY configurée)
+  const key = getApiKey();
+  if (!key) {
+    throw new Error(
+      'Analyse IA indisponible. Configurez GEMINI_API_KEY sur Cloudflare Pages (secret serveur).',
+    );
+  }
+  onProgress?.(50, 'Analyse Gemini (local)…');
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
   const body = {
-    contents: [
-      {
-        parts: [{ text: prompt }, { inline_data: { mime_type: mime, data } }],
-      },
-    ],
-    generationConfig: {
-      temperature: 0.15,
-      maxOutputTokens: 4096,
-    },
+    contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: mime, data } }] }],
+    generationConfig: { temperature: 0.15, maxOutputTokens: 4096 },
   };
-
   const res = await fetch(url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-goog-api-key': key,
-    },
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
     body: JSON.stringify(body),
   });
-  onProgress?.(85, 'Réponse reçue…');
+  const errText = await res.text();
   if (!res.ok) {
-    const errText = await res.text().catch(() => '');
     if (res.status === 400 || res.status === 403) {
       throw new Error('Clé Gemini invalide ou refusée. Vérifiez la clé API.');
     }
     throw new Error(`Gemini erreur ${res.status}: ${errText.slice(0, 180)}`);
   }
-  const json = await res.json();
-  const text =
-    json?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).filter(Boolean).join('\n') ||
-    '';
-  return String(text).trim();
+  onProgress?.(90, 'Réponse reçue…');
+  try {
+    const j = JSON.parse(errText);
+    return (
+      j?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text || '').join('') ||
+      ''
+    );
+  } catch {
+    return errText;
+  }
 }
 
 const LIST_PROMPT = `Tu analyses une photo d'inventaire / liste de produits (boissons de maquis, bar, restaurant en Côte d'Ivoire).
