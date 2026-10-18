@@ -1,47 +1,53 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  ArrowLeft, MessageCircle, Wallet, CheckCircle2, Loader2, Crown,
+  ArrowLeft, MessageCircle, Wallet, CheckCircle2, Loader2, Crown, CreditCard,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import {
-  PLAN, PLANS, getSubscriptionState, getEffectivePlan, getPlanLimits,
-  getPlanDisplayTitle, getActivePlanLimits, formatPlanLimitsLine, isOnTrial,
-  priceForMonths, priceForPlanMonths, type PlanTier,
+  PLAN, PLANS, getSubscriptionState, getActivePlanLimits, formatPlanLimitsLine,
+  getPlanDisplayTitle, isOnTrial, priceForPlanMonths, type PlanTier,
 } from '@/lib/subscription';
-import {
-  PAYMENT_METHODS,
-  listPeriods,
-  initPaystackCheckout,
-  isPaystackConfigured,
-} from '@/lib/payments';
+import { listPeriods, initPaystackCheckout } from '@/lib/payments';
 import { createPaymentRequest, listMyPendingRequests } from '@/lib/paymentRequests';
 
 export default function SubscriptionPage() {
   const { member, activeEstablishment, session } = useAuth();
   const [months, setMonths] = useState(1);
-  const [method, setMethod] = useState('whatsapp');
   const [selectedTier, setSelectedTier] = useState<PlanTier | null>(null);
   const [busy, setBusy] = useState(false);
+  const [assistBusy, setAssistBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const [statusKind, setStatusKind] = useState<'info' | 'error' | 'ok'>('info');
   const [pendingCode, setPendingCode] = useState<string | null>(null);
+  const sessionEmail =
+    (session as { user?: { email?: string } } | null)?.user?.email ||
+    (member as { email?: string } | null)?.email ||
+    '';
+  const [email, setEmail] = useState(sessionEmail.includes('@') ? sessionEmail : '');
 
   const estName = activeEstablishment?.name || 'Mon établissement';
   const current = activeEstablishment ? getActivePlanLimits(activeEstablishment as any) : null;
-  const limits = current;
   const displayTitle = activeEstablishment ? getPlanDisplayTitle(activeEstablishment as any) : '—';
   const onTrial = activeEstablishment ? isOnTrial(activeEstablishment as any) : false;
   const state = activeEstablishment
     ? getSubscriptionState(activeEstablishment)
-    : { label: '—', message: 'Sélectionnez un établissement pour voir votre abonnement.', status: 'trial' as const };
+    : {
+        label: '—',
+        message: 'Sélectionnez un établissement pour voir votre abonnement.',
+        status: 'trial' as const,
+      };
 
   const targetTier = selectedTier || (current?.id as PlanTier) || 'starter';
   const targetPlan = PLANS[targetTier];
-  const amount = useMemo(() => {
-    const monthly = targetPlan.monthlyFcfa;
-    return monthly * Math.max(1, months);
-  }, [targetPlan, months]);
+  const amount = useMemo(
+    () => priceForPlanMonths(targetTier, months),
+    [targetTier, months],
+  );
 
+  useEffect(() => {
+    if (sessionEmail.includes('@') && !email) setEmail(sessionEmail);
+  }, [sessionEmail]);
 
   useEffect(() => {
     if (!activeEstablishment?.id) return;
@@ -50,7 +56,7 @@ export default function SubscriptionPage() {
     });
   }, [activeEstablishment?.id]);
 
-  // Retour Paystack : ?paystack=1&reference=... ou reference seule
+  // Retour Paystack
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
@@ -59,35 +65,45 @@ export default function SubscriptionPage() {
     const ref =
       params.get('reference') ||
       params.get('trxref') ||
-      (() => { try { return sessionStorage.getItem('sm_paystack_ref'); } catch { return null; } })();
+      sessionStorage.getItem('sm_paystack_ref') ||
+      '';
     if (!ref) {
+      setStatusKind('error');
       setStatus('Retour Paystack sans référence — contactez le support avec la capture du paiement.');
       return;
     }
     let cancelled = false;
     (async () => {
-      setBusy(true);
+      setStatusKind('info');
       setStatus('Vérification du paiement Paystack…');
       try {
         const { verifyPaystackPayment } = await import('@/lib/payments');
         const v = await verifyPaystackPayment(ref);
         if (cancelled) return;
         if (v.ok) {
-          setStatus(`Paiement confirmé (${v.amount_fcfa?.toLocaleString('fr-FR') || '—'} F). Abonnement en cours d’activation…`);
-          // Appelle activate côté serveur
-          await fetch('/api/paystack/verify', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ reference: ref, activate: true }),
-          }).catch(() => null);
-          setStatus(`Paiement confirmé (${v.amount_fcfa?.toLocaleString('fr-FR') || '—'} F). Rechargez la page si le forfait n’est pas encore à jour.`);
+          setStatusKind('ok');
+          setStatus(
+            `Paiement confirmé (${v.amount_fcfa?.toLocaleString('fr-FR') || '—'} F). Abonnement en cours d’activation…`,
+          );
+          try {
+            await fetch('/api/paystack/verify', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ reference: ref, activate: true }),
+            });
+          } catch { /* webhook peut déjà avoir activé */ }
+          setStatusKind('ok');
+          setStatus('Paiement validé. Rechargez la page si le forfait ne s’affiche pas encore.');
         } else {
-          setStatus(v.error || `Paiement non confirmé (statut: ${v.status || 'inconnu'}).`);
+          setStatusKind('error');
+          setStatus(v.error || `Paiement non confirmé (${v.status || 'inconnu'}).`);
         }
       } catch (e: unknown) {
-        if (!cancelled) setStatus(e instanceof Error ? e.message : 'Erreur de vérification');
+        if (!cancelled) {
+          setStatusKind('error');
+          setStatus(e instanceof Error ? e.message : 'Erreur de vérification');
+        }
       } finally {
-        if (!cancelled) setBusy(false);
         try {
           const url = new URL(window.location.href);
           url.searchParams.delete('paystack');
@@ -97,9 +113,10 @@ export default function SubscriptionPage() {
         } catch { /* */ }
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
-
 
   const periods = listPeriods?.() ?? [
     { months: 1, label: '1 mois' },
@@ -108,88 +125,105 @@ export default function SubscriptionPage() {
     { months: 12, label: '1 an' },
   ];
 
+  function showError(msg: string) {
+    setStatusKind('error');
+    setStatus(msg);
+  }
 
   async function payPaystack() {
     if (!activeEstablishment?.id) {
-      setStatus('Choisissez un établissement.');
+      showError('Choisissez un établissement avant de payer.');
       return;
     }
-    const email =
-      (session as { user?: { email?: string } } | null)?.user?.email ||
-      (member as { email?: string } | null)?.email ||
-      '';
-    const finalEmail =
-      email && String(email).includes('@')
-        ? String(email)
-        : (typeof window !== 'undefined' ? window.prompt('Email pour le reçu Paystack') || '' : '');
-    if (!finalEmail || !String(finalEmail).includes('@')) {
-      setStatus('Email requis pour payer avec Paystack.');
+    const finalEmail = String(email || '').trim();
+    if (!finalEmail.includes('@') || finalEmail.length < 5) {
+      showError('Indiquez un e-mail valide pour le reçu Paystack (obligatoire).');
       return;
     }
     setBusy(true);
-    setStatus(null);
+    setStatusKind('info');
+    setStatus('Ouverture sécurisée du paiement…');
     try {
-      // Montant = plan choisi × durée (identique à l’affichage)
       const payAmount = priceForPlanMonths(targetTier, months);
-      const ref = `SM-${activeEstablishment.id.slice(0, 8)}-${targetTier}-${months}-${Date.now()}`;
+      if (!payAmount || payAmount < 100) {
+        showError('Montant invalide. Choisissez un forfait et une durée.');
+        return;
+      }
+      const ref = `SM-${activeEstablishment.id.slice(0, 8)}-${targetTier}-${months}-${Date.now()}`.slice(0, 50);
       const res = await initPaystackCheckout({
         amount: payAmount,
-        email: String(finalEmail).trim(),
-        reference: ref.slice(0, 50),
-        description: `Abonnement ${targetPlan.label} — ${months} mois — ${activeEstablishment.name || ''}`,
+        email: finalEmail,
+        reference: ref,
+        description: `Abonnement ${targetPlan.label} — ${months} mois — ${estName}`,
         callback_url: `${window.location.origin}/subscription?paystack=1`,
         metadata: {
           establishment_id: activeEstablishment.id,
           plan_tier: targetTier,
           months,
           user_id: member?.user_id || '',
-          // format legacy pour webhook: est|months|user
           custom_meta: `${activeEstablishment.id}|${months}|${member?.user_id || ''}|${targetTier}`,
         },
       });
       if (res.error || !res.authorization_url) {
-        setStatus(res.error || 'Paystack indisponible. Vérifiez PAYSTACK_SECRET_KEY sur le serveur.');
+        showError(res.error || 'Paystack indisponible. Réessayez dans un instant.');
         return;
       }
       if (res.reference) {
-        try { sessionStorage.setItem('sm_paystack_ref', res.reference); } catch { /* */ }
+        try {
+          sessionStorage.setItem('sm_paystack_ref', res.reference);
+        } catch { /* */ }
       }
-      window.location.href = res.authorization_url;
+      setStatusKind('ok');
+      setStatus('Redirection vers Paystack…');
+      // assign plutôt que href pour fiabilité mobile
+      window.location.assign(res.authorization_url);
     } catch (e: unknown) {
-      setStatus(e instanceof Error ? e.message : 'Erreur Paystack');
+      showError(e instanceof Error ? e.message : 'Erreur réseau Paystack');
     } finally {
       setBusy(false);
     }
   }
 
-  async function payWhatsApp() {
+  async function payAssistance() {
     if (!activeEstablishment?.id || !member?.user_id) {
-      setStatus('Choisissez un établissement et reconnectez-vous si besoin.');
+      showError('Choisissez un établissement et reconnectez-vous si besoin.');
       return;
     }
-    setBusy(true);
-    setStatus(null);
-    const r = await createPaymentRequest({
-      establishmentId: activeEstablishment.id,
-      userId: member.user_id,
-      planTier: targetTier,
-      months,
-      paymentMethod: PAYMENT_METHODS.find((m) => m.id === method)?.label || method,
-      establishmentName: estName,
-    });
-    setBusy(false);
-    if (r.request?.reference_code) setPendingCode(r.request.reference_code);
-    setStatus(
-      r.request
-        ? `Demande ${r.request.reference_code} — ${targetPlan.label} · ${months} mois · ${r.request.amount_fcfa.toLocaleString('fr-FR')} F. WhatsApp ouvert ; activation après validation.`
-        : 'WhatsApp ouvert. Activation après confirmation du paiement.'
-    );
-    window.open(r.waUrl, '_blank', 'noopener,noreferrer');
+    setAssistBusy(true);
+    setStatusKind('info');
+    setStatus('Préparation de l’assistance paiement…');
+    try {
+      const r = await createPaymentRequest({
+        establishmentId: activeEstablishment.id,
+        userId: member.user_id,
+        planTier: targetTier,
+        months,
+        paymentMethod: 'Assistance (WhatsApp / App)',
+        establishmentName: estName,
+      });
+      if (r.request?.reference_code) setPendingCode(r.request.reference_code);
+      setStatusKind('ok');
+      setStatus(
+        r.request
+          ? `Demande ${r.request.reference_code} — ${targetPlan.label} · ${months} mois · ${r.request.amount_fcfa.toLocaleString('fr-FR')} F. Un conseiller vous aide à finaliser.`
+          : 'Assistance ouverte. Activation après confirmation du paiement.',
+      );
+      if (r.waUrl) {
+        window.open(r.waUrl, '_blank', 'noopener,noreferrer');
+      }
+    } catch (e: unknown) {
+      showError(e instanceof Error ? e.message : 'Impossible d’ouvrir l’assistance');
+    } finally {
+      setAssistBusy(false);
+    }
   }
 
   return (
     <div className="max-w-lg mx-auto space-y-5 pb-16">
-      <Link to="/dashboard" className="inline-flex items-center gap-1 text-sm text-stone-500 dark:text-stone-400 hover:text-stone-800 dark:hover:text-stone-200">
+      <Link
+        to="/dashboard"
+        className="inline-flex items-center gap-1 text-sm text-stone-500 dark:text-stone-400 hover:text-stone-800 dark:hover:text-stone-200"
+      >
         <ArrowLeft size={16} /> Accueil
       </Link>
 
@@ -198,17 +232,31 @@ export default function SubscriptionPage() {
           <Wallet className="text-amber-500" size={26} /> Abonnement
         </h1>
         <p className="text-sm text-stone-600 dark:text-stone-400 mt-1">
-          Votre forfait actuel et les offres disponibles · {PLAN.currencyLabel}
+          Votre forfait et le paiement sécurisé · {PLAN.currencyLabel}
         </p>
       </div>
 
       {pendingCode && (
         <div className="rounded-xl border border-amber-500/40 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-sm text-amber-900 dark:text-amber-100">
-          Demande en attente · code <strong>{pendingCode}</strong> — validation admin après paiement.
+          Demande en attente · code <strong>{pendingCode}</strong> — validation après paiement assisté.
         </div>
       )}
 
-      {/* Forfait actuel — toujours clair */}
+      {status && (
+        <div
+          className={`rounded-xl border px-3 py-2 text-sm ${
+            statusKind === 'error'
+              ? 'border-red-500/40 bg-red-50 text-red-900 dark:bg-red-950/40 dark:text-red-100'
+              : statusKind === 'ok'
+                ? 'border-emerald-500/40 bg-emerald-50 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100'
+                : 'border-amber-500/30 bg-amber-50/80 text-amber-950 dark:bg-amber-500/10 dark:text-amber-100'
+          }`}
+        >
+          {status}
+        </div>
+      )}
+
+      {/* Forfait actuel */}
       <div className="rounded-2xl border-2 border-emerald-600/50 bg-emerald-50 dark:bg-emerald-950/30 p-4 space-y-2">
         <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
           <Crown size={14} /> Votre forfait actuel
@@ -218,151 +266,126 @@ export default function SubscriptionPage() {
             <p className="text-2xl font-bold text-stone-900 dark:text-stone-50">{displayTitle}</p>
             <p className="text-sm font-medium text-stone-800 dark:text-stone-200">{estName}</p>
             <p className="text-sm text-stone-700 dark:text-stone-300">{state.message || state.label}</p>
-            {limits && (
-              <p className="text-xs text-stone-600 dark:text-stone-400">
-                Limites actives : {formatPlanLimitsLine(limits)}
-                {onTrial ? ' (Pro pendant l’essai)' : ''}
-                {limits.qrOrdering ? ' · QR' : ''}
-                {limits.multiSite ? ' · Multi-sites' : ''}
-                {limits.ocrAi ? ' · IA' : ''}
-              </p>
-            )}
+            <p className="text-xs text-stone-600 dark:text-stone-400">
+              Limites : {formatPlanLimitsLine(current)}
+              {onTrial ? ' (Pro pendant l’essai)' : ''}
+            </p>
             {onTrial && (
               <p className="text-xs text-amber-800 dark:text-amber-200 mt-1">
-                Après l’essai : Essentiel à {PLANS.starter.monthlyFcfa.toLocaleString('fr-FR')} F/mois, ou restez en Pro à {PLANS.pro.monthlyFcfa.toLocaleString('fr-FR')} F/mois.
+                Après l’essai : Essentiel {PLANS.starter.monthlyFcfa.toLocaleString('fr-FR')} F/mois, ou Pro{' '}
+                {PLANS.pro.monthlyFcfa.toLocaleString('fr-FR')} F/mois.
               </p>
             )}
           </>
         ) : (
-          <p className="text-sm text-stone-700 dark:text-stone-300">{state.message}</p>
+          <p className="text-sm text-stone-600 dark:text-stone-400">Aucun établissement sélectionné.</p>
         )}
       </div>
 
-      {/* Autres / tous les forfaits */}
+      {/* Choix forfait */}
       <div className="space-y-2">
-        <h2 className="text-sm font-semibold text-stone-800 dark:text-stone-200">Tous les forfaits</h2>
-        <p className="text-xs text-stone-500 dark:text-stone-500">
-          Choisissez une offre pour payer ou upgrader. Votre forfait actuel est indiqué.
-        </p>
-        {(['starter', 'pro', 'business'] as PlanTier[]).map((id) => {
-          const p = PLANS[id];
-          const isCurrent = current?.id === id;
-          const isSelected = targetTier === id;
-          return (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setSelectedTier(id)}
-              className={`w-full text-left rounded-2xl border p-4 transition ${
-                isCurrent
-                  ? 'border-emerald-600 bg-emerald-50/80 dark:bg-emerald-900/20'
-                  : isSelected
-                    ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/20'
+        <p className="text-sm font-semibold text-stone-800 dark:text-stone-200">Choisir un forfait</p>
+        <div className="grid gap-2">
+          {(Object.keys(PLANS) as PlanTier[]).map((id) => {
+            const p = PLANS[id];
+            const isSelected = targetTier === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setSelectedTier(id)}
+                className={`text-left rounded-xl border-2 px-4 py-3 transition ${
+                  isSelected
+                    ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/40'
                     : 'border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900/50'
-              }`}
-            >
-              <div className="flex justify-between items-start gap-2">
-                <div>
-                  <p className="font-bold text-stone-900 dark:text-stone-100">{p.label}</p>
-                  <p className="text-xs text-stone-600 dark:text-stone-400 mt-1">
-                    {p.maxEstablishments} site(s) · {p.maxEmployees} employés · {p.maxProducts} produits
-                  </p>
-                  <p className="text-xs text-stone-500 mt-1">
-                    {[
-                      p.qrOrdering && 'QR',
-                      p.kitchen && 'Cuisine',
-                      p.multiSite && 'Multi-sites',
-                      p.ocrAi && 'IA',
-                      p.advancedReports && 'Rapports+',
-                    ]
-                      .filter(Boolean)
-                      .join(' · ') || 'Essentiel stock & caisse'}
-                  </p>
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-bold text-stone-900 dark:text-stone-100">{p.label}</span>
+                  <span className="text-amber-700 dark:text-amber-300 font-semibold">
+                    {p.monthlyFcfa.toLocaleString('fr-FR')} F/mois
+                  </span>
                 </div>
-                <div className="text-right shrink-0">
-                  {isCurrent && (
-                    <span className="block text-[10px] font-semibold uppercase text-emerald-700 dark:text-emerald-400 mb-1">
-                      Actuel
-                    </span>
-                  )}
-                  <p className="font-semibold text-stone-900 dark:text-stone-100">
-                    {p.monthlyFcfa.toLocaleString('fr-FR')} F
-                  </p>
-                  <p className="text-[10px] text-stone-500">/ mois</p>
-                </div>
-              </div>
-            </button>
-          );
-        })}
+                <p className="text-xs text-stone-500 mt-1">{formatPlanLimitsLine(p)}</p>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {/* Durée + moyen + payer */}
-      <div className="rounded-2xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900/40 p-4 space-y-3">
-        <p className="text-sm font-semibold text-stone-800 dark:text-stone-200">
-          Payer : <span className="text-amber-700 dark:text-amber-300">{targetPlan.label}</span>
-        </p>
+      {/* Durée */}
+      <div className="space-y-2">
+        <p className="text-sm font-semibold text-stone-800 dark:text-stone-200">Durée</p>
         <div className="flex flex-wrap gap-2">
-          {periods.map((per: { months: number; label: string }) => (
+          {periods.map((p: { months: number; label: string }) => (
             <button
-              key={per.months}
+              key={p.months}
               type="button"
-              onClick={() => setMonths(per.months)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium border ${
-                months === per.months
-                  ? 'border-amber-500 bg-amber-500/15 text-amber-800 dark:text-amber-200'
-                  : 'border-stone-300 dark:border-stone-600 text-stone-600 dark:text-stone-300'
+              onClick={() => setMonths(p.months)}
+              className={`px-3 py-2 rounded-lg text-sm font-medium border ${
+                months === p.months
+                  ? 'border-amber-500 bg-amber-500 text-white'
+                  : 'border-stone-300 dark:border-stone-600 text-stone-700 dark:text-stone-300'
               }`}
             >
-              {per.label}
+              {p.label}
             </button>
           ))}
         </div>
-        <p className="text-lg font-bold text-stone-900 dark:text-stone-100">
-          {amount.toLocaleString('fr-FR')} {PLAN.currencyLabel}
-          <span className="text-sm font-normal text-stone-500"> · {months} mois</span>
-        </p>
+      </div>
 
-        <div className="flex flex-wrap gap-2">
-          {PAYMENT_METHODS.map((m) => (
-            <button
-              key={m.id}
-              type="button"
-              onClick={() => setMethod(m.id)}
-              className={`px-2.5 py-1.5 rounded-lg text-xs border ${
-                method === m.id
-                  ? 'border-amber-500 bg-amber-500/15 text-amber-900 dark:text-amber-100'
-                  : 'border-stone-300 dark:border-stone-600 text-stone-600 dark:text-stone-400'
-              }`}
-            >
-              {m.icon} {m.label}
-            </button>
-          ))}
+      {/* Montant + paiement */}
+      <div className="rounded-2xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900/60 p-4 space-y-4">
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-stone-600 dark:text-stone-400">
+            À payer · {targetPlan.label} · {months} mois
+          </span>
+          <span className="text-xl font-bold text-amber-700 dark:text-amber-300">
+            {amount.toLocaleString('fr-FR')} F
+          </span>
         </div>
 
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-stone-600 dark:text-stone-400" htmlFor="pay-email">
+            E-mail pour le reçu (obligatoire)
+          </label>
+          <input
+            id="pay-email"
+            type="email"
+            inputMode="email"
+            autoComplete="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="ex. vous@email.com"
+            className="w-full rounded-xl border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-950 px-3 py-3 text-sm text-stone-900 dark:text-stone-100 min-h-[48px]"
+          />
+        </div>
+
+        {/* UN SEUL bouton de paiement */}
         <button
           type="button"
           disabled={busy || !activeEstablishment}
-          className="btn-primary w-full flex items-center justify-center gap-2 min-h-[48px]"
-          onClick={() => void payWhatsApp()}
-        >
-          {busy ? <Loader2 className="animate-spin" size={18} /> : <MessageCircle size={18} />}
-          Payer via WhatsApp (validation manuelle)
-        </button>
-        <button
-          type="button"
-          disabled={busy || !activeEstablishment}
-          className="w-full rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-semibold py-3 px-4 flex items-center justify-center gap-2 min-h-[48px] disabled:opacity-50"
+          className="w-full rounded-xl bg-sky-600 hover:bg-sky-500 active:bg-sky-700 text-white font-semibold py-3.5 px-4 flex items-center justify-center gap-2 min-h-[52px] disabled:opacity-50 shadow-lg shadow-sky-900/20"
           onClick={() => void payPaystack()}
         >
-          {busy ? <Loader2 className="animate-spin" size={18} /> : null}
-          Payer avec Paystack (carte / Mobile Money)
+          {busy ? <Loader2 className="animate-spin" size={20} /> : <CreditCard size={20} />}
+          {busy ? 'Connexion à Paystack…' : `Payer ${amount.toLocaleString('fr-FR')} F maintenant`}
         </button>
+
+        {/* Assistance — pas un 2e paiement concurrent */}
+        <button
+          type="button"
+          disabled={assistBusy || !activeEstablishment}
+          className="w-full rounded-xl border-2 border-emerald-600/60 bg-transparent hover:bg-emerald-50 dark:hover:bg-emerald-950/30 text-emerald-800 dark:text-emerald-200 font-medium py-3 px-4 flex items-center justify-center gap-2 min-h-[48px] disabled:opacity-50"
+          onClick={() => void payAssistance()}
+        >
+          {assistBusy ? <Loader2 className="animate-spin" size={18} /> : <MessageCircle size={18} />}
+          Besoin d’aide ? Assistance paiement (App / WhatsApp)
+        </button>
+
         {!activeEstablishment && (
-          <p className="text-xs text-amber-700 dark:text-amber-300">Choisissez un établissement pour finaliser le paiement.</p>
-        )}
-        {status && (
-          <p className="text-xs text-stone-700 dark:text-amber-100 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2">
-            {status}
+          <p className="text-xs text-amber-700 dark:text-amber-300">
+            Choisissez un établissement pour finaliser le paiement.
           </p>
         )}
       </div>
@@ -372,15 +395,14 @@ export default function SubscriptionPage() {
           <CheckCircle2 size={14} className="text-amber-500" /> Comment ça marche
         </p>
         <ul className="space-y-1 list-disc list-inside">
-          <li>Votre forfait actuel est toujours affiché en vert ci-dessus.</li>
-          <li>Sélectionnez un autre forfait pour upgrader ou renouveler.</li>
-          <li><strong>Paystack</strong> : carte ou Mobile Money — activation automatique après paiement.</li>
-          <li><strong>WhatsApp</strong> : validation manuelle par l’admin (Wave/MTN/Orange hors app).</li>
-          <li>Le montant affiché est toujours celui du forfait choisi × la durée.</li>
+          <li>
+            <strong>Payer maintenant</strong> : carte ou Mobile Money via Paystack — activation automatique.
+          </li>
+          <li>
+            <strong>Assistance</strong> : un message WhatsApp / suivi app pour vous aider à payer (validation manuelle).
+          </li>
+          <li>Le montant affiché = forfait choisi × durée.</li>
         </ul>
-        {member?.role && (
-          <p className="pt-1 text-stone-500">Connecté en tant que : {member.role}</p>
-        )}
       </div>
     </div>
   );
