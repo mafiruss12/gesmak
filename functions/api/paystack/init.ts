@@ -1,6 +1,6 @@
 import { json, env, readBody, noContent } from '../_lib/http';
 
-const SITE = 'https://stock-manager-ai.pages.dev';
+const SITE = 'https://stock-manager-ai.pages.dev'; // fallback; APP_URL env prioritaire
 
 export async function onRequest(context: { request: Request; env: Record<string, string | undefined> }) {
   const { request } = context;
@@ -20,7 +20,8 @@ export async function onRequest(context: { request: Request; env: Record<string,
   const email = String(body.email || body.customerEmail || '').trim();
   const reference = String(body.reference || body.transactionId || `SM-${Date.now()}`).slice(0, 50);
   const description = String(body.description || 'Abonnement Stock Manager AI').slice(0, 200);
-  const callback_url = String(body.callback_url || body.returnUrl || `${SITE}/subscription?paystack=1`);
+  const appUrl = (env(context, 'APP_URL') || SITE).replace(/\/$/, '');
+  const callback_url = String(body.callback_url || body.returnUrl || `${appUrl}/subscription?paystack=1`);
 
   if (amountFcfa < 100) return json({ error: 'Montant minimum 100 XOF' }, 400);
   if (!email.includes('@')) return json({ error: 'Email client requis pour Paystack' }, 400);
@@ -65,6 +66,40 @@ export async function onRequest(context: { request: Request; env: Record<string,
     if (!r.ok || !status) {
       return json({ error: (data.message as string) || 'Echec initialisation Paystack', details: data }, 400);
     }
+
+    // Enregistre la transaction pending (provider paystack)
+    try {
+      const supabaseUrl = env(context, 'SUPABASE_URL') || env(context, 'VITE_SUPABASE_URL');
+      const serviceKey = env(context, 'SUPABASE_SERVICE_ROLE_KEY');
+      if (supabaseUrl && serviceKey) {
+        const estId = metaObj.establishment_id ? String(metaObj.establishment_id) : null;
+        const userId = metaObj.user_id ? String(metaObj.user_id) : null;
+        const months = Math.max(1, parseInt(String(metaObj.months || '1'), 10) || 1);
+        await fetch(`${supabaseUrl}/rest/v1/payment_transactions`, {
+          method: 'POST',
+          headers: {
+            apikey: serviceKey,
+            Authorization: `Bearer ${serviceKey}`,
+            'Content-Type': 'application/json',
+            Prefer: 'resolution=merge-duplicates,return=minimal',
+          },
+          body: JSON.stringify({
+            transaction_id: dataObj?.reference || reference,
+            establishment_id: estId,
+            user_id: userId || null,
+            amount: amountFcfa,
+            currency: 'XOF',
+            months,
+            status: 'pending',
+            provider: 'paystack',
+            raw: { init: data, description },
+          }),
+        });
+      }
+    } catch {
+      /* non bloquant */
+    }
+
     return json({
       ok: true,
       authorization_url: dataObj?.authorization_url,
