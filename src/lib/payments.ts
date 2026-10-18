@@ -3,7 +3,7 @@
  */
 import { PLAN, priceForMonths, paymentWhatsAppLink, SUB_PERIODS } from '@/lib/subscription';
 
-export type PaymentProvider = 'whatsapp' | 'cinetpay';
+export type PaymentProvider = 'whatsapp' | 'cinetpay' | 'paystack';
 
 export const PAYMENT_METHODS = [
   { id: 'whatsapp' as const, label: 'WhatsApp (validation manuelle)', icon: '💬' },
@@ -96,4 +96,64 @@ export function listPeriods() {
     ...p,
     amount: priceForMonths(p.months),
   }));
+}
+
+
+/** Paystack disponible si non désactivé côté front */
+export function isPaystackConfigured(): boolean {
+  return import.meta.env.VITE_PAYSTACK_DISABLED !== '1';
+}
+
+/**
+ * Init Paystack via API serveur (secret key jamais exposée)
+ */
+export async function initPaystackCheckout(opts: {
+  amount: number;
+  email: string;
+  reference?: string;
+  description: string;
+  callback_url?: string;
+  metadata?: Record<string, unknown>;
+}): Promise<{ authorization_url?: string; reference?: string; error?: string }> {
+  try {
+    const res = await fetch('/api/paystack/init', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        amount: opts.amount,
+        email: opts.email,
+        reference: opts.reference || `SM-${Date.now()}`,
+        description: opts.description,
+        callback_url: opts.callback_url,
+        metadata: opts.metadata,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data?.authorization_url) {
+      return { error: data?.error || data?.message || 'Impossible d’ouvrir Paystack' };
+    }
+    return { authorization_url: data.authorization_url, reference: data.reference };
+  } catch (e: any) {
+    return { error: e?.message || 'Erreur réseau Paystack' };
+  }
+}
+
+export async function verifyPaystackPayment(reference: string): Promise<{
+  ok: boolean;
+  amount_fcfa?: number | null;
+  status?: string;
+  error?: string;
+}> {
+  try {
+    const res = await fetch(`/api/paystack/verify?reference=${encodeURIComponent(reference)}`);
+    const data = await res.json().catch(() => ({}));
+    return {
+      ok: Boolean(data?.ok),
+      amount_fcfa: data?.amount_fcfa,
+      status: data?.status,
+      error: data?.error,
+    };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || 'Erreur vérification' };
+  }
 }
