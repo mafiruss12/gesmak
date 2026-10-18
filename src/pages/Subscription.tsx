@@ -20,11 +20,26 @@ export default function SubscriptionPage() {
   const [status, setStatus] = useState<string | null>(null);
   const [statusKind, setStatusKind] = useState<'info' | 'error' | 'ok'>('info');
   const [pendingCode, setPendingCode] = useState<string | null>(null);
+
   const sessionEmail =
     (session as { user?: { email?: string } } | null)?.user?.email ||
     (member as { email?: string } | null)?.email ||
     '';
+  const sessionName =
+    (member as { full_name?: string; name?: string } | null)?.full_name ||
+    (member as { name?: string } | null)?.name ||
+    (session as { user?: { user_metadata?: { full_name?: string; name?: string } } } | null)?.user
+      ?.user_metadata?.full_name ||
+    (session as { user?: { user_metadata?: { name?: string } } } | null)?.user?.user_metadata?.name ||
+    '';
+
+  const nameParts = String(sessionName || '').trim().split(/\s+/).filter(Boolean);
+  const [prenom, setPrenom] = useState(nameParts[0] || '');
+  const [nom, setNom] = useState(nameParts.length > 1 ? nameParts.slice(1).join(' ') : '');
   const [email, setEmail] = useState(sessionEmail.includes('@') ? sessionEmail : '');
+  const [phone, setPhone] = useState(
+    String((member as { phone?: string } | null)?.phone || '').replace(/\D/g, '') || '',
+  );
 
   const estName = activeEstablishment?.name || 'Mon établissement';
   const current = activeEstablishment ? getActivePlanLimits(activeEstablishment as any) : null;
@@ -40,10 +55,7 @@ export default function SubscriptionPage() {
 
   const targetTier = selectedTier || (current?.id as PlanTier) || 'starter';
   const targetPlan = PLANS[targetTier];
-  const amount = useMemo(
-    () => priceForPlanMonths(targetTier, months),
-    [targetTier, months],
-  );
+  const amount = useMemo(() => priceForPlanMonths(targetTier, months), [targetTier, months]);
 
   useEffect(() => {
     if (sessionEmail.includes('@') && !email) setEmail(sessionEmail);
@@ -56,11 +68,11 @@ export default function SubscriptionPage() {
     });
   }, [activeEstablishment?.id]);
 
-  // Retour Paystack
+  // Retour Paystack → vérifier + activer abonnement
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
-    const fromPs = params.get('paystack') === '1' || params.has('reference');
+    const fromPs = params.get('paystack') === '1' || params.has('reference') || params.has('trxref');
     if (!fromPs) return;
     const ref =
       params.get('reference') ||
@@ -69,34 +81,50 @@ export default function SubscriptionPage() {
       '';
     if (!ref) {
       setStatusKind('error');
-      setStatus('Retour Paystack sans référence — contactez le support avec la capture du paiement.');
+      setStatus('Retour Paystack sans référence. Contactez le support avec la capture du paiement.');
       return;
     }
     let cancelled = false;
     (async () => {
       setStatusKind('info');
-      setStatus('Vérification du paiement Paystack…');
+      setStatus('Vérification du paiement et activation de l’abonnement…');
       try {
-        const { verifyPaystackPayment } = await import('@/lib/payments');
-        const v = await verifyPaystackPayment(ref);
+        // 1) Vérifier auprès de Paystack
+        const vRes = await fetch(`/api/paystack/verify?reference=${encodeURIComponent(ref)}`);
+        const v = await vRes.json().catch(() => ({}));
         if (cancelled) return;
-        if (v.ok) {
+        if (!v?.ok && v?.status !== 'success') {
+          setStatusKind('error');
+          setStatus(v?.error || `Paiement non confirmé (${v?.status || 'inconnu'}).`);
+          return;
+        }
+        // 2) Activer l’abonnement côté serveur (service role)
+        const aRes = await fetch('/api/paystack/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reference: ref, activate: true }),
+        });
+        const act = await aRes.json().catch(() => ({}));
+        if (cancelled) return;
+        if (aRes.ok && (act?.ok || act?.activation?.ok || act?.status === 'ALREADY_PROCESSED')) {
           setStatusKind('ok');
           setStatus(
-            `Paiement confirmé (${v.amount_fcfa?.toLocaleString('fr-FR') || '—'} F). Abonnement en cours d’activation…`,
+            'Paiement validé. Votre abonnement est activé. Rechargez la page si le forfait ne s’affiche pas encore.',
           );
           try {
-            await fetch('/api/paystack/verify', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ reference: ref, activate: true }),
-            });
-          } catch { /* webhook peut déjà avoir activé */ }
-          setStatusKind('ok');
-          setStatus('Paiement validé. Rechargez la page si le forfait ne s’affiche pas encore.');
+            sessionStorage.removeItem('sm_paystack_ref');
+          } catch { /* */ }
+          // recharger le profil établissement après court délai
+          setTimeout(() => {
+            try {
+              window.location.href = '/subscription';
+            } catch { /* */ }
+          }, 1800);
         } else {
-          setStatusKind('error');
-          setStatus(v.error || `Paiement non confirmé (${v.status || 'inconnu'}).`);
+          setStatusKind('ok');
+          setStatus(
+            `Paiement reçu (${v?.amount_fcfa?.toLocaleString?.('fr-FR') || '—'} F). Activation en cours — si le forfait ne change pas sous 1 min, contactez le support avec la référence ${ref}.`,
+          );
         }
       } catch (e: unknown) {
         if (!cancelled) {
@@ -109,7 +137,7 @@ export default function SubscriptionPage() {
           url.searchParams.delete('paystack');
           url.searchParams.delete('reference');
           url.searchParams.delete('trxref');
-          window.history.replaceState({}, '', url.pathname + url.search);
+          window.history.replaceState({}, '', url.pathname + (url.search || ''));
         } catch { /* */ }
       }
     })();
@@ -130,55 +158,68 @@ export default function SubscriptionPage() {
     setStatus(msg);
   }
 
+  function validateIdentity(): string | null {
+    if (!String(prenom).trim()) return 'Indiquez votre prénom.';
+    if (!String(nom).trim()) return 'Indiquez votre nom.';
+    const em = String(email).trim();
+    if (!em.includes('@') || em.length < 5) return 'Indiquez un e-mail valide pour le reçu.';
+    return null;
+  }
+
   async function payPaystack() {
     if (!activeEstablishment?.id) {
       showError('Choisissez un établissement avant de payer.');
       return;
     }
-    const finalEmail = String(email || '').trim();
-    if (!finalEmail.includes('@') || finalEmail.length < 5) {
-      showError('Indiquez un e-mail valide pour le reçu Paystack (obligatoire).');
+    const err = validateIdentity();
+    if (err) {
+      showError(err);
       return;
     }
     setBusy(true);
     setStatusKind('info');
-    setStatus('Ouverture sécurisée du paiement…');
+    setStatus('Préparation du paiement sécurisé…');
     try {
       const payAmount = priceForPlanMonths(targetTier, months);
       if (!payAmount || payAmount < 100) {
         showError('Montant invalide. Choisissez un forfait et une durée.');
         return;
       }
+      const fullName = `${prenom.trim()} ${nom.trim()}`.trim();
       const ref = `SM-${activeEstablishment.id.slice(0, 8)}-${targetTier}-${months}-${Date.now()}`.slice(0, 50);
       const res = await initPaystackCheckout({
         amount: payAmount,
-        email: finalEmail,
+        email: email.trim(),
         reference: ref,
-        description: `Abonnement ${targetPlan.label} — ${months} mois — ${estName}`,
+        description: `Abonnement ${targetPlan.label} — ${months} mois — ${estName} — ${fullName}`,
         callback_url: `${window.location.origin}/subscription?paystack=1`,
         metadata: {
           establishment_id: activeEstablishment.id,
           plan_tier: targetTier,
           months,
           user_id: member?.user_id || '',
+          customer_first_name: prenom.trim(),
+          customer_last_name: nom.trim(),
+          customer_name: fullName,
+          customer_phone: phone.trim() || null,
           custom_meta: `${activeEstablishment.id}|${months}|${member?.user_id || ''}|${targetTier}`,
         },
       });
       if (res.error || !res.authorization_url) {
-        showError(res.error || 'Paystack indisponible. Réessayez dans un instant.');
+        showError(res.error || 'Paiement indisponible. Réessayez dans un instant.');
         return;
       }
       if (res.reference) {
         try {
           sessionStorage.setItem('sm_paystack_ref', res.reference);
+          sessionStorage.setItem('sm_pay_name', fullName);
         } catch { /* */ }
       }
       setStatusKind('ok');
-      setStatus('Redirection vers Paystack…');
-      // assign plutôt que href pour fiabilité mobile
+      setStatus('Redirection vers la page de paiement sécurisée…');
       window.location.assign(res.authorization_url);
     } catch (e: unknown) {
-      showError(e instanceof Error ? e.message : 'Erreur réseau Paystack');
+      showError(e instanceof Error ? e.message : 'Erreur réseau paiement');
     } finally {
       setBusy(false);
     }
@@ -189,34 +230,40 @@ export default function SubscriptionPage() {
       showError('Choisissez un établissement et reconnectez-vous si besoin.');
       return;
     }
+    const err = validateIdentity();
+    if (err) {
+      showError(err);
+      return;
+    }
     setAssistBusy(true);
     setStatusKind('info');
-    setStatus('Préparation de l’assistance paiement…');
+    setStatus('Ouverture de l’assistance paiement…');
     try {
       const r = await createPaymentRequest({
         establishmentId: activeEstablishment.id,
         userId: member.user_id,
         planTier: targetTier,
         months,
-        paymentMethod: 'Assistance (WhatsApp / App)',
+        paymentMethod: `Assistance — ${prenom.trim()} ${nom.trim()}`.trim(),
         establishmentName: estName,
       });
       if (r.request?.reference_code) setPendingCode(r.request.reference_code);
       setStatusKind('ok');
       setStatus(
         r.request
-          ? `Demande ${r.request.reference_code} — ${targetPlan.label} · ${months} mois · ${r.request.amount_fcfa.toLocaleString('fr-FR')} F. Un conseiller vous aide à finaliser.`
-          : 'Assistance ouverte. Activation après confirmation du paiement.',
+          ? `Demande ${r.request.reference_code} — ${targetPlan.label} · ${months} mois · ${r.request.amount_fcfa.toLocaleString('fr-FR')} F.`
+          : 'Assistance ouverte.',
       );
-      if (r.waUrl) {
-        window.open(r.waUrl, '_blank', 'noopener,noreferrer');
-      }
+      if (r.waUrl) window.open(r.waUrl, '_blank', 'noopener,noreferrer');
     } catch (e: unknown) {
       showError(e instanceof Error ? e.message : 'Impossible d’ouvrir l’assistance');
     } finally {
       setAssistBusy(false);
     }
   }
+
+  const inputCls =
+    'w-full rounded-xl border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-950 px-3 py-3 text-sm text-stone-900 dark:text-stone-100 min-h-[48px]';
 
   return (
     <div className="max-w-lg mx-auto space-y-5 pb-16">
@@ -232,13 +279,13 @@ export default function SubscriptionPage() {
           <Wallet className="text-amber-500" size={26} /> Abonnement
         </h1>
         <p className="text-sm text-stone-600 dark:text-stone-400 mt-1">
-          Votre forfait et le paiement sécurisé · {PLAN.currencyLabel}
+          Paiement sécurisé · activation automatique · {PLAN.currencyLabel}
         </p>
       </div>
 
       {pendingCode && (
         <div className="rounded-xl border border-amber-500/40 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-sm text-amber-900 dark:text-amber-100">
-          Demande en attente · code <strong>{pendingCode}</strong> — validation après paiement assisté.
+          Demande en attente · code <strong>{pendingCode}</strong>
         </div>
       )}
 
@@ -256,7 +303,6 @@ export default function SubscriptionPage() {
         </div>
       )}
 
-      {/* Forfait actuel */}
       <div className="rounded-2xl border-2 border-emerald-600/50 bg-emerald-50 dark:bg-emerald-950/30 p-4 space-y-2">
         <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
           <Crown size={14} /> Votre forfait actuel
@@ -270,21 +316,14 @@ export default function SubscriptionPage() {
               Limites : {formatPlanLimitsLine(current)}
               {onTrial ? ' (Pro pendant l’essai)' : ''}
             </p>
-            {onTrial && (
-              <p className="text-xs text-amber-800 dark:text-amber-200 mt-1">
-                Après l’essai : Essentiel {PLANS.starter.monthlyFcfa.toLocaleString('fr-FR')} F/mois, ou Pro{' '}
-                {PLANS.pro.monthlyFcfa.toLocaleString('fr-FR')} F/mois.
-              </p>
-            )}
           </>
         ) : (
           <p className="text-sm text-stone-600 dark:text-stone-400">Aucun établissement sélectionné.</p>
         )}
       </div>
 
-      {/* Choix forfait */}
       <div className="space-y-2">
-        <p className="text-sm font-semibold text-stone-800 dark:text-stone-200">Choisir un forfait</p>
+        <p className="text-sm font-semibold text-stone-800 dark:text-stone-200">1. Choisir un forfait</p>
         <div className="grid gap-2">
           {(Object.keys(PLANS) as PlanTier[]).map((id) => {
             const p = PLANS[id];
@@ -313,9 +352,8 @@ export default function SubscriptionPage() {
         </div>
       </div>
 
-      {/* Durée */}
       <div className="space-y-2">
-        <p className="text-sm font-semibold text-stone-800 dark:text-stone-200">Durée</p>
+        <p className="text-sm font-semibold text-stone-800 dark:text-stone-200">2. Durée</p>
         <div className="flex flex-wrap gap-2">
           {periods.map((p: { months: number; label: string }) => (
             <button
@@ -334,20 +372,48 @@ export default function SubscriptionPage() {
         </div>
       </div>
 
-      {/* Montant + paiement */}
       <div className="rounded-2xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900/60 p-4 space-y-4">
         <div className="flex items-center justify-between">
           <span className="text-sm text-stone-600 dark:text-stone-400">
-            À payer · {targetPlan.label} · {months} mois
+            3. Identité & paiement · {targetPlan.label} · {months} mois
           </span>
           <span className="text-xl font-bold text-amber-700 dark:text-amber-300">
             {amount.toLocaleString('fr-FR')} F
           </span>
         </div>
 
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-stone-600 dark:text-stone-400" htmlFor="pay-prenom">
+              Prénom *
+            </label>
+            <input
+              id="pay-prenom"
+              value={prenom}
+              onChange={(e) => setPrenom(e.target.value)}
+              className={inputCls}
+              autoComplete="given-name"
+              placeholder="Prénom"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-stone-600 dark:text-stone-400" htmlFor="pay-nom">
+              Nom *
+            </label>
+            <input
+              id="pay-nom"
+              value={nom}
+              onChange={(e) => setNom(e.target.value)}
+              className={inputCls}
+              autoComplete="family-name"
+              placeholder="Nom"
+            />
+          </div>
+        </div>
+
         <div className="space-y-1">
           <label className="text-xs font-medium text-stone-600 dark:text-stone-400" htmlFor="pay-email">
-            E-mail pour le reçu (obligatoire)
+            E-mail (reçu) *
           </label>
           <input
             id="pay-email"
@@ -356,12 +422,31 @@ export default function SubscriptionPage() {
             autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="ex. vous@email.com"
-            className="w-full rounded-xl border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-950 px-3 py-3 text-sm text-stone-900 dark:text-stone-100 min-h-[48px]"
+            placeholder="vous@email.com"
+            className={inputCls}
           />
         </div>
 
-        {/* UN SEUL bouton de paiement */}
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-stone-600 dark:text-stone-400" htmlFor="pay-phone">
+            Téléphone (optionnel)
+          </label>
+          <input
+            id="pay-phone"
+            type="tel"
+            inputMode="tel"
+            autoComplete="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="07XXXXXXXX"
+            className={inputCls}
+          />
+        </div>
+
+        <p className="text-xs text-stone-500 dark:text-stone-400">
+          Carte bancaire ou Mobile Money : saisis sur la page sécurisée Paystack après validation (nous ne stockons pas vos numéros de carte).
+        </p>
+
         <button
           type="button"
           disabled={busy || !activeEstablishment}
@@ -369,10 +454,11 @@ export default function SubscriptionPage() {
           onClick={() => void payPaystack()}
         >
           {busy ? <Loader2 className="animate-spin" size={20} /> : <CreditCard size={20} />}
-          {busy ? 'Connexion à Paystack…' : `Payer ${amount.toLocaleString('fr-FR')} F maintenant`}
+          {busy
+            ? 'Connexion au paiement…'
+            : `Valider et payer ${amount.toLocaleString('fr-FR')} F`}
         </button>
 
-        {/* Assistance — pas un 2e paiement concurrent */}
         <button
           type="button"
           disabled={assistBusy || !activeEstablishment}
@@ -385,23 +471,19 @@ export default function SubscriptionPage() {
 
         {!activeEstablishment && (
           <p className="text-xs text-amber-700 dark:text-amber-300">
-            Choisissez un établissement pour finaliser le paiement.
+            Choisissez un établissement pour finaliser.
           </p>
         )}
       </div>
 
       <div className="rounded-2xl border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-900/40 p-4 text-xs text-stone-600 dark:text-stone-400 space-y-2">
         <p className="font-medium text-stone-800 dark:text-stone-300 flex items-center gap-2">
-          <CheckCircle2 size={14} className="text-amber-500" /> Comment ça marche
+          <CheckCircle2 size={14} className="text-amber-500" /> Après validation
         </p>
         <ul className="space-y-1 list-disc list-inside">
-          <li>
-            <strong>Payer maintenant</strong> : carte ou Mobile Money via Paystack — activation automatique.
-          </li>
-          <li>
-            <strong>Assistance</strong> : un message WhatsApp / suivi app pour vous aider à payer (validation manuelle).
-          </li>
-          <li>Le montant affiché = forfait choisi × durée.</li>
+          <li>Vous renseignez nom, prénom et e-mail ici.</li>
+          <li>Paystack gère carte / Mobile Money de façon sécurisée.</li>
+          <li>Dès confirmation, l’abonnement est accordé automatiquement à votre établissement.</li>
         </ul>
       </div>
     </div>
