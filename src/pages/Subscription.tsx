@@ -21,10 +21,6 @@ export default function SubscriptionPage() {
   const [statusKind, setStatusKind] = useState<'info' | 'error' | 'ok'>('info');
   const [pendingCode, setPendingCode] = useState<string | null>(null);
 
-  const sessionEmail =
-    (session as { user?: { email?: string } } | null)?.user?.email ||
-    (member as { email?: string } | null)?.email ||
-    '';
   const sessionName =
     (member as { full_name?: string; name?: string } | null)?.full_name ||
     (member as { name?: string } | null)?.name ||
@@ -36,7 +32,7 @@ export default function SubscriptionPage() {
   const nameParts = String(sessionName || '').trim().split(/\s+/).filter(Boolean);
   const [prenom, setPrenom] = useState(nameParts[0] || '');
   const [nom, setNom] = useState(nameParts.length > 1 ? nameParts.slice(1).join(' ') : '');
-  const [email, setEmail] = useState(sessionEmail.includes('@') ? sessionEmail : '');
+  const [email, setEmail] = useState('');
   const [phone, setPhone] = useState(
     String((member as { phone?: string } | null)?.phone || '').replace(/\D/g, '') || '',
   );
