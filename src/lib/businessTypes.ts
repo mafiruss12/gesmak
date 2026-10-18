@@ -71,7 +71,7 @@ export const MENU_BY_TYPE: Record<BusinessType, string[]> = {
     '/purchases', '/suppliers', '/customers', '/point-manuel', '/documents',
     '/expenses', '/mes-employes', '/calendar', '/daily-report', '/cloture', '/patron',
     '/statistics', '/reports', '/accounting', '/ai', '/ai-train', '/chat',
-    '/notifications', '/settings',
+    '/notifications', '/subscription', '/settings',
   ],
   restaurant: [
     '/dashboard', '/tables', '/orders', '/kitchen', '/menu-carte', '/reservations',
@@ -79,20 +79,20 @@ export const MENU_BY_TYPE: Record<BusinessType, string[]> = {
     '/inventory', '/inventory/scan', '/purchases', '/customers',
     '/expenses', '/mes-employes', '/calendar', '/daily-report', '/cloture',
     '/statistics', '/reports', '/accounting', '/ai', '/chat',
-    '/notifications', '/settings', '/guide',
+    '/notifications', '/subscription', '/settings', '/guide',
   ],
   depot: [
     '/dashboard', '/depot/clients', '/depot/deliveries', '/depot/tours',
     '/depot/creances', '/depot/tracking', '/depot/consignes', '/depot/prices',
     '/inventory', '/inventory/scan', '/purchases', '/suppliers',
     '/expenses', '/mes-employes', '/daily-report', '/statistics', '/reports', '/accounting',
-    '/ai', '/chat', '/notifications', '/settings', '/guide',
+    '/ai', '/chat', '/notifications', '/subscription', '/settings', '/guide',
   ],
   location_event: [
     '/dashboard', '/rent/equipment', '/rent/clients', '/rent/orders',
     '/rent/movements', '/rent/payments', '/rent/calendar', '/rent/packs',
     '/rent/invoices', '/guide', '/mes-employes', '/daily-report', '/cloture',
-    '/ai', '/ai-train', '/chat', '/notifications', '/settings',
+    '/ai', '/ai-train', '/chat', '/notifications', '/subscription', '/settings',
   ],
   complexe: [
     '/hotel', '/hotel/rooms', '/hotel/reservations', '/hotel/guests',
@@ -102,7 +102,7 @@ export const MENU_BY_TYPE: Record<BusinessType, string[]> = {
     '/inventory', '/inventory/scan', '/guide', '/menu-qr', '/purchases', '/customers',
     '/expenses', '/mes-employes', '/calendar', '/daily-report', '/cloture',
     '/statistics', '/reports', '/accounting', '/ai', '/chat',
-    '/notifications', '/settings',
+    '/notifications', '/subscription', '/settings',
   ],
 };
 
@@ -119,7 +119,7 @@ const SERVICE_TO_MENU_TYPE: Record<string, BusinessType> = {
 const COMPLEXE_CORE_ROUTES = [
   '/dashboard', '/daily-report', '/expenses', '/mes-employes', '/calendar',
   '/statistics', '/reports', '/accounting', '/ai', '/chat', '/notifications',
-  '/settings', '/guide', '/customers', '/purchases', '/inventory', '/inventory/scan', '/pos',
+  '/subscription', '/settings', '/guide', '/customers', '/purchases', '/inventory', '/inventory/scan', '/pos',
 ];
 
 const HOTEL_ROUTES = [
