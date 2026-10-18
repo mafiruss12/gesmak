@@ -46,6 +46,8 @@ export async function onRequest(context: { request: Request; env: Record<string,
         reference,
         callback_url,
         channels: ['card', 'mobile_money'],
+        first_name: String(metaObj.customer_first_name || metaObj.first_name || '').slice(0, 80) || undefined,
+        last_name: String(metaObj.customer_last_name || metaObj.last_name || '').slice(0, 80) || undefined,
         metadata: {
           custom_fields: [
             { display_name: 'Description', variable_name: 'description', value: description },
