@@ -1,25 +1,29 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-/**
- * POST /api/paystack/init
- * Body: { amount, email, reference?, description?, callback_url?, metadata? }
- * Env: PAYSTACK_SECRET_KEY (jamais côté client)
- * Montant en FCFA (XOF) — converti en subunit (* 100) pour Paystack
- */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const secret = process.env.PAYSTACK_SECRET_KEY || process.env.PAYSTACK_SECRET;
   if (!secret) {
     return res.status(503).json({
       error: 'Paystack non configuré',
-      hint: 'Ajoutez PAYSTACK_SECRET_KEY dans Vercel → Settings → Environment Variables',
+      hint: 'Ajoutez PAYSTACK_SECRET_KEY dans Vercel',
     });
   }
 
-  const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body || {};
+  let body: Record<string, unknown> = {};
+  try {
+    body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+  } catch {
+    return res.status(400).json({ error: 'JSON invalide' });
+  }
+
   const amountFcfa = Math.round(Number(body.amount) || 0);
-  const email = String(body.email || body.customerEmail || 'client@stock-manager.local').trim();
+  const email = String(body.email || body.customerEmail || '').trim();
   const reference = String(body.reference || body.transactionId || `SM-${Date.now()}`).slice(0, 50);
   const description = String(body.description || 'Abonnement Stock Manager AI').slice(0, 200);
   const baseUrl =
@@ -30,8 +34,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (amountFcfa < 100) return res.status(400).json({ error: 'Montant minimum 100 XOF' });
   if (!email.includes('@')) return res.status(400).json({ error: 'Email client requis pour Paystack' });
 
-  // XOF: Paystack attend le montant en subunit (centimes) → * 100
   const amount = amountFcfa * 100;
+  const metaObj = (typeof body.metadata === 'object' && body.metadata) ? (body.metadata as Record<string, unknown>) : {};
+  const customMeta = String(
+    metaObj.custom_meta ||
+      `${metaObj.establishment_id || ''}|${metaObj.months || 1}|${metaObj.user_id || ''}|${metaObj.plan_tier || 'starter'}`
+  );
 
   try {
     const r = await fetch('https://api.paystack.co/transaction/initialize', {
@@ -51,8 +59,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           custom_fields: [
             { display_name: 'Description', variable_name: 'description', value: description },
             { display_name: 'App', variable_name: 'app', value: 'stock-manager-ai' },
+            { display_name: 'Meta', variable_name: 'custom_meta', value: customMeta },
           ],
-          ...(typeof body.metadata === 'object' && body.metadata ? body.metadata : {}),
+          custom_meta: customMeta,
+          establishment_id: metaObj.establishment_id || null,
+          plan_tier: metaObj.plan_tier || 'starter',
+          months: metaObj.months || 1,
+          user_id: metaObj.user_id || null,
         },
       }),
     });
@@ -70,7 +83,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       reference: data.data?.reference || reference,
       amount_fcfa: amountFcfa,
     });
-  } catch (e: any) {
-    return res.status(500).json({ error: e?.message || 'Erreur réseau Paystack' });
+  } catch (e: unknown) {
+    return res.status(500).json({ error: e instanceof Error ? e.message : 'Erreur réseau Paystack' });
   }
 }
