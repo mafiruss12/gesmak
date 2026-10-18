@@ -344,7 +344,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       if (item.to === '/admin') return member.role === 'super_admin';
 
       // Filtre métier : uniquement les routes du type d'établissement
-      const alwaysOn = item.to === '/daily-report' || item.to === '/dashboard' || item.to === '/settings';
+      const alwaysOn = item.to === '/daily-report' || item.to === '/dashboard' || item.to === '/settings' || item.to === '/subscription' || item.to === '/notifications' || item.to === '/chat';
       if (!alwaysOn && !allowedRoutes.has(item.to)) return false;
 
       // Limites de palier (Essentiel / Pro / Business)
