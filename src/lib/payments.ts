@@ -133,8 +133,8 @@ export async function initPaystackCheckout(opts: {
       return { error: data?.error || data?.message || 'Impossible d’ouvrir Paystack' };
     }
     return { authorization_url: data.authorization_url, reference: data.reference };
-  } catch (e: any) {
-    return { error: e?.message || 'Erreur réseau Paystack' };
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : 'Erreur réseau Paystack' };
   }
 }
 
@@ -153,7 +153,7 @@ export async function verifyPaystackPayment(reference: string): Promise<{
       status: data?.status,
       error: data?.error,
     };
-  } catch (e: any) {
-    return { ok: false, error: e?.message || 'Erreur vérification' };
+  } catch (e: unknown) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Erreur vérification' };
   }
 }
