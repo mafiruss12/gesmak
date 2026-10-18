@@ -56,12 +56,7 @@ export default function SubscriptionPage() {
   const targetTier = selectedTier || (current?.id as PlanTier) || 'starter';
   const targetPlan = PLANS[targetTier];
   const amount = useMemo(() => priceForPlanMonths(targetTier, months), [targetTier, months]);
-
-  useEffect(() => {
-    if (sessionEmail.includes('@') && !email) setEmail(sessionEmail);
-  }, [sessionEmail]);
-
-  useEffect(() => {
+useEffect(() => {
     if (!activeEstablishment?.id) return;
     void listMyPendingRequests(activeEstablishment.id).then((rows) => {
       if (rows[0]?.reference_code) setPendingCode(rows[0].reference_code);
