@@ -1,37 +1,35 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { json, env, readBody, noContent } from '../_lib/http';
 
-/**
- * POST /api/paystack/init
- * Body: { amount, email, reference?, description?, callback_url?, metadata? }
- * Env: PAYSTACK_SECRET_KEY (jamais côté client)
- * Montant en FCFA (XOF) — converti en subunit (* 100) pour Paystack
- */
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+const SITE = 'https://stock-manager-ai.pages.dev';
 
-  const secret = process.env.PAYSTACK_SECRET_KEY || process.env.PAYSTACK_SECRET;
+export async function onRequest(context: { request: Request; env: Record<string, string | undefined> }) {
+  const { request } = context;
+  if (request.method === 'OPTIONS') return noContent();
+  if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
+
+  const secret = env(context, 'PAYSTACK_SECRET_KEY') || env(context, 'PAYSTACK_SECRET');
   if (!secret) {
-    return res.status(503).json({
-      error: 'Paystack non configuré',
-      hint: 'Ajoutez PAYSTACK_SECRET_KEY dans Vercel → Settings → Environment Variables',
-    });
+    return json({
+      error: 'Paystack non configure',
+      hint: 'Ajoutez PAYSTACK_SECRET_KEY dans Cloudflare Pages Environment variables',
+    }, 503);
   }
 
-  const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body || {};
+  const body = await readBody(request);
   const amountFcfa = Math.round(Number(body.amount) || 0);
-  const email = String(body.email || body.customerEmail || 'client@stock-manager.local').trim();
+  const email = String(body.email || body.customerEmail || '').trim();
   const reference = String(body.reference || body.transactionId || `SM-${Date.now()}`).slice(0, 50);
   const description = String(body.description || 'Abonnement Stock Manager AI').slice(0, 200);
-  const baseUrl =
-    process.env.APP_URL ||
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://stock-manager-ktp.vercel.app');
-  const callback_url = String(body.callback_url || body.returnUrl || `${baseUrl}/subscription?paystack=1`);
+  const callback_url = String(body.callback_url || body.returnUrl || `${SITE}/subscription?paystack=1`);
 
-  if (amountFcfa < 100) return res.status(400).json({ error: 'Montant minimum 100 XOF' });
-  if (!email.includes('@')) return res.status(400).json({ error: 'Email client requis pour Paystack' });
+  if (amountFcfa < 100) return json({ error: 'Montant minimum 100 XOF' }, 400);
+  if (!email.includes('@')) return json({ error: 'Email client requis pour Paystack' }, 400);
 
-  // XOF: Paystack attend le montant en subunit (centimes) → * 100
-  const amount = amountFcfa * 100;
+  const metaObj = (typeof body.metadata === 'object' && body.metadata) ? (body.metadata as Record<string, unknown>) : {};
+  const customMeta = String(
+    metaObj.custom_meta ||
+      `${metaObj.establishment_id || ''}|${metaObj.months || 1}|${metaObj.user_id || ''}|${metaObj.plan_tier || 'starter'}`
+  );
 
   try {
     const r = await fetch('https://api.paystack.co/transaction/initialize', {
@@ -42,7 +40,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
       body: JSON.stringify({
         email,
-        amount,
+        amount: amountFcfa * 100,
         currency: 'XOF',
         reference,
         callback_url,
@@ -51,26 +49,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           custom_fields: [
             { display_name: 'Description', variable_name: 'description', value: description },
             { display_name: 'App', variable_name: 'app', value: 'stock-manager-ai' },
+            { display_name: 'Meta', variable_name: 'custom_meta', value: customMeta },
           ],
-          ...(typeof body.metadata === 'object' && body.metadata ? body.metadata : {}),
+          custom_meta: customMeta,
+          establishment_id: metaObj.establishment_id || null,
+          plan_tier: metaObj.plan_tier || 'starter',
+          months: metaObj.months || 1,
+          user_id: metaObj.user_id || null,
         },
       }),
     });
-    const data = await r.json().catch(() => ({}));
-    if (!r.ok || !data?.status) {
-      return res.status(400).json({
-        error: data?.message || 'Échec initialisation Paystack',
-        details: data,
-      });
+    const data = (await r.json().catch(() => ({}))) as Record<string, unknown>;
+    const status = data.status;
+    const dataObj = data.data as Record<string, unknown> | undefined;
+    if (!r.ok || !status) {
+      return json({ error: (data.message as string) || 'Echec initialisation Paystack', details: data }, 400);
     }
-    return res.status(200).json({
+    return json({
       ok: true,
-      authorization_url: data.data?.authorization_url,
-      access_code: data.data?.access_code,
-      reference: data.data?.reference || reference,
+      authorization_url: dataObj?.authorization_url,
+      access_code: dataObj?.access_code,
+      reference: dataObj?.reference || reference,
       amount_fcfa: amountFcfa,
     });
-  } catch (e: any) {
-    return res.status(500).json({ error: e?.message || 'Erreur réseau Paystack' });
+  } catch (e: unknown) {
+    return json({ error: e instanceof Error ? e.message : 'Erreur reseau Paystack' }, 500);
   }
 }
