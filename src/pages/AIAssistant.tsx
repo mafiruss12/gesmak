@@ -26,6 +26,7 @@ interface ChatTurn {
   text: string;
   escalate?: boolean;
   imageUrl?: string;
+  videoUrl?: string;
 }
 
 function buildReply(
@@ -123,7 +124,7 @@ export default function AIAssistant() {
   const [thinking, setThinking] = useState(false);
   const [knowledge, setKnowledge] = useState<AiKnowledge[]>([]);
   const [modelId, setModelId] = useState('gemini-2.0-flash');
-  const [mode, setMode] = useState<'chat' | 'image' | 'file'>('chat');
+  const [mode, setMode] = useState<'chat' | 'image' | 'video' | 'file'>('chat');
   const [lastError, setLastError] = useState('');
 
   const endRef = useRef<HTMLDivElement>(null);
@@ -238,7 +239,7 @@ export default function AIAssistant() {
     })();
   }, [member]);
 
-  async function callRemoteAi(prompt: string, forceMode?: 'chat' | 'image' | 'file') {
+  async function callRemoteAi(prompt: string, forceMode?: 'chat' | 'image' | 'video' | 'file') {
     const m = forceMode || mode;
     const mod = modelById(modelId);
     const provider = mod?.provider || 'gemini';
@@ -259,7 +260,7 @@ export default function AIAssistant() {
     if (!res.ok) {
       throw new Error(j.error || `Erreur IA (${res.status})`);
     }
-    return j as { text?: string; image_url?: string; provider?: string; model?: string };
+    return j as { text?: string; image_url?: string; video_url?: string; provider?: string; model?: string };
   }
 
   async function ask() {
@@ -281,6 +282,23 @@ export default function AIAssistant() {
             role: 'assistant',
             text: j.text || 'Image générée.',
             imageUrl: j.image_url,
+          },
+        ]);
+        setThinking(false);
+        setTimeout(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+        return;
+      }
+
+      // Mode vidéo
+      if (mode === 'video' || modelId === 'pollinations-video') {
+        const j = await callRemoteAi(q, 'video');
+        setTurns((t) => [
+          ...t,
+          {
+            id: `a-${Date.now()}`,
+            role: 'assistant',
+            text: j.text || 'Vidéo générée (peut prendre 15–60 s à charger).',
+            videoUrl: j.video_url,
           },
         ]);
         setThinking(false);
@@ -419,8 +437,9 @@ export default function AIAssistant() {
             onChange={(e) => {
               setModelId(e.target.value);
               const m = modelById(e.target.value);
-              if (m?.caps.includes('image') && !m.caps.includes('chat')) setMode('image');
-              else if (mode === 'image' && m && !m.caps.includes('image')) setMode('chat');
+              if (m?.caps.includes('video') && !m.caps.includes('chat')) setMode('video');
+              else if (m?.caps.includes('image') && !m.caps.includes('chat')) setMode('image');
+              else if ((mode === 'image' || mode === 'video') && m && !m.caps.includes(mode)) setMode('chat');
             }}
             className="input-field text-sm flex-1 min-w-[200px]"
           >
@@ -459,12 +478,16 @@ export default function AIAssistant() {
           >
             <FileDown size={12} /> Fichier
           </button>
-          <span
-            className="text-xs px-3 py-1.5 rounded-full bg-stone-900 text-stone-500 flex items-center gap-1"
-            title="La vidéo IA gratuite n'est pas stable — non activée"
+          <button
+            type="button"
+            onClick={() => {
+              setMode('video');
+              setModelId('pollinations-video');
+            }}
+            className={`text-xs px-3 py-1.5 rounded-full flex items-center gap-1 ${mode === 'video' ? 'bg-primary-600 text-white' : 'bg-stone-800 text-stone-300'}`}
           >
-            <Video size={12} /> Vidéo (bientôt)
-          </span>
+            <Video size={12} /> Vidéo
+          </button>
         </div>
         {lastError ? (
           <p className="text-xs text-amber-400">Dernière erreur API : {lastError}</p>
@@ -542,8 +565,27 @@ export default function AIAssistant() {
                       src={t.imageUrl}
                       alt="Générée"
                       className="rounded-xl max-h-64 object-cover border border-stone-700"
+                      loading="lazy"
                     />
                   </a>
+                ) : null}
+                {t.videoUrl ? (
+                  <div className="mt-2 space-y-2">
+                    <video
+                      src={t.videoUrl}
+                      controls
+                      playsInline
+                      className="rounded-xl max-h-72 w-full bg-black border border-stone-700"
+                    />
+                    <a
+                      href={t.videoUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs text-primary-400 underline"
+                    >
+                      Ouvrir la vidéo
+                    </a>
+                  </div>
                 ) : null}
                 {t.role === 'assistant' && t.escalate && (
                   <a
@@ -591,9 +633,11 @@ export default function AIAssistant() {
             placeholder={
               mode === 'image'
                 ? 'Décrivez l’image à générer…'
-                : mode === 'file'
-                  ? 'Ex. Rapport stock bas en texte…'
-                  : 'Ex. Comment ajouter une boisson ?'
+                : mode === 'video'
+                  ? 'Décrivez la vidéo (ex. maquis animé, bières sur comptoir)…'
+                  : mode === 'file'
+                    ? 'Ex. Rapport stock bas en texte…'
+                    : 'Ex. Comment ajouter une boisson ?'
             }
             className="input-field flex-1"
           />
