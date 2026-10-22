@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Sparkles, TrendingUp, AlertTriangle, Lightbulb, Brain, Target, Zap,
-  Send, Loader2, Bot, User,
+  Send, Loader2, Bot, User, ImagePlus, FileDown, Video,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
@@ -10,7 +10,7 @@ import { formatFCFA, daysAgoISO } from '@/lib/format';
 import { EmptyState } from '@/components/ui';
 import { loadKnowledge, matchTrainedAnswer, getPersona, type AiKnowledge } from '@/lib/aiTrainer';
 import { SUPPORT_EMAIL, supportMailto } from '@/lib/supportContact';
-
+import { AI_MODELS, modelById, type AiModelOption } from '@/lib/aiProviders';
 
 interface AIInsight {
   type: 'prediction' | 'alert' | 'recommendation' | 'opportunity';
@@ -25,6 +25,7 @@ interface ChatTurn {
   role: 'user' | 'assistant';
   text: string;
   escalate?: boolean;
+  imageUrl?: string;
 }
 
 function buildReply(
@@ -39,15 +40,11 @@ function buildReply(
   },
   knowledge: AiKnowledge[] = [],
 ): string {
-  // 1) Réponses entraînées par l'admin / propriétaire
   const trained = matchTrainedAnswer(question, knowledge);
-  if (trained) {
-    return trained.answer;
-  }
+  if (trained) return trained.answer;
 
   const q = question.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
-  // Aide navigation / tâches
   if (/caisse|vente|pos|encaiss/.test(q)) {
     return "Pour encaisser : menu **Caisse (POS)** → choisissez les produits → validez le paiement (espèces / mobile money). Le stock est déduit automatiquement.";
   }
@@ -58,54 +55,46 @@ function buildReply(
     return "Enregistrez une dépense dans **Dépenses** (catégorie, montant, mode de paiement). Elles apparaissent dans la Comptabilité et la Clôture du jour.";
   }
   if (/cloture|clôture|rapport.?jour|fermer.?caisse/.test(q)) {
-    return "Allez dans **Clôture du jour** pour valider les ventes, dépenses, caisse et mobile money de la journée. Vous pouvez verrouiller le rapport une fois terminé.";
+    return "Allez dans **Clôture du jour** / **Rapport du jour** pour valider les ventes, dépenses et caisse de la journée.";
   }
   if (/employe|employé|personnel|planning|pointage/.test(q)) {
-    return "Section **Employés** pour la liste du personnel, et **Planning** pour le calendrier / suivi. Le propriétaire peut créer des accès dans **Administration**.";
+    return "Section **Mes employés** pour créer les accès (gérant, caissier). Le propriétaire contrôle les droits stock.";
   }
-  if (/chat|message|discut/.test(q)) {
-    return "Ouvrez **Chat interne** pour écrire à votre équipe. Chaque message notifie les autres membres (voir **Notifications** → « Ouvrir le chat »).";
-  }
-  if (/commande|cuisine|table/.test(q)) {
-    return "Créez une commande dans **Commandes** (table ou à emporter). La **Cuisine / Bar** suit le statut des articles. Les **Tables** indiquent libre / occupée.";
-  }
-  if (/fournisseur|achat|approvisionnement/.test(q)) {
-    return "Ajoutez un **Fournisseur**, puis enregistrez un **Achat** (quantité + coût). Pensez à mettre à jour l'inventaire après réception.";
-  }
-  if (/stat|chiffre|ca\b|benefice|bénéfice|compta/.test(q)) {
-    const profit = ctx.salesTotal - ctx.expensesTotal;
-    return `Sur 30 jours : ventes **${formatFCFA(ctx.salesTotal)}**, dépenses **${formatFCFA(ctx.expensesTotal)}**, solde estimé **${formatFCFA(profit)}**. Détails dans **Statistiques** et **Comptabilité**.`;
-  }
-  if (/stock.?bas|rupture|manque/.test(q) || /alerte/.test(q)) {
-    if (ctx.lowStock.length === 0) return "Aucune alerte stock pour le moment. Tous les produits sont au-dessus du seuil minimum.";
-    return `Attention : ${ctx.lowStock.length} produit(s) sous le seuil : ${ctx.lowStock.slice(0, 5).map((p) => p.name).join(', ')}. Réapprovisionnez via **Achats** ou ajustez l'**Inventaire**.`;
-  }
-  if (/meilleur|top|star|populaire/.test(q)) {
-    if (!ctx.topProduct) return "Pas encore assez de ventes pour identifier un produit star.";
-    return `Produit le plus rentable (30 j) : **${ctx.topProduct.name}** avec **${formatFCFA(ctx.topProduct.revenue)}**. Gardez un stock confortable.`;
-  }
-  if (/aide|help|comment|que.?faire|guide/.test(q)) {
-    return "Je peux vous guider sur : caisse, inventaire, dépenses, clôture, employés, chat, commandes, tables, fournisseurs, stats et alertes stock. Posez une question précise, ex. « Comment faire la clôture ? »";
+  if (/support|aide|kevin|humain|contacter/.test(q)) {
+    return `__ESCALATE__Je peux vous orienter vers le support humain Kevin Tech Pro.`;
   }
 
-  if (/support|assistance|contacter|contact|humain|ecrire|écrire|\bemail\b|\bmail\b|kevin\s*tech|pas\s*resolu|pas\s*résolu|marche\s*pas|ne\s*fonctionne/.test(q)) {
-    return `__ESCALATE__L’assistant n’a pas pu résoudre ce point automatiquement.
-
-Écrivez à **Kevin Tech Pro** : **${SUPPORT_EMAIL}**
-Précisez : nom de l’établissement, page concernée, et le problème.
-
-Utilisez le bouton « Écrire au support » sous ce message.`;
-  }
-
-  // Réponse générale — sans publier l’email
   return `Voici un résumé de votre établissement (30 j) :
 • Ventes : ${formatFCFA(ctx.salesTotal)}
 • Dépenses : ${formatFCFA(ctx.expensesTotal)}
 • Produits en alerte stock : ${ctx.lowStock.length}
 • ${ctx.topProduct ? `Top produit : ${ctx.topProduct.name}` : 'Pas encore de top produit'}
 
-Si ce n’est pas la bonne réponse, reformulez — ou écrivez **contacter le support**.`;
+Si ce n’est pas la bonne réponse, reformulez — ou choisissez un modèle IA (Gemini / Groq) ci-dessus.`;
+}
 
+function downloadTextFile(filename: string, content: string) {
+  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function buildSystemPrompt(persona: string, ctx: NonNullable<Parameters<typeof buildReply>[1]>) {
+  return `${persona}
+
+Tu aides un gérant/propriétaire de maquis ou commerce en Côte d'Ivoire (FCFA).
+Contexte 30 jours :
+- Ventes : ${ctx.salesTotal} FCFA
+- Dépenses : ${ctx.expensesTotal} FCFA
+- Alertes stock : ${ctx.lowStock.map((p) => p.name).slice(0, 8).join(', ') || 'aucune'}
+- Top produit : ${ctx.topProduct?.name || 'n/a'}
+
+Réponds en français simple, concret, actions menu (Caisse, Inventaire, Rapport du jour).
+Ne invente pas de chiffres hors contexte. Si tu génères un tableau, utilise du texte clair.`;
 }
 
 export default function AIAssistant() {
@@ -127,14 +116,18 @@ export default function AIAssistant() {
     {
       id: 'welcome',
       role: 'assistant',
-      text: 'Bonjour ! Je suis Stock AI Assistant (Kevin Tech Pro). Posez vos questions sur la caisse, le stock, les prévisions, les dépenses, la clôture, le personnel…',
+      text: 'Bonjour ! Je suis Stock AI Assistant (Kevin Tech Pro). Choisissez un modèle IA, puis posez votre question. Vous pouvez aussi générer une image ou exporter un fichier.',
     },
   ]);
   const [input, setInput] = useState('');
   const [thinking, setThinking] = useState(false);
   const [knowledge, setKnowledge] = useState<AiKnowledge[]>([]);
+  const [modelId, setModelId] = useState('gemini-2.0-flash');
+  const [mode, setMode] = useState<'chat' | 'image' | 'file'>('chat');
+  const [lastError, setLastError] = useState('');
 
   const endRef = useRef<HTMLDivElement>(null);
+  const selected: AiModelOption | undefined = modelById(modelId);
 
   useEffect(() => {
     (async () => {
@@ -152,7 +145,8 @@ export default function AIAssistant() {
             return [{
               id: 'welcome',
               role: 'assistant',
-              text: persona.slice(0, 280) + (persona.length > 280 ? '…' : '') + '\n\nPosez votre question sur la caisse, le stock, le rapport du jour…',
+              text: persona.slice(0, 280) + (persona.length > 280 ? '…' : '') +
+                '\n\nModèles : Gemini, Groq, OpenRouter, images Pollinations. Posez votre question.',
             }];
           }
           return prev;
@@ -174,80 +168,51 @@ export default function AIAssistant() {
           .gte('created_at', start),
       ]);
 
-      const sales = (salesRes.data ?? []) as Sale[];
-      const products = (productsRes.data ?? []) as Product[];
-      const expensesTotal = (expensesRes.data ?? []).reduce((s, e) => s + Number(e.amount), 0);
-      const salesTotal = sales.reduce((s, x) => s + Number(x.total), 0);
-      const lowStock = products.filter((p) => Number(p.stock) <= Number(p.min_stock));
+      const sales = (salesRes.data || []) as Sale[];
+      const products = (productsRes.data || []) as Product[];
+      const expensesTotal = (expensesRes.data || []).reduce(
+        (s: number, e: { amount?: number }) => s + Number(e.amount || 0),
+        0,
+      );
+      const salesTotal = sales.reduce((s, x) => s + Number(x.total || 0), 0);
+      const lowStock = products.filter(
+        (p) => Number(p.stock_qty ?? p.qty ?? 0) <= Number(p.min_stock ?? p.seuil ?? 5),
+      );
 
-      const prodRevenue: Record<string, number> = {};
+      const byProduct: Record<string, number> = {};
       for (const s of sales) {
-        const pid = s.product_id ?? '';
-        prodRevenue[pid] = (prodRevenue[pid] ?? 0) + Number(s.total);
+        const id = String(s.product_id || '');
+        byProduct[id] = (byProduct[id] || 0) + Number(s.total || 0);
       }
-      const sortedProds = Object.entries(prodRevenue).sort((a, b) => b[1] - a[1]);
-      const best = sortedProds[0]
-        ? products.find((p) => p.id === sortedProds[0][0])
-        : undefined;
-      const topProduct = best
-        ? { name: best.name, revenue: sortedProds[0][1] }
-        : undefined;
-
-      setCtx({ sales, products, expensesTotal, salesTotal, lowStock, topProduct });
-
-      const newInsights: AIInsight[] = [];
-      const dailyMap: Record<string, number> = {};
-      for (const s of sales) {
-        const d = s.created_at.split('T')[0];
-        dailyMap[d] = (dailyMap[d] ?? 0) + Number(s.total);
+      let topProduct: { name: string; revenue: number } | undefined;
+      let best = 0;
+      for (const p of products) {
+        const rev = byProduct[String(p.id)] || 0;
+        if (rev > best) {
+          best = rev;
+          topProduct = { name: p.name, revenue: rev };
+        }
       }
-      const dailyValues = Object.values(dailyMap);
-      const avg7 =
-        dailyValues.slice(-7).reduce((a, b) => a + b, 0) /
-        Math.max(1, dailyValues.slice(-7).length);
-      const avg30 = dailyValues.reduce((a, b) => a + b, 0) / Math.max(1, dailyValues.length);
-      const trend = avg7 > avg30 * 1.1 ? 'hausse' : avg7 < avg30 * 0.9 ? 'baisse' : 'stable';
-      const prediction = Math.round(avg7 * 1.05);
-      setPredictedSales(prediction);
-
-      newInsights.push({
-        type: 'prediction',
-        title: 'Prédiction des ventes de demain',
-        message: `Basé sur 7 jours, estimation ~ ${formatFCFA(prediction)}. Tendance : ${trend}.`,
-        icon: TrendingUp,
-        color: 'success',
-      });
 
       const dayMap: Record<string, number> = {};
       for (const s of sales) {
-        const day = new Date(s.created_at).toLocaleDateString('fr-FR', { weekday: 'long' });
-        dayMap[day] = (dayMap[day] ?? 0) + Number(s.total);
+        const d = new Date(s.created_at).toLocaleDateString('fr-FR', { weekday: 'long' });
+        dayMap[d] = (dayMap[d] || 0) + Number(s.total || 0);
       }
-      const sortedDays = Object.entries(dayMap).sort((a, b) => b[1] - a[1]);
-      if (sortedDays.length > 0) {
-        setTopDay(sortedDays[0][0]);
-        newInsights.push({
-          type: 'opportunity',
-          title: 'Jour le plus rentable',
-          message: `${sortedDays[0][0]} : ${formatFCFA(sortedDays[0][1])}. Préparez stock et personnel ce jour-là.`,
-          icon: Target,
-          color: 'primary',
-        });
-      }
+      const topD = Object.entries(dayMap).sort((a, b) => b[1] - a[1])[0];
+      if (topD) setTopDay(topD[0]);
+      setPredictedSales(Math.round(salesTotal / 30));
 
-      if (lowStock.length > 0) {
+      const newInsights: AIInsight[] = [];
+      if (lowStock.length) {
         newInsights.push({
           type: 'alert',
-          title: `${lowStock.length} produit(s) en alerte stock`,
-          message: `${lowStock
-            .slice(0, 3)
-            .map((p) => p.name)
-            .join(', ')}${lowStock.length > 3 ? '…' : ''} — réapprovisionnez vite.`,
+          title: 'Stock bas',
+          message: `${lowStock.length} produit(s) sous le seuil (ex. ${lowStock[0].name}).`,
           icon: AlertTriangle,
           color: 'warning',
         });
       }
-
       if (topProduct) {
         newInsights.push({
           type: 'opportunity',
@@ -257,34 +222,144 @@ export default function AIAssistant() {
           color: 'primary',
         });
       }
-
       if (sales.length === 0) {
         newInsights.push({
           type: 'recommendation',
           title: 'Premiers pas',
-          message:
-            'Ajoutez des produits dans Inventaire, puis encaisser via la Caisse. Posez-moi une question ci-dessous pour un guide étape par étape.',
+          message: 'Ajoutez des produits dans Inventaire, puis encaisser via la Caisse.',
           icon: Lightbulb,
           color: 'warning',
         });
       }
 
+      setCtx({ sales, products, expensesTotal, salesTotal, lowStock, topProduct });
       setInsights(newInsights);
       setLoading(false);
     })();
   }, [member]);
 
+  async function callRemoteAi(prompt: string, forceMode?: 'chat' | 'image' | 'file') {
+    const m = forceMode || mode;
+    const mod = modelById(modelId);
+    const provider = mod?.provider || 'gemini';
+    const res = await fetch('/api/ai/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        prompt,
+        model: modelId,
+        provider: m === 'image' ? 'pollinations' : provider,
+        mode: m === 'file' ? 'chat' : m,
+        system: ctx ? buildSystemPrompt(getPersona(knowledge), ctx) : getPersona(knowledge),
+        temperature: 0.35,
+        maxOutputTokens: 2048,
+      }),
+    });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(j.error || `Erreur IA (${res.status})`);
+    }
+    return j as { text?: string; image_url?: string; provider?: string; model?: string };
+  }
+
   async function ask() {
     if (!input.trim() || !ctx) return;
     const q = input.trim();
     setInput('');
+    setLastError('');
     setTurns((t) => [...t, { id: `u-${Date.now()}`, role: 'user', text: q }]);
     setThinking(true);
-    await new Promise((r) => setTimeout(r, 350));
-    const raw = buildReply(q, ctx, knowledge);
-    const escalate = raw.startsWith('__ESCALATE__');
-    const reply = escalate ? raw.replace(/^__ESCALATE__/, '') : raw;
-    setTurns((t) => [...t, { id: `a-${Date.now()}`, role: 'assistant', text: reply, escalate }]);
+
+    try {
+      // Mode image
+      if (mode === 'image' || modelId === 'pollinations-image') {
+        const j = await callRemoteAi(q, 'image');
+        setTurns((t) => [
+          ...t,
+          {
+            id: `a-${Date.now()}`,
+            role: 'assistant',
+            text: j.text || 'Image générée.',
+            imageUrl: j.image_url,
+          },
+        ]);
+        setThinking(false);
+        setTimeout(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+        return;
+      }
+
+      // Mode fichier : demander un contenu structuré puis télécharger
+      if (mode === 'file') {
+        let content = '';
+        if (modelId === 'local-rules') {
+          content = [
+            'Stock Manager AI — Export',
+            `Date: ${new Date().toLocaleString('fr-FR')}`,
+            `Ventes 30j: ${ctx.salesTotal}`,
+            `Dépenses 30j: ${ctx.expensesTotal}`,
+            `Alertes: ${ctx.lowStock.map((p) => p.name).join(', ') || 'aucune'}`,
+            '',
+            `Demande: ${q}`,
+            '',
+            buildReply(q, ctx, knowledge),
+          ].join('\n');
+        } else {
+          const j = await callRemoteAi(
+            `Génère un fichier texte clair (rapport ou CSV simple) pour: ${q}`,
+            'file',
+          );
+          content = j.text || buildReply(q, ctx, knowledge);
+        }
+        const fname = `stock-ai-${Date.now()}.txt`;
+        downloadTextFile(fname, content);
+        setTurns((t) => [
+          ...t,
+          {
+            id: `a-${Date.now()}`,
+            role: 'assistant',
+            text: `Fichier **${fname}** téléchargé.\n\nAperçu :\n${content.slice(0, 800)}${content.length > 800 ? '…' : ''}`,
+          },
+        ]);
+        setThinking(false);
+        return;
+      }
+
+      // Chat local
+      if (modelId === 'local-rules') {
+        await new Promise((r) => setTimeout(r, 250));
+        const raw = buildReply(q, ctx, knowledge);
+        const escalate = raw.startsWith('__ESCALATE__');
+        const reply = escalate ? raw.replace(/^__ESCALATE__/, '') : raw;
+        setTurns((t) => [...t, { id: `a-${Date.now()}`, role: 'assistant', text: reply, escalate }]);
+        setThinking(false);
+        return;
+      }
+
+      // Chat distant (Gemini / Groq / OpenRouter)
+      const j = await callRemoteAi(q, 'chat');
+      const reply = (j.text || '').trim() || buildReply(q, ctx, knowledge);
+      setTurns((t) => [
+        ...t,
+        {
+          id: `a-${Date.now()}`,
+          role: 'assistant',
+          text: reply + (j.provider ? `\n\n_(${j.provider}${j.model ? ` · ${j.model}` : ''})_` : ''),
+        },
+      ]);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Erreur';
+      setLastError(msg);
+      // fallback local
+      const raw = buildReply(q, ctx, knowledge);
+      setTurns((t) => [
+        ...t,
+        {
+          id: `a-${Date.now()}`,
+          role: 'assistant',
+          text: `⚠️ IA distante indisponible (${msg}). Réponse locale :\n\n${raw.replace(/^__ESCALATE__/, '')}`,
+        },
+      ]);
+    }
     setThinking(false);
     setTimeout(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
   }
@@ -327,13 +402,74 @@ export default function AIAssistant() {
           <Sparkles className="text-primary-400" />
           <h1 className="text-2xl font-bold font-display text-stone-100">Stock AI Assistant</h1>
         </div>
-        {(member?.role === 'super_admin') && (
+        {(member?.role === 'super_admin' || member?.role === 'owner' || member?.role === 'proprietaire') && (
           <a href="/ai-train" className="text-sm text-primary-400 hover:underline">Former l&apos;IA</a>
         )}
       </div>
-      <p className="text-stone-400 text-sm mb-6">
-        Analyses automatiques + réponses que vous entraînez (Former l&apos;IA)
+      <p className="text-stone-400 text-sm mb-4">
+        Multi-modèles : Gemini, Groq, OpenRouter + images + export fichier
       </p>
+
+      {/* Sélecteurs */}
+      <div className="card mb-4 space-y-3">
+        <div className="flex flex-wrap gap-2 items-center">
+          <label className="text-xs text-stone-400 shrink-0">Modèle</label>
+          <select
+            value={modelId}
+            onChange={(e) => {
+              setModelId(e.target.value);
+              const m = modelById(e.target.value);
+              if (m?.caps.includes('image') && !m.caps.includes('chat')) setMode('image');
+              else if (mode === 'image' && m && !m.caps.includes('image')) setMode('chat');
+            }}
+            className="input-field text-sm flex-1 min-w-[200px]"
+          >
+            {AI_MODELS.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        {selected ? (
+          <p className="text-xs text-stone-500">{selected.description}</p>
+        ) : null}
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setMode('chat')}
+            className={`text-xs px-3 py-1.5 rounded-full ${mode === 'chat' ? 'bg-primary-600 text-white' : 'bg-stone-800 text-stone-300'}`}
+          >
+            Chat
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setMode('image');
+              setModelId('pollinations-image');
+            }}
+            className={`text-xs px-3 py-1.5 rounded-full flex items-center gap-1 ${mode === 'image' ? 'bg-primary-600 text-white' : 'bg-stone-800 text-stone-300'}`}
+          >
+            <ImagePlus size={12} /> Image
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode('file')}
+            className={`text-xs px-3 py-1.5 rounded-full flex items-center gap-1 ${mode === 'file' ? 'bg-primary-600 text-white' : 'bg-stone-800 text-stone-300'}`}
+          >
+            <FileDown size={12} /> Fichier
+          </button>
+          <span
+            className="text-xs px-3 py-1.5 rounded-full bg-stone-900 text-stone-500 flex items-center gap-1"
+            title="La vidéo IA gratuite n'est pas stable — non activée"
+          >
+            <Video size={12} /> Vidéo (bientôt)
+          </span>
+        </div>
+        {lastError ? (
+          <p className="text-xs text-amber-400">Dernière erreur API : {lastError}</p>
+        ) : null}
+      </div>
 
       <div className="card mb-6 bg-gradient-to-br from-primary-500/10 to-secondary-500/5 border-primary-500/20">
         <div className="flex items-center gap-4">
@@ -374,13 +510,13 @@ export default function AIAssistant() {
         })}
       </div>
 
-      {/* Chat d'aide */}
       <div className="card p-0 overflow-hidden">
         <div className="px-4 py-3 border-b border-stone-800 flex items-center gap-2">
           <Bot size={18} className="text-primary-400" />
-          <p className="font-semibold text-stone-100">Demander de l’aide</p>
+          <span className="text-sm font-medium text-stone-200">Assistant</span>
+          <span className="text-xs text-stone-500 ml-auto">{selected?.label || modelId}</span>
         </div>
-        <div className="p-4 space-y-3 max-h-80 overflow-y-auto">
+        <div className="p-4 space-y-3 max-h-[420px] overflow-y-auto">
           {turns.map((t) => (
             <div
               key={t.id}
@@ -399,6 +535,16 @@ export default function AIAssistant() {
                 }`}
               >
                 {t.text}
+                {t.imageUrl ? (
+                  <a href={t.imageUrl} target="_blank" rel="noreferrer" className="block mt-2">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={t.imageUrl}
+                      alt="Générée"
+                      className="rounded-xl max-h-64 object-cover border border-stone-700"
+                    />
+                  </a>
+                ) : null}
                 {t.role === 'assistant' && t.escalate && (
                   <a
                     href={supportMailto(
@@ -442,7 +588,13 @@ export default function AIAssistant() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && ask()}
-            placeholder="Ex. Comment ajouter une boisson ?"
+            placeholder={
+              mode === 'image'
+                ? 'Décrivez l’image à générer…'
+                : mode === 'file'
+                  ? 'Ex. Rapport stock bas en texte…'
+                  : 'Ex. Comment ajouter une boisson ?'
+            }
             className="input-field flex-1"
           />
           <button
