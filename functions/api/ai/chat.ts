@@ -2,6 +2,13 @@ import { json, env, readBody, noContent } from '../_lib/http';
 
 type Ctx = { request: Request; env: Record<string, string | undefined> };
 
+function imageUrl(prompt: string) {
+  return `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt.slice(0, 400))}?width=1024&height=1024&nologo=true&enhance=true`;
+}
+function videoUrl(prompt: string) {
+  return `https://gen.pollinations.ai/video/${encodeURIComponent(prompt.slice(0, 300))}`;
+}
+
 async function chatGemini(apiKey: string, body: Record<string, unknown>) {
   const model = String(body.model || 'gemini-2.0-flash');
   const parts: Array<Record<string, unknown>> = [];
@@ -79,13 +86,24 @@ export async function onRequest(context: Ctx) {
   const mode = String(body.mode || 'chat');
   const provider = String(body.provider || '').toLowerCase();
   const model = String(body.model || '');
+  const prompt = String(body.prompt || '').trim();
   const appUrl = env(context, 'APP_URL') || 'https://stock-manager-ktp.vercel.app';
 
   if (mode === 'image' || provider === 'pollinations' || model === 'pollinations-image') {
-    const prompt = String(body.prompt || '').trim();
     if (!prompt) return json({ error: 'prompt requis pour image' }, 400);
-    const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt.slice(0, 500))}?width=1024&height=1024&nologo=true`;
+    const url = imageUrl(prompt);
     return json({ ok: true, mode: 'image', provider: 'pollinations', image_url: url, text: `Image générée.\n${url}` });
+  }
+  if (mode === 'video' || model === 'pollinations-video') {
+    if (!prompt) return json({ error: 'prompt requis pour vidéo' }, 400);
+    const url = videoUrl(prompt);
+    return json({
+      ok: true,
+      mode: 'video',
+      provider: 'pollinations',
+      video_url: url,
+      text: `Vidéo en cours (15–60 s).\n${url}`,
+    });
   }
 
   if (!body.prompt && !body.image) return json({ error: 'prompt ou image requis' }, 400);
@@ -109,8 +127,7 @@ export async function onRequest(context: Ctx) {
     if (prov === 'groq') {
       const key = env(context, 'GROQ_API_KEY') || '';
       if (!key) return json({ error: 'GROQ_API_KEY manquant' }, 503);
-      const m = model || 'llama-3.3-70b-versatile';
-      const out = await chatOpenAICompat('https://api.groq.com/openai/v1', key, m, body, 'groq', appUrl);
+      const out = await chatOpenAICompat('https://api.groq.com/openai/v1', key, model || 'llama-3.3-70b-versatile', body, 'groq', appUrl);
       if ('error' in out && out.error) return json(out, out.status || 502);
       return json({ ok: true, mode: 'chat', ...out });
     }
