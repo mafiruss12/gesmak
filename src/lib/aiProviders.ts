@@ -1,5 +1,5 @@
 /** Catalogue modèles IA — Stock Manager AI */
-export type AiCapability = 'chat' | 'vision' | 'image' | 'file';
+export type AiCapability = 'chat' | 'vision' | 'image' | 'video' | 'file';
 
 export type AiProviderId = 'gemini' | 'groq' | 'openrouter' | 'pollinations' | 'local';
 
@@ -9,7 +9,6 @@ export interface AiModelOption {
   label: string;
   description: string;
   caps: AiCapability[];
-  /** true = pas de clé serveur obligatoire (ex. règles locales / Pollinations image) */
   freeNoKey?: boolean;
 }
 
@@ -44,13 +43,6 @@ export const AI_MODELS: AiModelOption[] = [
     caps: ['chat', 'file'],
   },
   {
-    id: 'openai/gpt-oss-120b',
-    provider: 'groq',
-    label: 'Groq GPT-OSS 120B',
-    description: 'Alternative Groq si dispo',
-    caps: ['chat', 'file'],
-  },
-  {
     id: 'openrouter/auto',
     provider: 'openrouter',
     label: 'OpenRouter (free)',
@@ -70,6 +62,14 @@ export const AI_MODELS: AiModelOption[] = [
     label: 'Images (Pollinations)',
     description: 'Génération d’images gratuite',
     caps: ['image'],
+    freeNoKey: true,
+  },
+  {
+    id: 'pollinations-video',
+    provider: 'pollinations',
+    label: 'Vidéo (Pollinations)',
+    description: 'Génération vidéo courte (15–60 s)',
+    caps: ['video'],
     freeNoKey: true,
   },
 ];
