@@ -176,7 +176,7 @@ export default function AIAssistant() {
       );
       const salesTotal = sales.reduce((s, x) => s + Number(x.total || 0), 0);
       const lowStock = products.filter(
-        (p) => Number(p.stock_qty ?? p.qty ?? 0) <= Number(p.min_stock ?? p.seuil ?? 5),
+        (p) => Number(p.stock ?? 0) <= Number(p.min_stock ?? 5),
       );
 
       const byProduct: Record<string, number> = {};
