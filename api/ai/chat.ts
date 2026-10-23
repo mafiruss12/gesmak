@@ -71,7 +71,7 @@ async function resolveMedia(url: string, expect: 'image' | 'video') {
 }
 
 async function chatGemini(apiKey: string, body: Body) {
-  const model = String(body.model || 'gemini-2.0-flash').replace(/^gemini\//, '');
+  const model = String(body.model || 'gemini-3.5-flash-lite').replace(/^gemini\//, '');
   const parts: Array<Record<string, unknown>> = [];
   const system = String(body.system || '').slice(0, 4000);
   const prompt = String(body.prompt || '').slice(0, 12000);
@@ -258,7 +258,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (prov === 'groq') {
       const key = process.env.GROQ_API_KEY || '';
       if (!key) return res.status(503).json({ error: 'GROQ_API_KEY manquant (secret Vercel)' });
-      const m = model && !model.includes('/') ? model : 'llama-3.3-70b-versatile';
+      const m = model && !model.includes('/') ? model : 'llama-3.1-8b-instant';
       const out = await chatOpenAICompat('https://api.groq.com/openai/v1', key, m, body, 'groq');
       if ('error' in out && out.error) return res.status(out.status || 502).json(out);
       return res.status(200).json({ ok: true, mode: 'chat', ...out });
@@ -266,8 +266,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (prov === 'openrouter') {
       const key = process.env.OPENROUTER_API_KEY || '';
       if (!key) return res.status(503).json({ error: 'OPENROUTER_API_KEY manquant (secret Vercel)' });
-      let m = model || 'meta-llama/llama-3.3-70b-instruct:free';
-      if (m === 'openrouter/auto') m = 'meta-llama/llama-3.3-70b-instruct:free';
+      let m = model || 'openrouter/free';
+      if (m === 'openrouter/auto') m = 'openrouter/free';
       const out = await chatOpenAICompat('https://openrouter.ai/api/v1', key, m, body, 'openrouter');
       if ('error' in out && out.error) return res.status(out.status || 502).json(out);
       return res.status(200).json({ ok: true, mode: 'chat', ...out });
