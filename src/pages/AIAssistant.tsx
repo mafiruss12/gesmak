@@ -117,7 +117,7 @@ export default function AIAssistant() {
     {
       id: 'welcome',
       role: 'assistant',
-      text: 'Bonjour ! Je suis Stock AI Assistant (Kevin Tech Pro). Choisissez un modèle IA, puis posez votre question. Vous pouvez aussi générer une image ou exporter un fichier.',
+      text: 'Tu es Stock AI Assistant. Français simple, aide concrète pour maquis et gestion de stock.\n\nPosez votre question, ou utilisez **Image** / **Vidéo** ci-dessous.',
     },
   ]);
   const [input, setInput] = useState('');
@@ -147,7 +147,7 @@ export default function AIAssistant() {
               id: 'welcome',
               role: 'assistant',
               text: persona.slice(0, 280) + (persona.length > 280 ? '…' : '') +
-                '\n\nModèles : Gemini, Groq, OpenRouter, images Pollinations. Posez votre question.',
+                '\n\nChoisissez Chat, Image ou Vidéo. Modèles : Gemini, Groq, OpenRouter, Pollinations.',
             }];
           }
           return prev;
@@ -418,7 +418,8 @@ export default function AIAssistant() {
       <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
         <div className="flex items-center gap-2">
           <Sparkles className="text-primary-400" />
-          <h1 className="text-2xl font-bold font-display text-stone-100">Stock AI Assistant</h1>
+          <h1 className="text-xl font-bold font-display text-stone-100">Demander de l&apos;aide</h1>
+          <p className="text-xs text-stone-500">Stock AI · chat, images &amp; vidéos</p>
         </div>
         {(member?.role === 'super_admin' || member?.role === 'owner' || member?.role === 'proprietaire') && (
           <a href="/ai-train" className="text-sm text-primary-400 hover:underline">Former l&apos;IA</a>
@@ -534,6 +535,42 @@ export default function AIAssistant() {
       </div>
 
       <div className="card p-0 overflow-hidden">
+        {/* Barre modes toujours visible */}
+        <div className="sticky top-0 z-20 bg-stone-950/95 backdrop-blur border-b border-stone-800 px-3 py-2 space-y-2">
+          <div className="flex flex-wrap gap-1.5">
+            <button type="button" onClick={() => { setMode('chat'); if (modelId.startsWith('pollinations')) setModelId('gemini-2.0-flash'); }}
+              className={`text-xs px-3 py-1.5 rounded-full font-medium ${mode === 'chat' ? 'bg-primary-600 text-white' : 'bg-stone-800 text-stone-300'}`}>💬 Chat</button>
+            <button type="button" onClick={() => { setMode('image'); setModelId('pollinations-image'); }}
+              className={`text-xs px-3 py-1.5 rounded-full font-medium ${mode === 'image' ? 'bg-primary-600 text-white' : 'bg-stone-800 text-stone-300'}`}>🖼️ Image</button>
+            <button type="button" onClick={() => { setMode('video'); setModelId('pollinations-video'); }}
+              className={`text-xs px-3 py-1.5 rounded-full font-medium ${mode === 'video' ? 'bg-primary-600 text-white' : 'bg-stone-800 text-stone-300'}`}>🎬 Vidéo</button>
+            <button type="button" onClick={() => setMode('file')}
+              className={`text-xs px-3 py-1.5 rounded-full font-medium ${mode === 'file' ? 'bg-primary-600 text-white' : 'bg-stone-800 text-stone-300'}`}>📄 Fichier</button>
+          </div>
+          {mode === 'chat' || mode === 'file' ? (
+            <select
+              value={modelId}
+              onChange={(e) => {
+                const id = e.target.value;
+                setModelId(id);
+                const m = modelById(id);
+                if (m?.caps.includes('video') && !m.caps.includes('chat')) setMode('video');
+                else if (m?.caps.includes('image') && !m.caps.includes('chat')) setMode('image');
+              }}
+              className="w-full text-xs rounded-xl bg-stone-900 border border-stone-700 text-stone-200 px-3 py-2"
+            >
+              {AI_MODELS.filter((m) => m.caps.includes('chat') || m.caps.includes('file')).map((m) => (
+                <option key={m.id} value={m.id}>{m.label}</option>
+              ))}
+            </select>
+          ) : (
+            <p className="text-[11px] text-stone-500">
+              {mode === 'image' ? 'Décrivez l’image puis Envoyer (Pollinations).' : 'Décrivez la scène vidéo (15–60 s de génération).'}
+            </p>
+          )}
+          {lastError ? <p className="text-[11px] text-red-400">{lastError}</p> : null}
+        </div>
+
         <div className="px-4 py-3 border-b border-stone-800 flex items-center gap-2">
           <Bot size={18} className="text-primary-400" />
           <span className="text-sm font-medium text-stone-200">Assistant</span>
