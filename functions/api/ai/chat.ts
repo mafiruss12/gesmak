@@ -131,7 +131,7 @@ export async function onRequest(context: Ctx) {
   const prompt = String(body.prompt || '').trim();
   const appUrl = env(context, 'APP_URL') || 'https://stock-manager-ktp.vercel.app';
 
-  if (mode === 'image' || provider === 'pollinations' || model === 'pollinations-image') {
+  if (mode === 'image' || model === 'pollinations-image') {
     if (!prompt) return json({ error: 'prompt requis pour image' }, 400);
     const url = imageUrl(prompt);
     return json({ ok: true, mode: 'image', provider: 'pollinations', image_url: url, text: `Image générée.\n${url}` });
