@@ -15,7 +15,53 @@ type Body = {
   mime?: string;
   temperature?: number;
   maxOutputTokens?: number;
+  webSearch?: boolean;
 };
+
+/** Recherche web gratuite (DuckDuckGo Instant Answer + RelatedTopics) */
+async function webSearch(query: string): Promise<string> {
+  try {
+    const url =
+      'https://api.duckduckgo.com/?q=' +
+      encodeURIComponent(query.slice(0, 200)) +
+      '&format=json&no_html=1&skip_disambig=1';
+    const r = await fetch(url, { headers: { 'User-Agent': 'StockManagerAI/1.0' } });
+    if (!r.ok) return '';
+    const j = (await r.json()) as {
+      AbstractText?: string;
+      AbstractURL?: string;
+      Heading?: string;
+      RelatedTopics?: Array<{ Text?: string; FirstURL?: string } | { Topics?: Array<{ Text?: string }> }>;
+    };
+    const lines: string[] = [];
+    if (j.Heading) lines.push('Sujet: ' + j.Heading);
+    if (j.AbstractText) {
+      lines.push(j.AbstractText);
+      if (j.AbstractURL) lines.push('Source: ' + j.AbstractURL);
+    }
+    const topics = j.RelatedTopics || [];
+    let n = 0;
+    for (const t of topics) {
+      if (n >= 5) break;
+      if ('Text' in t && t.Text) {
+        lines.push('- ' + t.Text);
+        n++;
+      } else if ('Topics' in t && Array.isArray(t.Topics)) {
+        for (const sub of t.Topics) {
+          if (n >= 5) break;
+          if (sub.Text) {
+            lines.push('- ' + sub.Text);
+            n++;
+          }
+        }
+      }
+    }
+    return lines.join('\n').slice(0, 3000);
+  } catch {
+    return '';
+  }
+}
+
 
 function cors(res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -157,7 +203,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const mode = body.mode || 'chat';
   const provider = String(body.provider || '').toLowerCase();
   const model = String(body.model || '');
-  const prompt = String(body.prompt || '').trim();
+  let prompt = String(body.prompt || '').trim();
+  // Enrichissement recherche web (optionnel)
+  if (body.webSearch && prompt && mode === 'chat') {
+    const findings = await webSearch(prompt);
+    if (findings) {
+      prompt =
+        prompt +
+        '\n\n[Résultats de recherche web — utilise-les si utiles et cite les sources]\n' +
+        findings;
+    }
+  }
+  // System prompt par défaut polyvalent si absent
+  if (!body.system) {
+    body.system =
+      'Tu es un assistant IA polyvalent. Tu peux parler de n\'importe quel sujet (pas seulement le commerce). Français clair, utile, sans limiter le sujet.';
+  }
 
   // ——— IMAGE ———
   if (mode === 'image' || provider === 'pollinations' || model === 'pollinations-image') {
