@@ -78,6 +78,10 @@ export function getModel(id: string): AiModelOption | undefined {
   return AI_MODELS.find((m) => m.id === id);
 }
 
+export function modelById(id: string): AiModelOption | undefined {
+  return getModel(id);
+}
+
 export function defaultChatModelId(): string {
   return 'gemini-3.5-flash-lite';
 }
