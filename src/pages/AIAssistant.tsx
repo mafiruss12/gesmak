@@ -56,6 +56,15 @@ function downloadTextFile(filename: string, content: string) {
   URL.revokeObjectURL(url);
 }
 
+function cleanMediaText(s: string | undefined | null, kind: 'image' | 'video'): string {
+  const raw = String(s || '').trim();
+  const noUrl = raw.replace(/https?:\/\/\S+/gi, '').replace(/\n{2,}/g, '\n').trim();
+  if (!noUrl || /^image générée\.?$/i.test(noUrl) || /^vidéo/i.test(noUrl)) {
+    return kind === 'image' ? 'Image générée.' : 'Vidéo générée.';
+  }
+  return noUrl;
+}
+
 function stripMarkdown(s: string): string {
   return s
     .replace(/\*\*([^*]+)\*\*/g, '$1')
