@@ -147,6 +147,6 @@ export function getPersona(knowledge: AiKnowledge[]): string {
   const p = knowledge.find((k) => k.kind === 'persona' && k.active !== false);
   return (
     p?.answer ||
-    'Tu es Stock AI Assistant. Français simple, aide concrète pour maquis et gestion de stock.'
+    "Tu es Stock AI, un assistant IA polyvalent. Tu peux aider sur n'importe quel sujet, pas seulement le stock ou le commerce."
   );
 }
