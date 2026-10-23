@@ -360,7 +360,7 @@ export default function AIAssistant() {
     const body: Record<string, unknown> = {
       prompt,
       model: mid,
-      provider: m === 'image' ? 'pollinations' : provider,
+      provider: m === 'image' || m === 'video' ? 'pollinations' : provider,
       mode: m === 'file' ? 'chat' : m,
       system: buildSystemPrompt(),
       temperature: 0.35,
@@ -462,15 +462,27 @@ export default function AIAssistant() {
       }
 
       // Mode vidéo
-      if (mode === 'video' || modelId === 'pollinations-video') {
-        const j = await callRemoteAi(q, 'video');
-        const vurl = j.video_url || (j as { gen_url?: string }).gen_url;
+            if (mode === 'video' || modelId === 'pollinations-video') {
+        let vurl = '';
+        try {
+          const j = await callRemoteAi(q, 'video');
+          vurl = j.video_url || (j as { gen_url?: string }).gen_url || '';
+          // Si l’API a renvoyé une image par erreur, ignorer
+          if ((j as { mode?: string }).mode === 'image' || j.image_url) {
+            vurl = '';
+          }
+        } catch (e) {
+          console.warn('video api', e);
+        }
+        if (!vurl) {
+          vurl = `https://gen.pollinations.ai/video/${encodeURIComponent(q.slice(0, 300))}`;
+        }
         setTurns((t) => [
           ...t,
           {
             id: `a-${Date.now()}`,
             role: 'assistant',
-            text: vurl ? 'Vidéo générée — lecture en cours (peut prendre 15 à 90 s).' : 'Impossible d’obtenir l’URL vidéo.',
+            text: 'Vidéo générée — lecture en cours (peut prendre 15 à 90 s).',
             videoUrl: vurl,
           },
         ]);
