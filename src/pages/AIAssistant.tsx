@@ -66,22 +66,17 @@ function cleanMediaText(s: string | undefined | null, kind: 'image' | 'video'): 
 }
 
 function stripMarkdown(s: string): string {
-  return s
-    .replace(/\*\*([^*]+)\*\*/g, '$1')
-    .replace(/\*([^*]+)\*/g, '$1')
-    .replace(/__([^_]+)__/g, '$1')
-    .replace(/_([^_]+)_/g, '$1')
-    .replace(/^#{1,6}\s+/gm, '')
-    .replace(/`([^`]+)`/g, '$1')
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-    .replace(/https?:\/\/media\.pollinations\.ai\/\S+/gi, '')
-    .replace(/https?:\/\/gen\.pollinations\.ai\/\S+/gi, '')
-    .replace(/https?:\/\/image\.pollinations\.ai\/\S+/gi, '')
-    .replace(/
-{3,}/g, '
-
-')
-    .trim();
+  let out = String(s || '');
+  out = out.replace(/\*\*([^*]+)\*\*/g, '$1');
+  out = out.replace(/\*([^*]+)\*/g, '$1');
+  out = out.replace(/__([^_]+)__/g, '$1');
+  out = out.replace(/_([^_]+)_/g, '$1');
+  out = out.replace(/^#{1,6}\s+/gm, '');
+  out = out.replace(/`([^`]+)`/g, '$1');
+  out = out.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+  out = out.replace(/https?:\/\/(?:media|gen|image)\.pollinations\.ai\/\S+/gi, '');
+  out = out.replace(/\n{3,}/g, '\n\n');
+  return out.trim();
 }
 
 function buildSystemPrompt() {
@@ -115,23 +110,13 @@ export default function AIAssistant() {
     topProduct?: { name: string; revenue: number };
   } | null>(null);
 
-    const [turns, setTurns] = useState<ChatTurn[]>(() => {
-    try {
-      const key = 'sm_ai_chat_v1';
-      const raw = localStorage.getItem(key);
-      if (raw) {
-        const parsed = JSON.parse(raw) as ChatTurn[];
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed.slice(-80);
-      }
-    } catch { /* */ }
-    return [
-      {
-        id: 'welcome',
-        role: 'assistant',
-        text: 'Bonjour. Je suis Stock AI, assistant polyvalent.\n\nChat libre, image, vidéo, fichiers joints et recherche web. Posez n’importe quelle question.',
-      },
-    ];
-  });
+  const [turns, setTurns] = useState<ChatTurn[]>([
+    {
+      id: 'welcome',
+      role: 'assistant',
+      text: 'Bonjour. Je suis Stock AI, assistant polyvalent.\n\nChat libre, image, vidéo, fichiers joints et recherche web. Posez n’importe quelle question.',
+    },
+  ]);
   const [input, setInput] = useState('');
   const [thinking, setThinking] = useState(false);
   const [knowledge, setKnowledge] = useState<AiKnowledge[]>([]);
@@ -153,12 +138,6 @@ export default function AIAssistant() {
   useEffect(() => {
     try { localStorage.setItem('sm_ai_model', modelId); } catch { /* */ }
   }, [modelId]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('sm_ai_chat_v1', JSON.stringify(turns.slice(-80)));
-    } catch { /* */ }
-  }, [turns]);
 
   const endRef = useRef<HTMLDivElement>(null);
   const selected: AiModelOption | undefined = modelById(modelId);
@@ -693,21 +672,7 @@ export default function AIAssistant() {
         <div className="px-4 py-3 border-b border-stone-800 flex items-center gap-2">
           <Bot size={18} className="text-primary-400" />
           <span className="text-sm font-medium text-stone-200">Assistant</span>
-          <button
-            type="button"
-            className="ml-auto text-[11px] text-stone-400 hover:text-stone-200 underline"
-            onClick={() => {
-              const welcome: ChatTurn = {
-                id: 'welcome-' + Date.now(),
-                role: 'assistant',
-                text: 'Nouvelle conversation. Posez votre question, joignez un fichier, ou générez une image / vidéo.',
-              };
-              setTurns([welcome]);
-              try { localStorage.removeItem('sm_ai_chat_v1'); } catch { /* */ }
-            }}
-          >
-            Nouvelle conversation
-          </button>
+          <span className="text-xs text-stone-500 ml-auto"></span>
         </div>
         <div className="p-4 space-y-3 max-h-[420px] overflow-y-auto">
           {turns.map((t) => (
@@ -747,7 +712,14 @@ export default function AIAssistant() {
                       playsInline
                       className="rounded-xl max-h-72 w-full bg-black border border-stone-700"
                     />
-                    
+                    <a
+                      href={t.videoUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs text-primary-400 underline"
+                    >
+                      Ouvrir la vidéo
+                    </a>
                   </div>
                 ) : null}
                 {t.role === 'assistant' && t.escalate && (
