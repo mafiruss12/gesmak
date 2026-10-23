@@ -99,21 +99,44 @@ function extractEnclosure(linkHeader: string | null): string | null {
 }
 
 async function resolveMedia(url: string, expect: 'image' | 'video') {
-  const r = await fetch(url, {
-    method: 'GET',
-    headers: {
-      ...authHeaders(),
-      Accept: expect === 'video' ? 'video/*,application/octet-stream' : 'image/*',
-    },
-    redirect: 'follow',
-  });
-  const ct = (r.headers.get('content-type') || '').toLowerCase();
-  const enclosure = extractEnclosure(r.headers.get('link'));
-  if (enclosure) {
-    return { ok: r.ok, status: r.status, url: enclosure, contentType: ct };
+  // Vidéo : d’abord sans clé (évite 402 payant), puis avec clé si besoin
+  const attempts: Array<Record<string, string>> = [{}];
+  if (expect === 'image' && pollKey()) attempts.push(authHeaders());
+  if (expect === 'video' && pollKey()) attempts.push(authHeaders());
+
+  let last: { ok: boolean; status: number; url: string; contentType?: string; error?: string } = {
+    ok: false,
+    status: 0,
+    url,
+  };
+
+  for (const extra of attempts) {
+    try {
+      const r = await fetch(url, {
+        method: 'GET',
+        headers: {
+          ...extra,
+          Accept: expect === 'video' ? 'video/*,application/octet-stream' : 'image/*',
+        },
+        redirect: 'follow',
+      });
+      const ct = (r.headers.get('content-type') || '').toLowerCase();
+      const enclosure = extractEnclosure(r.headers.get('link'));
+      const finalUrl = enclosure || url;
+      if (r.ok || enclosure) {
+        return { ok: true, status: r.status, url: finalUrl, contentType: ct };
+      }
+      last = { ok: false, status: r.status, url: finalUrl, contentType: ct, error: `HTTP ${r.status}` };
+    } catch (e) {
+      last = {
+        ok: false,
+        status: 0,
+        url,
+        error: e instanceof Error ? e.message : 'fetch error',
+      };
+    }
   }
-  // Si OK, l’URL d’origine (ou finale après redirect) reste utilisable
-  return { ok: r.ok, status: r.status, url, contentType: ct, error: r.ok ? undefined : `HTTP ${r.status}` };
+  return last;
 }
 
 async function chatGemini(apiKey: string, body: Body) {
@@ -256,43 +279,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // ——— VIDEO ———
+  // Renvoie tout de suite l’URL de génération ; le navigateur charge/joue la vidéo
+  // (Pollinations peut prendre 15–90 s la première fois).
   if (mode === 'video' || model === 'pollinations-video') {
     if (!prompt) return res.status(400).json({ error: 'prompt requis pour vidéo' });
     const url = genVideoUrl(prompt);
+    let playUrl = url;
     try {
-      // Lance la génération côté serveur avec la clé (meilleure fiabilité)
-      const resolved = await resolveMedia(url, 'video');
-      if (resolved.ok) {
-        return res.status(200).json({
-          ok: true,
-          mode: 'video',
-          provider: 'pollinations',
-          video_url: resolved.url,
-          text: `Vidéo prête (ou en finalisation).\n${resolved.url}`,
-          authenticated: Boolean(pollKey()),
-        });
-      }
-      // Même si probe échoue, renvoyer l’URL pour que le lecteur client réessaie
-      return res.status(200).json({
-        ok: true,
-        mode: 'video',
-        provider: 'pollinations',
-        video_url: url,
-        text: `Vidéo en cours (15–60 s). Si ça ne charge pas, réessayez.\n${url}`,
-        authenticated: Boolean(pollKey()),
-        probe_status: resolved.status,
-        probe_error: resolved.error,
+      // HEAD/GET court sans bloquer trop longtemps
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 25000);
+      const r = await fetch(url, {
+        method: 'GET',
+        headers: { Accept: 'video/*,application/octet-stream' },
+        redirect: 'follow',
+        signal: controller.signal,
       });
-    } catch (e) {
-      return res.status(200).json({
-        ok: true,
-        mode: 'video',
-        provider: 'pollinations',
-        video_url: url,
-        text: `Vidéo demandée.\n${url}`,
-        error_soft: e instanceof Error ? e.message : 'timeout',
-      });
+      clearTimeout(timer);
+      const enclosure = extractEnclosure(r.headers.get('link'));
+      if (enclosure) playUrl = enclosure;
+      else if (r.ok) playUrl = url;
+    } catch {
+      /* client retentera avec l’URL gen */
     }
+    return res.status(200).json({
+      ok: true,
+      mode: 'video',
+      provider: 'pollinations',
+      video_url: playUrl,
+      gen_url: url,
+      text: 'Vidéo générée.',
+      authenticated: Boolean(pollKey()),
+    });
   }
 
   if (!body.prompt && !body.image) {
