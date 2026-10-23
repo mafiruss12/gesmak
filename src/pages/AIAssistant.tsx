@@ -31,47 +31,19 @@ interface ChatTurn {
 
 function buildReply(
   question: string,
-  ctx: {
+  _ctx: {
     sales: Sale[];
     products: Product[];
     expensesTotal: number;
     salesTotal: number;
     lowStock: Product[];
     topProduct?: { name: string; revenue: number };
-  },
+  } | null,
   knowledge: AiKnowledge[] = [],
 ): string {
   const trained = matchTrainedAnswer(question, knowledge);
   if (trained) return trained.answer;
-
-  const q = question.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-
-  if (/caisse|vente|pos|encaiss/.test(q)) {
-    return "Pour encaisser : menu **Caisse (POS)** → choisissez les produits → validez le paiement (espèces / mobile money). Le stock est déduit automatiquement.";
-  }
-  if (/inventaire|stock|produit|boisson|ajouter/.test(q)) {
-    return "Pour gérer le stock : **Inventaire** → « Ajouter » pour une nouvelle boisson/plat, ou modifiez le stock d'un produit existant. Surveillez le seuil minimum pour éviter les ruptures.";
-  }
-  if (/depense|dépense|frais/.test(q)) {
-    return "Enregistrez une dépense dans **Dépenses** (catégorie, montant, mode de paiement). Elles apparaissent dans la Comptabilité et la Clôture du jour.";
-  }
-  if (/cloture|clôture|rapport.?jour|fermer.?caisse/.test(q)) {
-    return "Allez dans **Clôture du jour** / **Rapport du jour** pour valider les ventes, dépenses et caisse de la journée.";
-  }
-  if (/employe|employé|personnel|planning|pointage/.test(q)) {
-    return "Section **Mes employés** pour créer les accès (gérant, caissier). Le propriétaire contrôle les droits stock.";
-  }
-  if (/support|aide|kevin|humain|contacter/.test(q)) {
-    return `__ESCALATE__Je peux vous orienter vers le support humain Kevin Tech Pro.`;
-  }
-
-  return `Voici un résumé de votre établissement (30 j) :
-• Ventes : ${formatFCFA(ctx.salesTotal)}
-• Dépenses : ${formatFCFA(ctx.expensesTotal)}
-• Produits en alerte stock : ${ctx.lowStock.length}
-• ${ctx.topProduct ? `Top produit : ${ctx.topProduct.name}` : 'Pas encore de top produit'}
-
-Si ce n’est pas la bonne réponse, reformulez — ou choisissez un modèle IA (Gemini / Groq) ci-dessus.`;
+  return 'L’IA distante est momentanément indisponible. Réessayez, changez de modèle (Grok / Gemini / OpenRouter), ou vérifiez la connexion.';
 }
 
 function downloadTextFile(filename: string, content: string) {
@@ -84,18 +56,20 @@ function downloadTextFile(filename: string, content: string) {
   URL.revokeObjectURL(url);
 }
 
-function buildSystemPrompt(persona: string, ctx: NonNullable<Parameters<typeof buildReply>[1]>) {
-  return `${persona}
+function buildSystemPrompt() {
+  return `Tu es Stock AI, un assistant IA polyvalent intégré à Stock Manager AI.
+Tu n’es PAS limité au sujet « maquis » ou stock : tu peux aider sur n’importe quel sujet.
 
-Tu aides un gérant/propriétaire de maquis ou commerce en Côte d'Ivoire (FCFA).
-Contexte 30 jours :
-- Ventes : ${ctx.salesTotal} FCFA
-- Dépenses : ${ctx.expensesTotal} FCFA
-- Alertes stock : ${ctx.lowStock.map((p) => p.name).slice(0, 8).join(', ') || 'aucune'}
-- Top produit : ${ctx.topProduct?.name || 'n/a'}
+Capacités :
+- Conversation générale, idées, rédaction, code, explications
+- Analyse de fichiers joints (texte, CSV, images via vision)
+- Génération d’images et de vidéos (modes Image / Vidéo)
+- Export de contenu texte / rapports (mode Fichier)
+- Si des résultats de recherche web sont fournis dans le message, utilise-les et cite les sources
 
-Réponds en français simple, concret, actions menu (Caisse, Inventaire, Rapport du jour).
-Ne invente pas de chiffres hors contexte. Si tu génères un tableau, utilise du texte clair.`;
+Style : clair, direct, utile, en français sauf si l’utilisateur écrit dans une autre langue.
+Ne force jamais le sujet commerce/maquis. Si l’utilisateur change de sujet, suis-le.
+Ne prétends pas avoir exécuté une action hors de tes outils (pas d’accès réel aux menus de l’app sauf si l’utilisateur le demande et que le contexte stock optionnel est fourni).`;
 }
 
 export default function AIAssistant() {
@@ -117,7 +91,7 @@ export default function AIAssistant() {
     {
       id: 'welcome',
       role: 'assistant',
-      text: 'Tu es Stock AI Assistant. Français simple, aide concrète pour maquis et gestion de stock.\n\nPosez votre question, ou utilisez **Image** / **Vidéo** ci-dessous.',
+      text: 'Bonjour — je suis **Stock AI**, assistant polyvalent.\n\nChat libre (Grok, Gemini…), **Image**, **Vidéo**, **Fichier**, jointure de documents, et recherche web si besoin.\n\nPosez n’importe quelle question.',
     },
   ]);
   const [input, setInput] = useState('');
@@ -136,6 +110,7 @@ export default function AIAssistant() {
     Array<{ name: string; mime: string; dataUrl: string; kind: 'image' | 'text' | 'binary' }>
   >([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [webSearch, setWebSearch] = useState(false);
 
   useEffect(() => {
     try { localStorage.setItem('sm_ai_model', modelId); } catch { /* */ }
@@ -160,8 +135,7 @@ export default function AIAssistant() {
             return [{
               id: 'welcome',
               role: 'assistant',
-              text: persona.slice(0, 280) + (persona.length > 280 ? '…' : '') +
-                '\n\nChat (Grok par défaut), Image, Vidéo — joignez un fichier pour analyse.',
+              text: 'Bonjour — **Stock AI** polyvalent.\n\nChat, images, vidéos, fichiers joints, recherche. Aucune limite de sujet.\n\n' + (persona ? '(Persona : ' + persona.slice(0, 120) + ')\n\n' : ''),
             }];
           }
           return prev;
@@ -267,9 +241,10 @@ export default function AIAssistant() {
       model: mid,
       provider: m === 'image' ? 'pollinations' : provider,
       mode: m === 'file' ? 'chat' : m,
-      system: ctx ? buildSystemPrompt(getPersona(knowledge), ctx) : getPersona(knowledge),
+      system: buildSystemPrompt(),
       temperature: 0.35,
       maxOutputTokens: 4096,
+      webSearch: webSearch || /recherche|search|sur le net|internet|actualité|qui est|what is/i.test(prompt),
     };
     if (opts?.image) {
       body.image = opts.image.replace(/^data:[^;]+;base64,/, '');
@@ -515,14 +490,14 @@ export default function AIAssistant() {
         <div className="flex items-center gap-2">
           <Sparkles className="text-primary-400" />
           <h1 className="text-xl font-bold font-display text-stone-100">Demander de l&apos;aide</h1>
-          <p className="text-xs text-stone-500">Stock AI · chat, images &amp; vidéos</p>
+          <p className="text-xs text-stone-500">IA polyvalente · chat, web, images, vidéos, fichiers</p>
         </div>
         {(member?.role === 'super_admin' || member?.role === 'owner' || member?.role === 'proprietaire') && (
           <a href="/ai-train" className="text-sm text-primary-400 hover:underline">Former l&apos;IA</a>
         )}
       </div>
       <p className="text-stone-400 text-sm mb-4">
-        Grok · Gemini (vision) · OpenRouter · images · fichiers joints
+        Grok · Gemini · OpenRouter · recherche · images · vidéos · fichiers
       </p>
 
       {/* Sélecteurs */}
@@ -665,6 +640,10 @@ export default function AIAssistant() {
             </p>
           )}
           {lastError ? <p className="text-[11px] text-red-400">{lastError}</p> : null}
+          <label className="flex items-center gap-2 text-[11px] text-stone-400 cursor-pointer select-none">
+            <input type="checkbox" checked={webSearch} onChange={(e) => setWebSearch(e.target.checked)} className="rounded border-stone-600" />
+            Recherche web (enrichir la réponse)
+          </label>
         </div>
 
         <div className="px-4 py-3 border-b border-stone-800 flex items-center gap-2">
@@ -781,7 +760,7 @@ export default function AIAssistant() {
               mode === 'image'
                 ? 'Décrivez l’image à générer…'
                 : mode === 'video'
-                  ? 'Décrivez la vidéo (ex. maquis animé, bières sur comptoir)…'
+                  ? 'Décrivez la vidéo à générer (tout sujet)…'
                   : mode === 'file'
                     ? 'Ex. Rapport stock bas en texte…'
                     : 'Ex. Comment ajouter une boisson ?'
