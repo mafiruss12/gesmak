@@ -2,10 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 /**
  * Multi-provider AI proxy
- * - Chat: Gemini / Groq / OpenRouter
- * - Image: Pollinations (image.pollinations.ai) + option POLLINATIONS_API_KEY
- * - Video: Pollinations (gen.pollinations.ai/video)
- * Secrets: GEMINI_API_KEY, GROQ_API_KEY, OPENROUTER_API_KEY, POLLINATIONS_API_KEY (optionnel)
+ * Secrets: GEMINI_API_KEY, GROQ_API_KEY, OPENROUTER_API_KEY, POLLINATIONS_API_KEY
  */
 
 type Body = {
@@ -22,24 +19,55 @@ type Body = {
 
 function cors(res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS, GET');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 }
 
-function pollinationsHeaders() {
-  const key = process.env.POLLINATIONS_API_KEY || '';
-  return key ? { Authorization: `Bearer ${key}` } : {};
+function pollKey() {
+  return process.env.POLLINATIONS_API_KEY || '';
 }
 
-function imageUrl(prompt: string) {
-  const p = encodeURIComponent(prompt.slice(0, 400));
-  return `https://image.pollinations.ai/prompt/${p}?width=1024&height=1024&nologo=true&enhance=true`;
+function authHeaders(): Record<string, string> {
+  const k = pollKey();
+  return k ? { Authorization: `Bearer ${k}` } : {};
 }
 
-function videoUrl(prompt: string) {
-  const p = encodeURIComponent(prompt.slice(0, 300));
-  // gen.pollinations.ai/video fonctionne (probe 200 video/mp4)
-  return `https://gen.pollinations.ai/video/${p}`;
+/** Image : legacy public + fallback gen avec clé */
+function publicImageUrl(prompt: string) {
+  return `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt.slice(0, 400))}?width=1024&height=1024&nologo=true&enhance=true`;
+}
+
+function genImageUrl(prompt: string) {
+  return `https://gen.pollinations.ai/image/${encodeURIComponent(prompt.slice(0, 400))}?width=1024&height=1024`;
+}
+
+function genVideoUrl(prompt: string) {
+  return `https://gen.pollinations.ai/video/${encodeURIComponent(prompt.slice(0, 300))}`;
+}
+
+/** Si la réponse a un Link enclosure CDN, on le préfère (lecture directe client) */
+function extractEnclosure(linkHeader: string | null): string | null {
+  if (!linkHeader) return null;
+  const m = linkHeader.match(/<([^>]+)>\s*;\s*rel="enclosure"/i);
+  return m?.[1] || null;
+}
+
+async function resolveMedia(url: string, expect: 'image' | 'video') {
+  const r = await fetch(url, {
+    method: 'GET',
+    headers: {
+      ...authHeaders(),
+      Accept: expect === 'video' ? 'video/*,application/octet-stream' : 'image/*',
+    },
+    redirect: 'follow',
+  });
+  const ct = (r.headers.get('content-type') || '').toLowerCase();
+  const enclosure = extractEnclosure(r.headers.get('link'));
+  if (enclosure) {
+    return { ok: r.ok, status: r.status, url: enclosure, contentType: ct };
+  }
+  // Si OK, l’URL d’origine (ou finale après redirect) reste utilisable
+  return { ok: r.ok, status: r.status, url, contentType: ct, error: r.ok ? undefined : `HTTP ${r.status}` };
 }
 
 async function chatGemini(apiKey: string, body: Body) {
@@ -114,30 +142,6 @@ async function chatOpenAICompat(
   return { text: j?.choices?.[0]?.message?.content || '', provider, model };
 }
 
-/** Vérifie qu'une URL média répond (image/jpeg ou video/mp4) */
-async function probeMedia(url: string, expect: 'image' | 'video') {
-  try {
-    const r = await fetch(url, {
-      method: 'GET',
-      headers: { ...pollinationsHeaders(), Accept: expect === 'video' ? 'video/*' : 'image/*' },
-      redirect: 'follow',
-    });
-    const ct = (r.headers.get('content-type') || '').toLowerCase();
-    if (!r.ok) return { ok: false, status: r.status, error: `HTTP ${r.status}` };
-    if (expect === 'image' && !ct.includes('image')) {
-      return { ok: false, status: r.status, error: `Content-Type inattendu: ${ct}` };
-    }
-    if (expect === 'video' && !ct.includes('video') && !ct.includes('octet-stream') && !ct.includes('mp4')) {
-      // certains CDN renvoient octet-stream
-      if (r.status === 200) return { ok: true, status: 200 };
-      return { ok: false, status: r.status, error: `Content-Type inattendu: ${ct}` };
-    }
-    return { ok: true, status: r.status };
-  } catch (e) {
-    return { ok: false, status: 0, error: e instanceof Error ? e.message : 'probe failed' };
-  }
-}
-
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   cors(res);
   if (req.method === 'OPTIONS') return res.status(200).end();
@@ -158,39 +162,76 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // ——— IMAGE ———
   if (mode === 'image' || provider === 'pollinations' || model === 'pollinations-image') {
     if (!prompt) return res.status(400).json({ error: 'prompt requis pour image' });
-    const url = imageUrl(prompt);
-    // Ne bloque pas trop longtemps : on renvoie l’URL (lazy load côté client)
-    // Probe court optionnel
-    const probe = await probeMedia(url, 'image');
-    if (!probe.ok && probe.status === 402) {
-      return res.status(402).json({
-        error: 'Quota image temporaire (Pollinations). Réessayez dans ~30 s.',
-        image_url: url,
-      });
+    const hasKey = Boolean(pollKey());
+    // 1) Essayer gen + clé si dispo
+    if (hasKey) {
+      try {
+        const resolved = await resolveMedia(genImageUrl(prompt), 'image');
+        if (resolved.ok) {
+          return res.status(200).json({
+            ok: true,
+            mode: 'image',
+            provider: 'pollinations',
+            image_url: resolved.url,
+            text: `Image générée.\n${resolved.url}`,
+            authenticated: true,
+          });
+        }
+      } catch {
+        /* fallback public */
+      }
     }
+    // 2) Fallback public image.pollinations.ai
+    const url = publicImageUrl(prompt);
     return res.status(200).json({
       ok: true,
       mode: 'image',
       provider: 'pollinations',
       image_url: url,
       text: `Image générée.\n${url}`,
-      probe_ok: probe.ok,
+      authenticated: false,
+      hint: hasKey ? undefined : 'Ajoutez POLLINATIONS_API_KEY pour plus de stabilité.',
     });
   }
 
   // ——— VIDEO ———
   if (mode === 'video' || model === 'pollinations-video') {
     if (!prompt) return res.status(400).json({ error: 'prompt requis pour vidéo' });
-    const url = videoUrl(prompt);
-    // La génération vidéo peut être longue : on renvoie l’URL et le client lit le flux
-    return res.status(200).json({
-      ok: true,
-      mode: 'video',
-      provider: 'pollinations',
-      video_url: url,
-      text: `Vidéo en cours de génération (peut prendre 15–60 s).\n${url}`,
-      hint: 'Si la lecture échoue, réessayez le même prompt ou créez une clé gratuite sur enter.pollinations.ai (POLLINATIONS_API_KEY).',
-    });
+    const url = genVideoUrl(prompt);
+    try {
+      // Lance la génération côté serveur avec la clé (meilleure fiabilité)
+      const resolved = await resolveMedia(url, 'video');
+      if (resolved.ok) {
+        return res.status(200).json({
+          ok: true,
+          mode: 'video',
+          provider: 'pollinations',
+          video_url: resolved.url,
+          text: `Vidéo prête (ou en finalisation).\n${resolved.url}`,
+          authenticated: Boolean(pollKey()),
+        });
+      }
+      // Même si probe échoue, renvoyer l’URL pour que le lecteur client réessaie
+      return res.status(200).json({
+        ok: true,
+        mode: 'video',
+        provider: 'pollinations',
+        video_url: url,
+        text: `Vidéo en cours (15–60 s). Si ça ne charge pas, réessayez.\n${url}`,
+        authenticated: Boolean(pollKey()),
+        probe_status: resolved.status,
+        probe_error: resolved.error,
+      });
+    } catch (e) {
+      return res.status(200).json({
+        ok: true,
+        mode: 'video',
+        provider: 'pollinations',
+        video_url: url,
+        text: `Vidéo demandée.\n${url}`,
+        error_soft: e instanceof Error ? e.message : 'timeout',
+      });
+    }
   }
 
   if (!body.prompt && !body.image) {
