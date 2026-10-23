@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Sparkles, TrendingUp, AlertTriangle, Lightbulb, Brain, Target, Zap,
-  Send, Loader2, Bot, User, ImagePlus, FileDown, Video, Paperclip, X, Pencil,
+  Send, Loader2, Bot, User, ImagePlus, FileDown, Video, Paperclip, X, Pencil, History,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
@@ -28,6 +28,45 @@ interface ChatTurn {
   imageUrl?: string;
   videoUrl?: string;
 }
+
+type SavedChat = {
+  id: string;
+  title: string;
+  updatedAt: number;
+  turns: ChatTurn[];
+};
+
+const HISTORY_KEY = 'sm_ai_history_v1';
+const CURRENT_CHAT_KEY = 'sm_ai_current_chat_id';
+
+function loadHistory(): SavedChat[] {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    if (!raw) return [];
+    const list = JSON.parse(raw) as SavedChat[];
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveHistory(list: SavedChat[]) {
+  try {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(list.slice(0, 40)));
+  } catch { /* */ }
+}
+
+function titleFromTurns(turns: ChatTurn[]): string {
+  const u = turns.find((x) => x.role === 'user' && x.text.trim());
+  if (u) return u.text.trim().slice(0, 48) + (u.text.trim().length > 48 ? '…' : '');
+  return 'Conversation';
+}
+
+function defaultWelcome(): ChatTurn[] {
+  return [{ id: 'welcome', role: 'assistant', text: 'Bonjour. Comment puis-je vous aider ?' }];
+}
+
+
 
 function buildReply(
   question: string,
@@ -108,22 +147,17 @@ export default function AIAssistant() {
     topProduct?: { name: string; revenue: number };
   } | null>(null);
 
-  const [turns, setTurns] = useState<ChatTurn[]>(() => {
+  const [turns, setTurns] = useState<ChatTurn[]>(() => defaultWelcome());
+  const [chatId, setChatId] = useState<string>(() => {
     try {
-      const raw = localStorage.getItem('sm_ai_chat_v1');
-      if (raw) {
-        const parsed = JSON.parse(raw) as ChatTurn[];
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed.slice(-80);
-      }
-    } catch { /* */ }
-    return [
-      {
-        id: 'welcome',
-        role: 'assistant',
-        text: 'Bonjour. Comment puis-je vous aider ?',
-      },
-    ];
+      return localStorage.getItem(CURRENT_CHAT_KEY) || `chat-${Date.now()}`;
+    } catch {
+      return `chat-${Date.now()}`;
+    }
   });
+  const [history, setHistory] = useState<SavedChat[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
+
   const [input, setInput] = useState('');
   const [thinking, setThinking] = useState(false);
   const [knowledge, setKnowledge] = useState<AiKnowledge[]>([]);
@@ -136,8 +170,6 @@ export default function AIAssistant() {
   });
   const [mode, setMode] = useState<'chat' | 'image' | 'video' | 'file'>('chat');
   const [lastError, setLastError] = useState('');
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editDraft, setEditDraft] = useState('');
   const [attachments, setAttachments] = useState<
     Array<{ name: string; mime: string; dataUrl: string; kind: 'image' | 'text' | 'binary' }>
   >([]);
@@ -148,11 +180,60 @@ export default function AIAssistant() {
     try { localStorage.setItem('sm_ai_model', modelId); } catch { /* */ }
   }, [modelId]);
 
+  // Charger historique + conversation courante (migration ancienne clé)
   useEffect(() => {
+    let list = loadHistory();
     try {
-      localStorage.setItem('sm_ai_chat_v1', JSON.stringify(turns.slice(-80)));
+      const legacy = localStorage.getItem('sm_ai_chat_v1');
+      if (legacy && list.length === 0) {
+        const parsed = JSON.parse(legacy) as ChatTurn[];
+        if (Array.isArray(parsed) && parsed.some((x) => x.role === 'user')) {
+          const id = `chat-${Date.now()}`;
+          list = [{ id, title: titleFromTurns(parsed), updatedAt: Date.now(), turns: parsed.slice(-80) }];
+          saveHistory(list);
+          localStorage.setItem(CURRENT_CHAT_KEY, id);
+          setChatId(id);
+          setTurns(parsed.slice(-80));
+        }
+        localStorage.removeItem('sm_ai_chat_v1');
+      }
     } catch { /* */ }
-  }, [turns]);
+    setHistory(list);
+    try {
+      const cur = localStorage.getItem(CURRENT_CHAT_KEY);
+      if (cur) {
+        const found = list.find((c) => c.id === cur);
+        if (found && found.turns?.length) {
+          setChatId(found.id);
+          setTurns(found.turns);
+        }
+      }
+    } catch { /* */ }
+  }, []);
+
+  // Sauvegarder la conversation active dans l'historique
+  useEffect(() => {
+    if (!chatId) return;
+    const hasUser = turns.some((x) => x.role === 'user');
+    setHistory((prev) => {
+      const others = prev.filter((c) => c.id !== chatId);
+      if (!hasUser && turns.length <= 1) {
+        saveHistory(others);
+        return others;
+      }
+      const entry: SavedChat = {
+        id: chatId,
+        title: titleFromTurns(turns),
+        updatedAt: Date.now(),
+        turns: turns.slice(-80),
+      };
+      const next = [entry, ...others].slice(0, 40);
+      saveHistory(next);
+      try { localStorage.setItem(CURRENT_CHAT_KEY, chatId); } catch { /* */ }
+      return next;
+    });
+  }, [turns, chatId]);
+
 
   const endRef = useRef<HTMLDivElement>(null);
   const selected: AiModelOption | undefined = modelById(modelId);
@@ -333,32 +414,17 @@ export default function AIAssistant() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   }
 
-  async function ask(opts?: { text?: string; replaceUserId?: string }) {
-    const fromEdit = Boolean(opts?.replaceUserId);
-    const rawQ = (opts?.text !== undefined ? opts.text : input).trim();
-    if ((!rawQ && attachments.length === 0 && !fromEdit) || !ctx) return;
-    const q = rawQ || (attachments.length ? 'Analyse le(s) fichier(s) joint(s) et explique clairement en français.' : '');
-    const attSnap = fromEdit ? [] : [...attachments];
-    if (!fromEdit) {
-      setInput('');
-      setAttachments([]);
-    }
-    setEditingId(null);
-    setEditDraft('');
+  async function ask() {
+    if ((!input.trim() && attachments.length === 0) || !ctx) return;
+    const q = input.trim() || (attachments.length ? 'Analyse le(s) fichier(s) joint(s) et explique clairement en français.' : '');
+    const attSnap = [...attachments];
+    setInput('');
+    setAttachments([]);
     setLastError('');
-    const attLabel = attSnap.length ? ('\n\n📎 ' + attSnap.map((a) => a.name).join(', ')) : '';
-    const userText = q + attLabel;
+    const attLabel = attSnap.length ? `
 
-    if (opts?.replaceUserId) {
-      setTurns((prev) => {
-        const idx = prev.findIndex((x) => x.id === opts.replaceUserId);
-        if (idx < 0) return prev;
-        const kept = prev.slice(0, idx);
-        return [...kept, { id: opts.replaceUserId!, role: 'user' as const, text: userText }];
-      });
-    } else {
-      setTurns((t) => [...t, { id: `u-${Date.now()}`, role: 'user', text: userText }]);
-    }
+📎 ${attSnap.map((a) => a.name).join(', ')}` : '';
+    setTurns((t) => [...t, { id: `u-${Date.now()}`, role: 'user', text: q + attLabel }]);
     setThinking(true);
 
     try {
@@ -586,24 +652,79 @@ export default function AIAssistant() {
 
       {/* Chat unique */}
       <div className="card overflow-hidden flex flex-col min-h-[420px]">
-        <div className="px-4 py-3 border-b border-stone-800 flex items-center gap-2">
+        <div className="px-4 py-3 border-b border-stone-800 flex items-center gap-2 flex-wrap">
           <Bot size={18} className="text-primary-400" />
           <span className="text-sm font-medium text-stone-200">Conversation</span>
-          <button
-            type="button"
-            className="ml-auto text-[11px] text-stone-400 hover:text-stone-200 underline"
-            onClick={() => {
-              setTurns([{
-                id: 'welcome-' + Date.now(),
-                role: 'assistant',
-                text: 'Nouvelle conversation. Écrivez librement.',
-              }]);
-              try { localStorage.removeItem('sm_ai_chat_v1'); } catch { /* */ }
-            }}
-          >
-            Nouvelle conversation
-          </button>
+          <div className="ml-auto flex items-center gap-3">
+            <button
+              type="button"
+              className="text-[11px] text-stone-400 hover:text-stone-200 underline inline-flex items-center gap-1"
+              onClick={() => setShowHistory((v) => !v)}
+            >
+              <History size={12} /> Historique
+            </button>
+            <button
+              type="button"
+              className="text-[11px] text-stone-400 hover:text-stone-200 underline"
+              onClick={() => {
+                const id = `chat-${Date.now()}`;
+                setChatId(id);
+                setTurns(defaultWelcome());
+                setShowHistory(false);
+                try { localStorage.setItem(CURRENT_CHAT_KEY, id); } catch { /* */ }
+              }}
+            >
+              Nouvelle conversation
+            </button>
+          </div>
         </div>
+        {showHistory && (
+          <div className="border-b border-stone-800 bg-stone-900/80 max-h-48 overflow-y-auto">
+            {history.length === 0 ? (
+              <p className="text-xs text-stone-500 px-4 py-3">Aucune conversation enregistrée pour l’instant.</p>
+            ) : (
+              <ul className="divide-y divide-stone-800">
+                {history.map((c) => (
+                  <li key={c.id} className="flex items-center gap-2 px-3 py-2 hover:bg-stone-800/60">
+                    <button
+                      type="button"
+                      className={`flex-1 text-left text-xs ${c.id === chatId ? 'text-primary-400' : 'text-stone-300'}`}
+                      onClick={() => {
+                        setChatId(c.id);
+                        setTurns(c.turns?.length ? c.turns : defaultWelcome());
+                        setShowHistory(false);
+                        try { localStorage.setItem(CURRENT_CHAT_KEY, c.id); } catch { /* */ }
+                      }}
+                    >
+                      <span className="font-medium block truncate">{c.title || 'Conversation'}</span>
+                      <span className="text-[10px] text-stone-500">
+                        {new Date(c.updatedAt).toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      className="text-[10px] text-red-400/80 hover:text-red-300 px-1"
+                      title="Supprimer"
+                      onClick={() => {
+                        const next = history.filter((x) => x.id !== c.id);
+                        setHistory(next);
+                        saveHistory(next);
+                        if (c.id === chatId) {
+                          const id = `chat-${Date.now()}`;
+                          setChatId(id);
+                          setTurns(defaultWelcome());
+                          try { localStorage.setItem(CURRENT_CHAT_KEY, id); } catch { /* */ }
+                        }
+                      }}
+                    >
+                      Suppr.
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
 
         <div className="p-4 space-y-3 flex-1 max-h-[55vh] overflow-y-auto">
           {turns.map((t) => (
@@ -616,49 +737,7 @@ export default function AIAssistant() {
               <div className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap ${
                 t.role === 'user' ? 'bg-primary-600 text-white' : 'bg-stone-800 text-stone-200'
               }`}>
-                {t.role === 'user' && editingId === t.id ? (
-                  <div className="space-y-2">
-                    <textarea
-                      value={editDraft}
-                      onChange={(e) => setEditDraft(e.target.value)}
-                      rows={3}
-                      className="w-full rounded-xl bg-primary-700/80 text-white text-sm p-2 border border-primary-400/40 outline-none"
-                      autoFocus
-                    />
-                    <div className="flex gap-2 justify-end">
-                      <button
-                        type="button"
-                        className="text-[11px] px-2 py-1 rounded-lg bg-primary-800/80"
-                        onClick={() => { setEditingId(null); setEditDraft(''); }}
-                        disabled={thinking}
-                      >
-                        Annuler
-                      </button>
-                      <button
-                        type="button"
-                        className="text-[11px] px-2 py-1 rounded-lg bg-white text-primary-700 font-semibold"
-                        disabled={thinking || !editDraft.trim()}
-                        onClick={() => ask({ text: editDraft.trim(), replaceUserId: t.id })}
-                      >
-                        Enregistrer & renvoyer
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    {t.text}
-                    {t.role === 'user' && !thinking && (
-                      <button
-                        type="button"
-                        title="Modifier le message"
-                        className="mt-1 inline-flex items-center gap-1 text-[10px] opacity-80 hover:opacity-100"
-                        onClick={() => { setEditingId(t.id); setEditDraft(t.text); }}
-                      >
-                        <Pencil size={11} /> Modifier
-                      </button>
-                    )}
-                  </>
-                )}
+                {t.text}
                 {t.imageUrl ? (
                   <a href={t.imageUrl} target="_blank" rel="noreferrer" className="block mt-2">
                     <img src={t.imageUrl} alt="" className="rounded-xl max-h-64 object-cover border border-stone-700" loading="lazy" />
