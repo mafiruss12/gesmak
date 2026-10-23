@@ -216,7 +216,7 @@ function ProtectedRoutes() {
         <Route path="/print-qr" element={<PlanGate feature="qrOrdering" label="Imprimer QR tables"><PrintTableQR /></PlanGate>} />
         <Route path="/patron" element={<PatronMode />} />
         <Route path="/cloture" element={<RedirectToReportTab tab="cloture" />} />
-        <Route path="/ai" element={<PlanGate feature="ocrAi" label="Assistant IA"><AIAssistant /></PlanGate>} />
+        <Route path="/ai" element={<AIAssistant />} />
         <Route path="/ai-train" element={<PlanGate feature="ocrAi" label="Entrainement IA"><AITrain /></PlanGate>} />
         <Route path="/chat" element={<ChatPage />} />
         <Route path="/suivi" element={<Navigate to="/mes-employes" replace />} />
