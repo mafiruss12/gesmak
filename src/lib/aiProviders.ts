@@ -1,4 +1,4 @@
-/** Catalogue modèles IA — Stock Manager AI */
+/** Catalogue modèles IA — Stock Manager AI (IDs vérifiés Oct 2026) */
 export type AiCapability = 'chat' | 'vision' | 'image' | 'video' | 'file';
 
 export type AiProviderId = 'gemini' | 'groq' | 'openrouter' | 'pollinations' | 'local';
@@ -14,70 +14,70 @@ export interface AiModelOption {
 
 export const AI_MODELS: AiModelOption[] = [
   {
-    id: 'local-rules',
-    provider: 'local',
-    label: 'Local (rapide)',
-    description: 'Réponses entraînées + règles métier sans API',
-    caps: ['chat'],
-    freeNoKey: true,
-  },
-  {
-    id: 'gemini-2.0-flash',
+    id: 'gemini-3.5-flash-lite',
     provider: 'gemini',
-    label: 'Gemini 2.0 Flash',
-    description: 'Chat + vision OCR — Google',
+    label: 'Gemini 3.5 Flash Lite',
+    description: 'Défaut recommandé — chat + vision (Google)',
     caps: ['chat', 'vision', 'file'],
   },
   {
-    id: 'gemini-2.5-flash',
+    id: 'gemini-flash-latest',
     provider: 'gemini',
-    label: 'Gemini 2.5 Flash',
-    description: 'Plus récent si disponible sur votre clé',
+    label: 'Gemini Flash (latest)',
+    description: 'Dernière version Flash Google',
     caps: ['chat', 'vision', 'file'],
   },
   {
-    id: 'llama-3.3-70b-versatile',
-    provider: 'groq',
-    label: 'Groq Llama 3.3 70B',
-    description: 'Très rapide, gratuit (quota)',
+    id: 'openrouter/free',
+    provider: 'openrouter',
+    label: 'OpenRouter Free (auto)',
+    description: 'Routage gratuit OpenRouter',
     caps: ['chat', 'file'],
   },
   {
-    id: 'openrouter/auto',
+    id: 'nvidia/nemotron-3.5-lightning:free',
     provider: 'openrouter',
-    label: 'OpenRouter (free)',
-    description: 'Route vers un modèle free OpenRouter',
+    label: 'Nemotron 3.5 Lightning (free)',
+    description: 'OpenRouter gratuit',
     caps: ['chat', 'file'],
   },
   {
-    id: 'meta-llama/llama-3.3-70b-instruct:free',
+    id: 'google/gemma-4-26b-a4b-it:free',
     provider: 'openrouter',
-    label: 'Llama 3.3 70B (OR free)',
-    description: 'OpenRouter modèle free',
+    label: 'Gemma 4 26B (free)',
+    description: 'OpenRouter free (peut être rate-limité)',
     caps: ['chat', 'file'],
   },
   {
     id: 'pollinations-image',
     provider: 'pollinations',
-    label: 'Images (Pollinations)',
-    description: 'Génération d’images gratuite',
+    label: 'Pollinations Image',
+    description: 'Génération d’images',
     caps: ['image'],
     freeNoKey: true,
   },
   {
     id: 'pollinations-video',
     provider: 'pollinations',
-    label: 'Vidéo (Pollinations)',
-    description: 'Génération vidéo courte (15–60 s)',
+    label: 'Pollinations Vidéo',
+    description: 'Génération de courtes vidéos',
     caps: ['video'],
+    freeNoKey: true,
+  },
+  {
+    id: 'local-rules',
+    provider: 'local',
+    label: 'Local (hors-ligne)',
+    description: 'Réponses métier sans API (secours)',
+    caps: ['chat'],
     freeNoKey: true,
   },
 ];
 
-export function modelById(id: string): AiModelOption | undefined {
+export function getModel(id: string): AiModelOption | undefined {
   return AI_MODELS.find((m) => m.id === id);
 }
 
-export function modelsForCap(cap: AiCapability): AiModelOption[] {
-  return AI_MODELS.filter((m) => m.caps.includes(cap));
+export function defaultChatModelId(): string {
+  return 'gemini-3.5-flash-lite';
 }
