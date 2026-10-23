@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Sparkles, TrendingUp, AlertTriangle, Lightbulb, Brain, Target, Zap,
-  Send, Loader2, Bot, User, ImagePlus, FileDown, Video,
+  Send, Loader2, Bot, User, ImagePlus, FileDown, Video, Paperclip, X,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
@@ -10,7 +10,7 @@ import { formatFCFA, daysAgoISO } from '@/lib/format';
 import { EmptyState } from '@/components/ui';
 import { loadKnowledge, matchTrainedAnswer, getPersona, type AiKnowledge } from '@/lib/aiTrainer';
 import { SUPPORT_EMAIL, supportMailto } from '@/lib/supportContact';
-import { AI_MODELS, modelById, defaultChatModelId, type AiModelOption } from '@/lib/aiProviders';
+import { AI_MODELS, modelById, defaultChatModelId, resolveModelId, visionModelId, type AiModelOption } from '@/lib/aiProviders';
 
 interface AIInsight {
   type: 'prediction' | 'alert' | 'recommendation' | 'opportunity';
@@ -123,9 +123,23 @@ export default function AIAssistant() {
   const [input, setInput] = useState('');
   const [thinking, setThinking] = useState(false);
   const [knowledge, setKnowledge] = useState<AiKnowledge[]>([]);
-  const [modelId, setModelId] = useState(defaultChatModelId());
+  const [modelId, setModelId] = useState(() => {
+    try {
+      return resolveModelId(localStorage.getItem('sm_ai_model'));
+    } catch {
+      return defaultChatModelId();
+    }
+  });
   const [mode, setMode] = useState<'chat' | 'image' | 'video' | 'file'>('chat');
   const [lastError, setLastError] = useState('');
+  const [attachments, setAttachments] = useState<
+    Array<{ name: string; mime: string; dataUrl: string; kind: 'image' | 'text' | 'binary' }>
+  >([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    try { localStorage.setItem('sm_ai_model', modelId); } catch { /* */ }
+  }, [modelId]);
 
   const endRef = useRef<HTMLDivElement>(null);
   const selected: AiModelOption | undefined = modelById(modelId);
@@ -147,7 +161,7 @@ export default function AIAssistant() {
               id: 'welcome',
               role: 'assistant',
               text: persona.slice(0, 280) + (persona.length > 280 ? '…' : '') +
-                '\n\nChoisissez Chat, Image ou Vidéo. Modèles : Gemini, Groq, OpenRouter, Pollinations.',
+                '\n\nChat (Grok par défaut), Image, Vidéo — joignez un fichier pour analyse.',
             }];
           }
           return prev;
@@ -239,36 +253,84 @@ export default function AIAssistant() {
     })();
   }, [member]);
 
-  async function callRemoteAi(prompt: string, forceMode?: 'chat' | 'image' | 'video' | 'file') {
+  async function callRemoteAi(
+    prompt: string,
+    forceMode?: 'chat' | 'image' | 'video' | 'file',
+    opts?: { image?: string; mime?: string; modelOverride?: string },
+  ) {
     const m = forceMode || mode;
-    const mod = modelById(modelId);
+    const mid = resolveModelId(opts?.modelOverride || modelId);
+    const mod = modelById(mid);
     const provider = mod?.provider || 'gemini';
+    const body: Record<string, unknown> = {
+      prompt,
+      model: mid,
+      provider: m === 'image' ? 'pollinations' : provider,
+      mode: m === 'file' ? 'chat' : m,
+      system: ctx ? buildSystemPrompt(getPersona(knowledge), ctx) : getPersona(knowledge),
+      temperature: 0.35,
+      maxOutputTokens: 4096,
+    };
+    if (opts?.image) {
+      body.image = opts.image.replace(/^data:[^;]+;base64,/, '');
+      body.mime = opts.mime || 'image/jpeg';
+      if (!mod?.caps.includes('vision')) {
+        body.model = visionModelId();
+        body.provider = 'gemini';
+      }
+    }
     const res = await fetch('/api/ai/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        prompt,
-        model: modelId,
-        provider: m === 'image' ? 'pollinations' : provider,
-        mode: m === 'file' ? 'chat' : m,
-        system: ctx ? buildSystemPrompt(getPersona(knowledge), ctx) : getPersona(knowledge),
-        temperature: 0.35,
-        maxOutputTokens: 2048,
-      }),
+      body: JSON.stringify(body),
     });
     const j = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      throw new Error(j.error || `Erreur IA (${res.status})`);
-    }
+    if (!res.ok) throw new Error(j.error || `Erreur IA (${res.status})`);
     return j as { text?: string; image_url?: string; video_url?: string; provider?: string; model?: string };
   }
 
+  async function onPickFiles(files: FileList | null) {
+    if (!files?.length) return;
+    const next: Array<{ name: string; mime: string; dataUrl: string; kind: 'image' | 'text' | 'binary' }> = [];
+    for (const file of Array.from(files).slice(0, 6)) {
+      if (file.size > 8 * 1024 * 1024) {
+        setLastError(`Fichier trop volumineux (max 8 Mo) : ${file.name}`);
+        continue;
+      }
+      const mime = file.type || 'application/octet-stream';
+      const isImg = mime.startsWith('image/');
+      const isText =
+        mime.startsWith('text/') ||
+        mime.includes('json') ||
+        mime.includes('csv') ||
+        /\.(txt|md|csv|json|log)$/i.test(file.name);
+      const isPdf = mime === 'application/pdf' || /\.pdf$/i.test(file.name);
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(String(r.result || ''));
+        r.onerror = () => reject(new Error('lecture fichier'));
+        r.readAsDataURL(file);
+      });
+      if (isImg) next.push({ name: file.name, mime, dataUrl, kind: 'image' });
+      else if (isText) next.push({ name: file.name, mime: mime || 'text/plain', dataUrl, kind: 'text' });
+      else if (isPdf) next.push({ name: file.name, mime: 'application/pdf', dataUrl, kind: 'binary' });
+      else setLastError(`Type non supporté : ${file.name}. Image, PDF, TXT, CSV ou JSON.`);
+    }
+    if (next.length) setAttachments((prev) => [...prev, ...next].slice(0, 8));
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }
+
   async function ask() {
-    if (!input.trim() || !ctx) return;
-    const q = input.trim();
+    if ((!input.trim() && attachments.length === 0) || !ctx) return;
+    const q = input.trim() || (attachments.length ? 'Analyse le(s) fichier(s) joint(s) et explique clairement en français.' : '');
+    const attSnap = [...attachments];
     setInput('');
+    setAttachments([]);
     setLastError('');
-    setTurns((t) => [...t, { id: `u-${Date.now()}`, role: 'user', text: q }]);
+    const attLabel = attSnap.length ? `
+
+📎 ${attSnap.map((a) => a.name).join(', ')}` : '';
+    setTurns((t) => [...t, { id: `u-${Date.now()}`, role: 'user', text: q + attLabel }]);
     setThinking(true);
 
     try {
@@ -353,8 +415,42 @@ export default function AIAssistant() {
         return;
       }
 
-      // Chat distant (Gemini / Groq / OpenRouter)
-      const j = await callRemoteAi(q, 'chat');
+      // Chat distant + fichiers joints (Grok / Gemini vision)
+      let prompt = q;
+      let imageB64: string | undefined;
+      let imageMime: string | undefined;
+      let modelOverride: string | undefined;
+      const textParts: string[] = [];
+      for (const a of attSnap) {
+        if (a.kind === 'text') {
+          try {
+            const b64 = a.dataUrl.split(',')[1] || '';
+            const decoded = atob(b64);
+            textParts.push('--- Fichier: ' + a.name + ' ---\n' + decoded.slice(0, 12000));
+          } catch {
+            textParts.push('(Impossible de lire ' + a.name + ')');
+          }
+        } else if (a.kind === 'image' && !imageB64) {
+          imageB64 = a.dataUrl;
+          imageMime = a.mime;
+          modelOverride = visionModelId();
+        } else if (a.kind === 'binary') {
+          textParts.push('--- Fichier joint: ' + a.name + ' (' + a.mime + ') ---');
+        }
+      }
+      if (textParts.length) {
+        prompt = q + '\n\nContenu des fichiers joints :\n' + textParts.join('\n\n');
+      }
+      if (attSnap.some((a) => a.kind === 'image')) {
+        prompt =
+          (prompt || 'Analyse cette image.') +
+          '\n\nAnalyse l’image jointe en détail (texte visible, produits, quantités, anomalies).';
+      }
+      const j = await callRemoteAi(prompt, 'chat', {
+        image: imageB64,
+        mime: imageMime,
+        modelOverride,
+      });
       const reply = (j.text || '').trim() || buildReply(q, ctx, knowledge);
       setTurns((t) => [
         ...t,
@@ -426,7 +522,7 @@ export default function AIAssistant() {
         )}
       </div>
       <p className="text-stone-400 text-sm mb-4">
-        Multi-modèles : Gemini, Groq, OpenRouter + images + export fichier
+        Grok · Gemini (vision) · OpenRouter · images · fichiers joints
       </p>
 
       {/* Sélecteurs */}
@@ -538,7 +634,7 @@ export default function AIAssistant() {
         {/* Barre modes toujours visible */}
         <div className="sticky top-0 z-20 bg-stone-950/95 backdrop-blur border-b border-stone-800 px-3 py-2 space-y-2">
           <div className="flex flex-wrap gap-1.5">
-            <button type="button" onClick={() => { setMode('chat'); if (modelId.startsWith('pollinations')) setModelId('gemini-3.5-flash-lite'); }}
+            <button type="button" onClick={() => { setMode('chat'); if (modelId.startsWith('pollinations')) setModelId(defaultChatModelId()); }}
               className={`text-xs px-3 py-1.5 rounded-full font-medium ${mode === 'chat' ? 'bg-primary-600 text-white' : 'bg-stone-800 text-stone-300'}`}>💬 Chat</button>
             <button type="button" onClick={() => { setMode('image'); setModelId('pollinations-image'); }}
               className={`text-xs px-3 py-1.5 rounded-full font-medium ${mode === 'image' ? 'bg-primary-600 text-white' : 'bg-stone-800 text-stone-300'}`}>🖼️ Image</button>
@@ -662,7 +758,21 @@ export default function AIAssistant() {
             </button>
           ))}
         </div>
-        <div className="p-3 border-t border-stone-800 flex gap-2">
+        
+        {attachments.length > 0 && (
+          <div className="flex flex-wrap gap-2 px-1 pb-2">
+            {attachments.map((a, idx) => (
+              <span key={a.name + String(idx)} className="inline-flex items-center gap-1 text-[11px] bg-stone-800 text-stone-200 rounded-full pl-2 pr-1 py-1">
+                {a.kind === 'image' ? '🖼️' : '📄'} {a.name.slice(0, 22)}
+                <button type="button" className="p-0.5 rounded-full hover:bg-stone-700" onClick={() => setAttachments((prev) => prev.filter((_, j) => j !== idx))} aria-label="Retirer">
+                  <X size={12} />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+        <input ref={fileInputRef} type="file" className="hidden" accept="image/*,.pdf,.txt,.csv,.json,.md,text/plain,application/pdf" multiple onChange={(e) => onPickFiles(e.target.files)} />
+<div className="p-3 border-t border-stone-800 flex gap-2">
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -678,9 +788,10 @@ export default function AIAssistant() {
             }
             className="input-field flex-1"
           />
-          <button
+          <button type="button" onClick={() => fileInputRef.current?.click()} className="p-2.5 rounded-xl bg-stone-800 text-stone-200 border border-stone-700 shrink-0" title="Joindre un fichier" disabled={thinking}><Paperclip size={18} /></button>
+            <button
             onClick={ask}
-            disabled={thinking || !input.trim()}
+            disabled={thinking || (!input.trim() && attachments.length === 0)}
             className="btn-primary px-4 flex items-center gap-2"
           >
             <Send size={18} />
