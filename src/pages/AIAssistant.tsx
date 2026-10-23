@@ -56,20 +56,32 @@ function downloadTextFile(filename: string, content: string) {
   URL.revokeObjectURL(url);
 }
 
+function stripMarkdown(s: string): string {
+  return s
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/\*([^*]+)\*/g, '$1')
+    .replace(/__([^_]+)__/g, '$1')
+    .replace(/_([^_]+)_/g, '$1')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .trim();
+}
+
 function buildSystemPrompt() {
-  return `Tu es Stock AI, un assistant IA polyvalent intégré à Stock Manager AI.
-Tu n’es PAS limité au sujet « maquis » ou stock : tu peux aider sur n’importe quel sujet.
+  return `Tu es Stock AI, un assistant conversationnel polyvalent (comme un assistant général).
 
-Capacités :
-- Conversation générale, idées, rédaction, code, explications
-- Analyse de fichiers joints (texte, CSV, images via vision)
-- Génération d’images et de vidéos (modes Image / Vidéo)
-- Export de contenu texte / rapports (mode Fichier)
-- Si des résultats de recherche web sont fournis dans le message, utilise-les et cite les sources
+Règles d'identité :
+- Tu n'es PAS limité au stock, maquis, caisse ou commerce.
+- Si on te demande qui tu es : dis que tu es Stock AI, assistant général intégré à l'app, capable de discuter de tout sujet, analyser des fichiers, générer des images/vidéos, et aider à la rédaction.
+- Ne propose PAS systématiquement Caisse / Inventaire / Rapport du jour sauf si l'utilisateur parle explicitement de gestion de stock.
 
-Style : clair, direct, utile, en français sauf si l’utilisateur écrit dans une autre langue.
-Ne force jamais le sujet commerce/maquis. Si l’utilisateur change de sujet, suis-le.
-Ne prétends pas avoir exécuté une action hors de tes outils (pas d’accès réel aux menus de l’app sauf si l’utilisateur le demande et que le contexte stock optionnel est fourni).`;
+Style de réponse (obligatoire) :
+- Français clair et professionnel.
+- PAS de markdown : n'utilise jamais ** gras **, * italique *, # titres, ni listes avec des tirets markdown.
+- Pour les listes, utilise des puces simples "• " ou des numéros "1. 2. 3." sans étoiles.
+- N'écris PAS ton nom de modèle, ni le fournisseur (Grok, Gemini, OpenRouter) dans le corps de la réponse.
+- Réponses naturelles, comme un humain utile, sans jargon technique inutile.`;
 }
 
 export default function AIAssistant() {
@@ -91,7 +103,7 @@ export default function AIAssistant() {
     {
       id: 'welcome',
       role: 'assistant',
-      text: 'Bonjour — je suis **Stock AI**, assistant polyvalent.\n\nChat libre (Grok, Gemini…), **Image**, **Vidéo**, **Fichier**, jointure de documents, et recherche web si besoin.\n\nPosez n’importe quelle question.',
+      text: 'Bonjour. Je suis Stock AI, assistant polyvalent.\n\nChat libre, image, vidéo, fichiers joints et recherche web. Posez n’importe quelle question.',
     },
   ]);
   const [input, setInput] = useState('');
@@ -135,7 +147,7 @@ export default function AIAssistant() {
             return [{
               id: 'welcome',
               role: 'assistant',
-              text: 'Bonjour — **Stock AI** polyvalent.\n\nChat, images, vidéos, fichiers joints, recherche. Aucune limite de sujet.\n\n' + (persona ? '(Persona : ' + persona.slice(0, 120) + ')\n\n' : ''),
+              text: 'Bonjour. Je suis Stock AI, assistant polyvalent. Chat, images, vidéos, fichiers et recherche — tous sujets.\n\n',
             }];
           }
           return prev;
@@ -385,7 +397,7 @@ export default function AIAssistant() {
         const raw = buildReply(q, ctx, knowledge);
         const escalate = raw.startsWith('__ESCALATE__');
         const reply = escalate ? raw.replace(/^__ESCALATE__/, '') : raw;
-        setTurns((t) => [...t, { id: `a-${Date.now()}`, role: 'assistant', text: reply, escalate }]);
+        setTurns((t) => [...t, { id: `a-${Date.now()}`, role: 'assistant', text: stripMarkdown(reply), escalate }]);
         setThinking(false);
         return;
       }
@@ -432,7 +444,7 @@ export default function AIAssistant() {
         {
           id: `a-${Date.now()}`,
           role: 'assistant',
-          text: reply + (j.provider ? `\n\n_(${j.provider}${j.model ? ` · ${j.model}` : ''})_` : ''),
+          text: stripMarkdown(reply),
         },
       ]);
     } catch (e) {
@@ -445,7 +457,7 @@ export default function AIAssistant() {
         {
           id: `a-${Date.now()}`,
           role: 'assistant',
-          text: `⚠️ IA distante indisponible (${msg}). Réponse locale :\n\n${raw.replace(/^__ESCALATE__/, '')}`,
+          text: stripMarkdown('IA distante indisponible (' + msg + '). ' + raw.replace(/^__ESCALATE__/, '')),
         },
       ]);
     }
@@ -478,10 +490,10 @@ export default function AIAssistant() {
   };
 
   const quick = [
-    'Comment encaisser ?',
-    'Stocks bas ?',
-    'Comment faire la clôture ?',
-    'Résumé des ventes',
+    'Qui es-tu ?',
+    'Aide-moi à rédiger un texte',
+    'Génère une idée créative',
+    'Explique un concept simplement',
   ];
 
   return (
@@ -649,7 +661,7 @@ export default function AIAssistant() {
         <div className="px-4 py-3 border-b border-stone-800 flex items-center gap-2">
           <Bot size={18} className="text-primary-400" />
           <span className="text-sm font-medium text-stone-200">Assistant</span>
-          <span className="text-xs text-stone-500 ml-auto">{selected?.label || modelId}</span>
+          <span className="text-xs text-stone-500 ml-auto"></span>
         </div>
         <div className="p-4 space-y-3 max-h-[420px] overflow-y-auto">
           {turns.map((t) => (
