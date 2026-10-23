@@ -123,7 +123,7 @@ export default function AIAssistant() {
   const [input, setInput] = useState('');
   const [thinking, setThinking] = useState(false);
   const [knowledge, setKnowledge] = useState<AiKnowledge[]>([]);
-  const [modelId, setModelId] = useState('gemini-2.0-flash');
+  const [modelId, setModelId] = useState(defaultChatModelId());
   const [mode, setMode] = useState<'chat' | 'image' | 'video' | 'file'>('chat');
   const [lastError, setLastError] = useState('');
 
@@ -538,7 +538,7 @@ export default function AIAssistant() {
         {/* Barre modes toujours visible */}
         <div className="sticky top-0 z-20 bg-stone-950/95 backdrop-blur border-b border-stone-800 px-3 py-2 space-y-2">
           <div className="flex flex-wrap gap-1.5">
-            <button type="button" onClick={() => { setMode('chat'); if (modelId.startsWith('pollinations')) setModelId('gemini-2.0-flash'); }}
+            <button type="button" onClick={() => { setMode('chat'); if (modelId.startsWith('pollinations')) setModelId('gemini-3.5-flash-lite'); }}
               className={`text-xs px-3 py-1.5 rounded-full font-medium ${mode === 'chat' ? 'bg-primary-600 text-white' : 'bg-stone-800 text-stone-300'}`}>💬 Chat</button>
             <button type="button" onClick={() => { setMode('image'); setModelId('pollinations-image'); }}
               className={`text-xs px-3 py-1.5 rounded-full font-medium ${mode === 'image' ? 'bg-primary-600 text-white' : 'bg-stone-800 text-stone-300'}`}>🖼️ Image</button>
