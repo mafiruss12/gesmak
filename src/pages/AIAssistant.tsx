@@ -111,7 +111,7 @@ export default function AIAssistant() {
       {
         id: 'welcome',
         role: 'assistant',
-        text: 'Bonjour. Je suis Stock AI, assistant polyvalent.\n\nChat libre, image, vidéo, fichiers joints et recherche web. Posez n’importe quelle question.',
+        text: 'Bonjour. Comment puis-je vous aider ?',
       },
     ];
   });
@@ -162,7 +162,7 @@ export default function AIAssistant() {
             return [{
               id: 'welcome',
               role: 'assistant',
-              text: 'Bonjour. Je suis Stock AI, assistant polyvalent. Chat, images, vidéos, fichiers et recherche — tous sujets.\n\n',
+              text: 'Bonjour. Comment puis-je vous aider ?',
             }];
           }
           return prev;
@@ -504,245 +504,109 @@ export default function AIAssistant() {
     primary: 'bg-primary-500/10 text-primary-400 border-primary-500/20',
   };
 
-  const quick = [
-    'Qui es-tu ?',
-    'Aide-moi à rédiger un texte',
-    'Génère une idée créative',
-    'Explique un concept simplement',
-  ];
 
   return (
-    <div>
-      <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
-        <div className="flex items-center gap-2">
-          <Sparkles className="text-primary-400" />
-          <h1 className="text-xl font-bold font-display text-stone-100">Demander de l&apos;aide</h1>
-          <p className="text-xs text-stone-500">IA polyvalente · chat, web, images, vidéos, fichiers</p>
+    <div className="max-w-2xl mx-auto pb-4">
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <div className="flex items-center gap-2 min-w-0">
+          <Sparkles className="text-primary-400 shrink-0" />
+          <div>
+            <h1 className="text-xl font-bold font-display text-stone-100">Assistant IA</h1>
+            <p className="text-xs text-stone-500">Un chat · plusieurs modèles · fichiers, images, vidéos</p>
+          </div>
         </div>
         {(member?.role === 'super_admin' || member?.role === 'owner' || member?.role === 'proprietaire') && (
-          <a href="/ai-train" className="text-sm text-primary-400 hover:underline">Former l&apos;IA</a>
+          <a href="/ai-train" className="text-xs text-primary-400 hover:underline shrink-0">Former l&apos;IA</a>
         )}
       </div>
-      <p className="text-stone-400 text-sm mb-4">
-        Grok · Gemini · OpenRouter · recherche · images · vidéos · fichiers
-      </p>
 
-      {/* Sélecteurs */}
-      <div className="card mb-4 space-y-3">
+      {/* Barre unique : modèle + modes */}
+      <div className="card mb-3 space-y-3">
         <div className="flex flex-wrap gap-2 items-center">
           <label className="text-xs text-stone-400 shrink-0">Modèle</label>
           <select
             value={modelId}
             onChange={(e) => {
-              setModelId(e.target.value);
-              const m = modelById(e.target.value);
+              const id = e.target.value;
+              setModelId(id);
+              const m = modelById(id);
               if (m?.caps.includes('video') && !m.caps.includes('chat')) setMode('video');
               else if (m?.caps.includes('image') && !m.caps.includes('chat')) setMode('image');
               else if ((mode === 'image' || mode === 'video') && m && !m.caps.includes(mode)) setMode('chat');
             }}
-            className="input-field text-sm flex-1 min-w-[200px]"
+            className="input-field text-sm flex-1 min-w-[180px]"
           >
-            {AI_MODELS.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.label}
-              </option>
+            {AI_MODELS.filter((m) => m.caps.includes('chat') || m.caps.includes('image') || m.caps.includes('video') || m.caps.includes('file')).map((m) => (
+              <option key={m.id} value={m.id}>{m.label}</option>
             ))}
           </select>
         </div>
-        {selected ? (
-          <p className="text-xs text-stone-500">{selected.description}</p>
-        ) : null}
         <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setMode('chat')}
-            className={`text-xs px-3 py-1.5 rounded-full ${mode === 'chat' ? 'bg-primary-600 text-white' : 'bg-stone-800 text-stone-300'}`}
-          >
-            Chat
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setMode('image');
-              setModelId('pollinations-image');
-            }}
-            className={`text-xs px-3 py-1.5 rounded-full flex items-center gap-1 ${mode === 'image' ? 'bg-primary-600 text-white' : 'bg-stone-800 text-stone-300'}`}
-          >
-            <ImagePlus size={12} /> Image
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode('file')}
-            className={`text-xs px-3 py-1.5 rounded-full flex items-center gap-1 ${mode === 'file' ? 'bg-primary-600 text-white' : 'bg-stone-800 text-stone-300'}`}
-          >
-            <FileDown size={12} /> Fichier
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setMode('video');
-              setModelId('pollinations-video');
-            }}
-            className={`text-xs px-3 py-1.5 rounded-full flex items-center gap-1 ${mode === 'video' ? 'bg-primary-600 text-white' : 'bg-stone-800 text-stone-300'}`}
-          >
-            <Video size={12} /> Vidéo
-          </button>
+          <button type="button" onClick={() => { setMode('chat'); if (modelId.startsWith('pollinations')) setModelId(defaultChatModelId()); }}
+            className={`text-xs px-3 py-1.5 rounded-full ${mode === 'chat' ? 'bg-primary-600 text-white' : 'bg-stone-800 text-stone-300'}`}>Chat</button>
+          <button type="button" onClick={() => { setMode('image'); setModelId('pollinations-image'); }}
+            className={`text-xs px-3 py-1.5 rounded-full inline-flex items-center gap-1 ${mode === 'image' ? 'bg-primary-600 text-white' : 'bg-stone-800 text-stone-300'}`}><ImagePlus size={12} /> Image</button>
+          <button type="button" onClick={() => { setMode('video'); setModelId('pollinations-video'); }}
+            className={`text-xs px-3 py-1.5 rounded-full inline-flex items-center gap-1 ${mode === 'video' ? 'bg-primary-600 text-white' : 'bg-stone-800 text-stone-300'}`}><Video size={12} /> Vidéo</button>
+          <button type="button" onClick={() => setMode('file')}
+            className={`text-xs px-3 py-1.5 rounded-full inline-flex items-center gap-1 ${mode === 'file' ? 'bg-primary-600 text-white' : 'bg-stone-800 text-stone-300'}`}><FileDown size={12} /> Fichier</button>
         </div>
-        {lastError ? (
-          <p className="text-xs text-amber-400">Dernière erreur API : {lastError}</p>
-        ) : null}
+        <label className="flex items-center gap-2 text-[11px] text-stone-400 cursor-pointer select-none">
+          <input type="checkbox" checked={webSearch} onChange={(e) => setWebSearch(e.target.checked)} className="rounded border-stone-600" />
+          Recherche web
+        </label>
+        {lastError ? <p className="text-[11px] text-red-400">{lastError}</p> : null}
       </div>
 
-      <div className="card mb-6 bg-gradient-to-br from-primary-500/10 to-secondary-500/5 border-primary-500/20">
-        <div className="flex items-center gap-4">
-          <div className="p-4 rounded-2xl bg-primary-500/15">
-            <Brain size={32} className="text-primary-400" />
-          </div>
-          <div className="flex-1">
-            <p className="text-sm text-stone-400">Ventes prédites demain</p>
-            <p className="text-3xl font-bold font-display text-stone-100">
-              {formatFCFA(predictedSales)}
-            </p>
-          </div>
-          {topDay && (
-            <div className="text-right">
-              <p className="text-sm text-stone-400">Meilleur jour</p>
-              <p className="text-xl font-bold text-primary-400 capitalize">{topDay}</p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
-        {insights.map((ins, i) => {
-          const Icon = ins.icon;
-          return (
-            <div key={i} className={`card border ${colorMap[ins.color]}`}>
-              <div className="flex items-start gap-3">
-                <div className={`p-2.5 rounded-xl shrink-0 ${colorMap[ins.color]}`}>
-                  <Icon size={20} />
-                </div>
-                <div className="flex-1">
-                  <p className="font-semibold text-stone-100 mb-1">{ins.title}</p>
-                  <p className="text-sm text-stone-400">{ins.message}</p>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="card p-0 overflow-hidden">
-        {/* Barre modes toujours visible */}
-        <div className="sticky top-0 z-20 bg-stone-950/95 backdrop-blur border-b border-stone-800 px-3 py-2 space-y-2">
-          <div className="flex flex-wrap gap-1.5">
-            <button type="button" onClick={() => { setMode('chat'); if (modelId.startsWith('pollinations')) setModelId(defaultChatModelId()); }}
-              className={`text-xs px-3 py-1.5 rounded-full font-medium ${mode === 'chat' ? 'bg-primary-600 text-white' : 'bg-stone-800 text-stone-300'}`}>💬 Chat</button>
-            <button type="button" onClick={() => { setMode('image'); setModelId('pollinations-image'); }}
-              className={`text-xs px-3 py-1.5 rounded-full font-medium ${mode === 'image' ? 'bg-primary-600 text-white' : 'bg-stone-800 text-stone-300'}`}>🖼️ Image</button>
-            <button type="button" onClick={() => { setMode('video'); setModelId('pollinations-video'); }}
-              className={`text-xs px-3 py-1.5 rounded-full font-medium ${mode === 'video' ? 'bg-primary-600 text-white' : 'bg-stone-800 text-stone-300'}`}>🎬 Vidéo</button>
-            <button type="button" onClick={() => setMode('file')}
-              className={`text-xs px-3 py-1.5 rounded-full font-medium ${mode === 'file' ? 'bg-primary-600 text-white' : 'bg-stone-800 text-stone-300'}`}>📄 Fichier</button>
-          </div>
-          {mode === 'chat' || mode === 'file' ? (
-            <select
-              value={modelId}
-              onChange={(e) => {
-                const id = e.target.value;
-                setModelId(id);
-                const m = modelById(id);
-                if (m?.caps.includes('video') && !m.caps.includes('chat')) setMode('video');
-                else if (m?.caps.includes('image') && !m.caps.includes('chat')) setMode('image');
-              }}
-              className="w-full text-xs rounded-xl bg-stone-900 border border-stone-700 text-stone-200 px-3 py-2"
-            >
-              {AI_MODELS.filter((m) => m.caps.includes('chat') || m.caps.includes('file')).map((m) => (
-                <option key={m.id} value={m.id}>{m.label}</option>
-              ))}
-            </select>
-          ) : (
-            <p className="text-[11px] text-stone-500">
-              {mode === 'image' ? 'Décrivez l’image puis Envoyer (Pollinations).' : 'Décrivez la scène vidéo (15–60 s de génération).'}
-            </p>
-          )}
-          {lastError ? <p className="text-[11px] text-red-400">{lastError}</p> : null}
-          <label className="flex items-center gap-2 text-[11px] text-stone-400 cursor-pointer select-none">
-            <input type="checkbox" checked={webSearch} onChange={(e) => setWebSearch(e.target.checked)} className="rounded border-stone-600" />
-            Recherche web (enrichir la réponse)
-          </label>
-        </div>
-
+      {/* Chat unique */}
+      <div className="card overflow-hidden flex flex-col min-h-[420px]">
         <div className="px-4 py-3 border-b border-stone-800 flex items-center gap-2">
           <Bot size={18} className="text-primary-400" />
-          <span className="text-sm font-medium text-stone-200">Assistant</span>
+          <span className="text-sm font-medium text-stone-200">Conversation</span>
           <button
             type="button"
             className="ml-auto text-[11px] text-stone-400 hover:text-stone-200 underline"
             onClick={() => {
-              setTurns([
-                {
-                  id: 'welcome-' + Date.now(),
-                  role: 'assistant',
-                  text: 'Nouvelle conversation. Posez votre question, joignez un fichier, ou générez une image / vidéo.',
-                },
-              ]);
+              setTurns([{
+                id: 'welcome-' + Date.now(),
+                role: 'assistant',
+                text: 'Nouvelle conversation. Écrivez librement.',
+              }]);
               try { localStorage.removeItem('sm_ai_chat_v1'); } catch { /* */ }
             }}
           >
             Nouvelle conversation
           </button>
         </div>
-        <div className="p-4 space-y-3 max-h-[420px] overflow-y-auto">
+
+        <div className="p-4 space-y-3 flex-1 max-h-[55vh] overflow-y-auto">
           {turns.map((t) => (
-            <div
-              key={t.id}
-              className={`flex gap-2 ${t.role === 'user' ? 'justify-end' : 'justify-start'}`}
-            >
+            <div key={t.id} className={`flex gap-2 ${t.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               {t.role === 'assistant' && (
                 <div className="w-8 h-8 rounded-full bg-primary-500/20 flex items-center justify-center shrink-0">
                   <Bot size={16} className="text-primary-400" />
                 </div>
               )}
-              <div
-                className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap ${
-                  t.role === 'user'
-                    ? 'bg-primary-600 text-white'
-                    : 'bg-stone-800 text-stone-200'
-                }`}
-              >
+              <div className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap ${
+                t.role === 'user' ? 'bg-primary-600 text-white' : 'bg-stone-800 text-stone-200'
+              }`}>
                 {t.text}
                 {t.imageUrl ? (
                   <a href={t.imageUrl} target="_blank" rel="noreferrer" className="block mt-2">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={t.imageUrl}
-                      alt="Générée"
-                      className="rounded-xl max-h-64 object-cover border border-stone-700"
-                      loading="lazy"
-                    />
+                    <img src={t.imageUrl} alt="" className="rounded-xl max-h-64 object-cover border border-stone-700" loading="lazy" />
                   </a>
                 ) : null}
                 {t.videoUrl ? (
-                  <div className="mt-2 space-y-2">
-                    <video
-                      src={t.videoUrl}
-                      controls
-                      playsInline
-                      className="rounded-xl max-h-72 w-full bg-black border border-stone-700"
-                    />
-                    
+                  <div className="mt-2">
+                    <video src={t.videoUrl} controls playsInline className="rounded-xl max-h-72 w-full bg-black border border-stone-700" />
                   </div>
                 ) : null}
                 {t.role === 'assistant' && t.escalate && (
                   <a
-                    href={supportMailto(
-                      'Assistance Stock Manager AI',
-                      `Bonjour Kevin Tech Pro,\n\nL’assistant IA n’a pas résolu mon problème.\n\nÉtablissement : ${member?.establishment_id || ''}\nCompte : ${member?.email || ''}\n\nDescription :\n`,
-                    )}
-                    className="mt-3 inline-flex items-center gap-2 rounded-xl bg-amber-500 text-stone-900 font-semibold text-xs px-3 py-2 hover:bg-amber-400"
+                    href={supportMailto('Assistance Stock Manager AI', `Bonjour,\n\nÉtablissement : ${member?.establishment_id || ''}\n`)}
+                    className="mt-3 inline-flex items-center gap-2 rounded-xl bg-amber-500 text-stone-900 font-semibold text-xs px-3 py-2"
                   >
-                    Écrire au support (email)
+                    Contacter le support
                   </a>
                 )}
               </div>
@@ -754,31 +618,19 @@ export default function AIAssistant() {
             </div>
           ))}
           {thinking && (
-            <div className="flex items-center gap-2 text-stone-500 text-sm">
-              <Loader2 className="animate-spin" size={14} /> Réflexion…
+            <div className="flex items-center gap-2 text-stone-400 text-sm">
+              <Loader2 size={16} className="animate-spin" /> Réflexion…
             </div>
           )}
           <div ref={endRef} />
         </div>
-        <div className="px-3 pb-2 flex flex-wrap gap-2">
-          {quick.map((q) => (
-            <button
-              key={q}
-              type="button"
-              onClick={() => setInput(q)}
-              className="text-xs px-2.5 py-1 rounded-full bg-stone-800 text-stone-300 hover:bg-stone-700"
-            >
-              {q}
-            </button>
-          ))}
-        </div>
-        
+
         {attachments.length > 0 && (
-          <div className="flex flex-wrap gap-2 px-1 pb-2">
+          <div className="flex flex-wrap gap-2 px-3 pb-1">
             {attachments.map((a, idx) => (
               <span key={a.name + String(idx)} className="inline-flex items-center gap-1 text-[11px] bg-stone-800 text-stone-200 rounded-full pl-2 pr-1 py-1">
                 {a.kind === 'image' ? '🖼️' : '📄'} {a.name.slice(0, 22)}
-                <button type="button" className="p-0.5 rounded-full hover:bg-stone-700" onClick={() => setAttachments((prev) => prev.filter((_, j) => j !== idx))} aria-label="Retirer">
+                <button type="button" className="p-0.5 rounded-full hover:bg-stone-700" onClick={() => setAttachments((prev) => prev.filter((_, j) => j !== idx))}>
                   <X size={12} />
                 </button>
               </span>
@@ -786,28 +638,24 @@ export default function AIAssistant() {
           </div>
         )}
         <input ref={fileInputRef} type="file" className="hidden" accept="image/*,.pdf,.txt,.csv,.json,.md,text/plain,application/pdf" multiple onChange={(e) => onPickFiles(e.target.files)} />
-<div className="p-3 border-t border-stone-800 flex gap-2">
+
+        <div className="p-3 border-t border-stone-800 flex gap-2 items-end">
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && ask()}
+            onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && ask()}
             placeholder={
-              mode === 'image'
-                ? 'Décrivez l’image à générer…'
-                : mode === 'video'
-                  ? 'Décrivez la vidéo à générer (tout sujet)…'
-                  : mode === 'file'
-                    ? 'Ex. Rapport stock bas en texte…'
-                    : 'Ex. Comment ajouter une boisson ?'
+              mode === 'image' ? 'Décrivez l’image…'
+                : mode === 'video' ? 'Décrivez la vidéo…'
+                : mode === 'file' ? 'Décrivez le fichier à générer…'
+                : 'Écrivez votre message…'
             }
             className="input-field flex-1"
           />
-          <button type="button" onClick={() => fileInputRef.current?.click()} className="p-2.5 rounded-xl bg-stone-800 text-stone-200 border border-stone-700 shrink-0" title="Joindre un fichier" disabled={thinking}><Paperclip size={18} /></button>
-            <button
-            onClick={ask}
-            disabled={thinking || (!input.trim() && attachments.length === 0)}
-            className="btn-primary px-4 flex items-center gap-2"
-          >
+          <button type="button" onClick={() => fileInputRef.current?.click()} className="p-2.5 rounded-xl bg-stone-800 text-stone-200 border border-stone-700 shrink-0" title="Joindre" disabled={thinking}>
+            <Paperclip size={18} />
+          </button>
+          <button type="button" onClick={ask} disabled={thinking || (!input.trim() && attachments.length === 0)} className="btn-primary px-4 flex items-center gap-2">
             <Send size={18} />
           </button>
         </div>
