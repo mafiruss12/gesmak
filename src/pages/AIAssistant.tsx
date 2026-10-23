@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Sparkles, TrendingUp, AlertTriangle, Lightbulb, Brain, Target, Zap,
-  Send, Loader2, Bot, User, ImagePlus, FileDown, Video, Paperclip, X,
+  Send, Loader2, Bot, User, ImagePlus, FileDown, Video, Paperclip, X, Pencil,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
@@ -136,6 +136,8 @@ export default function AIAssistant() {
   });
   const [mode, setMode] = useState<'chat' | 'image' | 'video' | 'file'>('chat');
   const [lastError, setLastError] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState('');
   const [attachments, setAttachments] = useState<
     Array<{ name: string; mime: string; dataUrl: string; kind: 'image' | 'text' | 'binary' }>
   >([]);
@@ -331,17 +333,32 @@ export default function AIAssistant() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   }
 
-  async function ask() {
-    if ((!input.trim() && attachments.length === 0) || !ctx) return;
-    const q = input.trim() || (attachments.length ? 'Analyse le(s) fichier(s) joint(s) et explique clairement en français.' : '');
-    const attSnap = [...attachments];
-    setInput('');
-    setAttachments([]);
+  async function ask(opts?: { text?: string; replaceUserId?: string }) {
+    const fromEdit = Boolean(opts?.replaceUserId);
+    const rawQ = (opts?.text !== undefined ? opts.text : input).trim();
+    if ((!rawQ && attachments.length === 0 && !fromEdit) || !ctx) return;
+    const q = rawQ || (attachments.length ? 'Analyse le(s) fichier(s) joint(s) et explique clairement en français.' : '');
+    const attSnap = fromEdit ? [] : [...attachments];
+    if (!fromEdit) {
+      setInput('');
+      setAttachments([]);
+    }
+    setEditingId(null);
+    setEditDraft('');
     setLastError('');
-    const attLabel = attSnap.length ? `
+    const attLabel = attSnap.length ? ('\n\n📎 ' + attSnap.map((a) => a.name).join(', ')) : '';
+    const userText = q + attLabel;
 
-📎 ${attSnap.map((a) => a.name).join(', ')}` : '';
-    setTurns((t) => [...t, { id: `u-${Date.now()}`, role: 'user', text: q + attLabel }]);
+    if (opts?.replaceUserId) {
+      setTurns((prev) => {
+        const idx = prev.findIndex((x) => x.id === opts.replaceUserId);
+        if (idx < 0) return prev;
+        const kept = prev.slice(0, idx);
+        return [...kept, { id: opts.replaceUserId!, role: 'user' as const, text: userText }];
+      });
+    } else {
+      setTurns((t) => [...t, { id: `u-${Date.now()}`, role: 'user', text: userText }]);
+    }
     setThinking(true);
 
     try {
@@ -599,7 +616,49 @@ export default function AIAssistant() {
               <div className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap ${
                 t.role === 'user' ? 'bg-primary-600 text-white' : 'bg-stone-800 text-stone-200'
               }`}>
-                {t.text}
+                {t.role === 'user' && editingId === t.id ? (
+                  <div className="space-y-2">
+                    <textarea
+                      value={editDraft}
+                      onChange={(e) => setEditDraft(e.target.value)}
+                      rows={3}
+                      className="w-full rounded-xl bg-primary-700/80 text-white text-sm p-2 border border-primary-400/40 outline-none"
+                      autoFocus
+                    />
+                    <div className="flex gap-2 justify-end">
+                      <button
+                        type="button"
+                        className="text-[11px] px-2 py-1 rounded-lg bg-primary-800/80"
+                        onClick={() => { setEditingId(null); setEditDraft(''); }}
+                        disabled={thinking}
+                      >
+                        Annuler
+                      </button>
+                      <button
+                        type="button"
+                        className="text-[11px] px-2 py-1 rounded-lg bg-white text-primary-700 font-semibold"
+                        disabled={thinking || !editDraft.trim()}
+                        onClick={() => ask({ text: editDraft.trim(), replaceUserId: t.id })}
+                      >
+                        Enregistrer & renvoyer
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {t.text}
+                    {t.role === 'user' && !thinking && (
+                      <button
+                        type="button"
+                        title="Modifier le message"
+                        className="mt-1 inline-flex items-center gap-1 text-[10px] opacity-80 hover:opacity-100"
+                        onClick={() => { setEditingId(t.id); setEditDraft(t.text); }}
+                      >
+                        <Pencil size={11} /> Modifier
+                      </button>
+                    )}
+                  </>
+                )}
                 {t.imageUrl ? (
                   <a href={t.imageUrl} target="_blank" rel="noreferrer" className="block mt-2">
                     <img src={t.imageUrl} alt="" className="rounded-xl max-h-64 object-cover border border-stone-700" loading="lazy" />
