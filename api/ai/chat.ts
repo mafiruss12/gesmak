@@ -244,7 +244,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // ——— IMAGE ———
-  if (mode === 'image' || provider === 'pollinations' || model === 'pollinations-image') {
+  if (mode === 'image' || model === 'pollinations-image') {
     if (!prompt) return res.status(400).json({ error: 'prompt requis pour image' });
     const hasKey = Boolean(pollKey());
     // 1) Essayer gen + clé si dispo
