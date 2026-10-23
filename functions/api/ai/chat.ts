@@ -153,7 +153,7 @@ export async function onRequest(context: Ctx) {
   let prov = provider;
   if (!prov) {
     if (model.includes('gemini')) prov = 'gemini';
-    else if (model.includes(':free') || model.includes('/')) prov = 'openrouter';
+    else if (model.startsWith('anthropic/') || model.startsWith('openai/') || model.startsWith('deepseek/') || model.startsWith('x-ai/') || model.includes(':free') || model.includes('/')) prov = 'openrouter';
     else if (model.includes('llama') || model.includes('gpt-oss')) prov = 'groq';
     else prov = 'gemini';
   }
