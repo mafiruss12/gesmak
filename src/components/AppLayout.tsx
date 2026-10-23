@@ -97,7 +97,7 @@ const NAV_SECTIONS: NavSection[] = [
   {
     label: 'Outils',
     items: [
-      { to: '/ai', label: 'Assistant IA', icon: <Sparkles size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'cashier', 'employee'] },
+      { to: '/ai', label: "Demander de l'aide", icon: <Sparkles size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'cashier', 'employee'] },
       { to: '/ai-train', label: "Former l'IA", icon: <Brain size={20} />, roles: ['super_admin'] },
       { to: '/chat', label: 'Chat interne', icon: <MessageCircle size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'cashier', 'employee'] },
       { to: '/notifications', label: 'Notifications', icon: <Bell size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'cashier', 'employee'] },
@@ -788,7 +788,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 { to: '/btp/documents', label: 'Devis', icon: <FileText size={22} /> },
                 { to: '/btp/clients', label: 'Clients', icon: <Users size={22} /> },
                 { to: '/btp/materials', label: 'Matériaux', icon: <Package size={22} /> },
-                { to: '/ai', label: 'IA', icon: <Brain size={22} /> },
+                { to: '/ai', label: 'Aide', icon: <Brain size={22} /> },
               ]
             : bizType === 'location_event'
             ? [
