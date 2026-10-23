@@ -1,5 +1,40 @@
 import { json, env, readBody, noContent } from '../_lib/http';
 
+
+async function webSearch(query: string): Promise<string> {
+  try {
+    const url =
+      'https://api.duckduckgo.com/?q=' +
+      encodeURIComponent(query.slice(0, 200)) +
+      '&format=json&no_html=1&skip_disambig=1';
+    const r = await fetch(url, { headers: { 'User-Agent': 'StockManagerAI/1.0' } });
+    if (!r.ok) return '';
+    const j = (await r.json()) as {
+      AbstractText?: string;
+      AbstractURL?: string;
+      Heading?: string;
+      RelatedTopics?: Array<{ Text?: string; Topics?: Array<{ Text?: string }> }>;
+    };
+    const lines: string[] = [];
+    if (j.Heading) lines.push('Sujet: ' + j.Heading);
+    if (j.AbstractText) {
+      lines.push(j.AbstractText);
+      if (j.AbstractURL) lines.push('Source: ' + j.AbstractURL);
+    }
+    let n = 0;
+    for (const t of j.RelatedTopics || []) {
+      if (n >= 5) break;
+      if (t.Text) {
+        lines.push('- ' + t.Text);
+        n++;
+      }
+    }
+    return lines.join('\n').slice(0, 3000);
+  } catch {
+    return '';
+  }
+}
+
 type Ctx = { request: Request; env: Record<string, string | undefined> };
 
 function imageUrl(prompt: string) {
@@ -13,7 +48,14 @@ async function chatGemini(apiKey: string, body: Record<string, unknown>) {
   const model = String(body.model || 'gemini-3.5-flash-lite');
   const parts: Array<Record<string, unknown>> = [];
   const system = String(body.system || '');
-  const prompt = String(body.prompt || '');
+  let prompt = String(body.prompt || '')
+  if (body.webSearch && prompt) {
+    const findings = await webSearch(prompt)
+    if (findings) prompt = prompt + '\n\n[Recherche web]\n' + findings
+  }
+  if (!body.system) {
+    body.system = 'Tu es un assistant IA polyvalent. Tu peux parler de n\'importe quel sujet.'
+  };
   if (system) parts.push({ text: `System: ${system}\n\nUser: ${prompt}` });
   else if (prompt) parts.push({ text: prompt });
   if (body.image) {
