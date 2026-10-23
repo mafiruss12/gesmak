@@ -10,7 +10,7 @@ function videoUrl(prompt: string) {
 }
 
 async function chatGemini(apiKey: string, body: Record<string, unknown>) {
-  const model = String(body.model || 'gemini-2.0-flash');
+  const model = String(body.model || 'gemini-3.5-flash-lite');
   const parts: Array<Record<string, unknown>> = [];
   const system = String(body.system || '');
   const prompt = String(body.prompt || '');
@@ -134,8 +134,8 @@ export async function onRequest(context: Ctx) {
     if (prov === 'openrouter') {
       const key = env(context, 'OPENROUTER_API_KEY') || '';
       if (!key) return json({ error: 'OPENROUTER_API_KEY manquant' }, 503);
-      let m = model || 'meta-llama/llama-3.3-70b-instruct:free';
-      if (m === 'openrouter/auto') m = 'meta-llama/llama-3.3-70b-instruct:free';
+      let m = model || 'openrouter/free';
+      if (m === 'openrouter/auto') m = 'openrouter/free';
       const out = await chatOpenAICompat('https://openrouter.ai/api/v1', key, m, body, 'openrouter', appUrl);
       if ('error' in out && out.error) return json(out, out.status || 502);
       return json({ ok: true, mode: 'chat', ...out });
