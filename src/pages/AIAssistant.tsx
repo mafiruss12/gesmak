@@ -10,7 +10,7 @@ import { formatFCFA, daysAgoISO } from '@/lib/format';
 import { EmptyState } from '@/components/ui';
 import { loadKnowledge, matchTrainedAnswer, getPersona, type AiKnowledge } from '@/lib/aiTrainer';
 import { SUPPORT_EMAIL, supportMailto } from '@/lib/supportContact';
-import { AI_MODELS, modelById, type AiModelOption } from '@/lib/aiProviders';
+import { AI_MODELS, modelById, defaultChatModelId, type AiModelOption } from '@/lib/aiProviders';
 
 interface AIInsight {
   type: 'prediction' | 'alert' | 'recommendation' | 'opportunity';
