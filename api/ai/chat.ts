@@ -320,11 +320,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   let prov = provider;
   if (!prov) {
-    if (model.startsWith('gemini') || model.includes('gemini')) prov = 'gemini';
-    else if (model.includes(':free') || model.includes('/'))
-      prov = model.includes('llama') && !model.includes('/') ? 'groq' : 'openrouter';
-    else if (model.includes('llama') || model.includes('gpt-oss')) prov = 'groq';
-    else prov = 'gemini';
+    if (
+      model.startsWith('anthropic/') ||
+      model.startsWith('openai/') ||
+      model.startsWith('deepseek/') ||
+      model.startsWith('x-ai/') ||
+      model.startsWith('meta-llama/') ||
+      model.startsWith('nvidia/') ||
+      model.startsWith('google/') ||
+      model === 'openrouter/free' ||
+      model.includes(':free')
+    ) {
+      prov = 'openrouter';
+    } else if (model.startsWith('gemini') || model.includes('gemini')) {
+      prov = 'gemini';
+    } else if (model.includes('/') ) {
+      prov = 'openrouter';
+    } else if (model.includes('llama') || model.includes('gpt-oss')) {
+      prov = 'groq';
+    } else {
+      prov = 'gemini';
+    }
+  }
+  // Forcer OpenRouter si le modèle est clairement un ID OpenRouter
+  if (
+    model.startsWith('anthropic/') ||
+    model.startsWith('openai/') ||
+    model.startsWith('deepseek/') ||
+    model.startsWith('x-ai/')
+  ) {
+    prov = 'openrouter';
   }
 
   try {
