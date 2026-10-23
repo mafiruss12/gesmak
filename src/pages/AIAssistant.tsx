@@ -464,13 +464,14 @@ export default function AIAssistant() {
       // Mode vidéo
       if (mode === 'video' || modelId === 'pollinations-video') {
         const j = await callRemoteAi(q, 'video');
+        const vurl = j.video_url || (j as { gen_url?: string }).gen_url;
         setTurns((t) => [
           ...t,
           {
             id: `a-${Date.now()}`,
             role: 'assistant',
-            text: cleanMediaText(j.text, 'video'),
-            videoUrl: j.video_url,
+            text: vurl ? 'Vidéo générée — lecture en cours (peut prendre 15 à 90 s).' : 'Impossible d’obtenir l’URL vidéo.',
+            videoUrl: vurl,
           },
         ]);
         setThinking(false);
@@ -783,8 +784,26 @@ export default function AIAssistant() {
                   </a>
                 ) : null}
                 {t.videoUrl ? (
-                  <div className="mt-2">
-                    <video src={t.videoUrl} controls playsInline className="rounded-xl max-h-72 w-full bg-black border border-stone-700" />
+                  <div className="mt-2 space-y-2">
+                    <video
+                      key={t.videoUrl}
+                      src={t.videoUrl}
+                      controls
+                      playsInline
+                      preload="auto"
+                      className="rounded-xl max-h-72 w-full bg-black border border-stone-700"
+                      onError={(e) => {
+                        const el = e.currentTarget;
+                        const n = Number(el.dataset.retry || '0');
+                        if (n < 6) {
+                          el.dataset.retry = String(n + 1);
+                          window.setTimeout(() => { el.load(); }, 5000 * (n + 1));
+                        }
+                      }}
+                    />
+                    <p className="text-[10px] text-stone-500">
+                      Si l’écran reste noir, patientez : la génération peut prendre 15 à 90 secondes.
+                    </p>
                   </div>
                 ) : null}
                 {t.role === 'assistant' && t.escalate && (
