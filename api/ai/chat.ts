@@ -243,41 +243,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       'Tu es un assistant IA polyvalent. Tu peux parler de n\'importe quel sujet (pas seulement le commerce). Français clair, utile, sans limiter le sujet.';
   }
 
-  // ——— IMAGE ———
-  if (mode === 'image' || model === 'pollinations-image') {
-    if (!prompt) return res.status(400).json({ error: 'prompt requis pour image' });
-    const hasKey = Boolean(pollKey());
-    // 1) Essayer gen + clé si dispo
-    if (hasKey) {
-      try {
-        const resolved = await resolveMedia(genImageUrl(prompt), 'image');
-        if (resolved.ok) {
-          return res.status(200).json({
-            ok: true,
-            mode: 'image',
-            provider: 'pollinations',
-            image_url: resolved.url,
-            text: `Image générée.\n${resolved.url}`,
-            authenticated: true,
-          });
-        }
-      } catch {
-        /* fallback public */
-      }
-    }
-    // 2) Fallback public image.pollinations.ai
-    const url = publicImageUrl(prompt);
-    return res.status(200).json({
-      ok: true,
-      mode: 'image',
-      provider: 'pollinations',
-      image_url: url,
-      text: `Image générée.\n${url}`,
-      authenticated: false,
-      hint: hasKey ? undefined : 'Ajoutez POLLINATIONS_API_KEY pour plus de stabilité.',
-    });
-  }
-
   // ——— VIDEO ———
   // Renvoie tout de suite l’URL de génération ; le navigateur charge/joue la vidéo
   // (Pollinations peut prendre 15–90 s la première fois).
@@ -312,6 +277,42 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       authenticated: Boolean(pollKey()),
     });
   }
+
+  // ——— IMAGE ———
+  if ((mode === 'image' || model === 'pollinations-image') && mode !== 'video') {
+    if (!prompt) return res.status(400).json({ error: 'prompt requis pour image' });
+    const hasKey = Boolean(pollKey());
+    // 1) Essayer gen + clé si dispo
+    if (hasKey) {
+      try {
+        const resolved = await resolveMedia(genImageUrl(prompt), 'image');
+        if (resolved.ok) {
+          return res.status(200).json({
+            ok: true,
+            mode: 'image',
+            provider: 'pollinations',
+            image_url: resolved.url,
+            text: `Image générée.\n${resolved.url}`,
+            authenticated: true,
+          });
+        }
+      } catch {
+        /* fallback public */
+      }
+    }
+    // 2) Fallback public image.pollinations.ai
+    const url = publicImageUrl(prompt);
+    return res.status(200).json({
+      ok: true,
+      mode: 'image',
+      provider: 'pollinations',
+      image_url: url,
+      text: `Image générée.\n${url}`,
+      authenticated: false,
+      hint: hasKey ? undefined : 'Ajoutez POLLINATIONS_API_KEY pour plus de stabilité.',
+    });
+  }
+
 
   if (!body.prompt && !body.image) {
     return res.status(400).json({ error: 'prompt ou image requis' });
