@@ -3,7 +3,7 @@ import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 import { toAuthEmail } from './login';
 import { isOnline, cacheAuthProfile, getCachedAuthProfile, prefetchForOffline } from './offline';
-import { getLoginLockRemaining, registerLoginFailure, registerLoginSuccess, isSafeLogin, safeErrorMessage, isStrongEnoughPassword, isPasswordBreached } from './security';
+import { getLoginLockRemaining, registerLoginFailure, registerLoginSuccess, isSafeLogin, safeErrorMessage, isStrongEnoughPassword, isPasswordBreached, serverLoginThrottle } from './security';
 import type { Member, AccessRequest, Establishment } from './types';
 
 export interface MyEstablishment extends Establishment {
@@ -88,7 +88,17 @@ function clearLocalAuthStorage() {
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
       if (!k) continue;
-      if ((k.startsWith('sb-') && k.includes('auth-token')) || k.startsWith(MEMBER_CACHE_PREFIX)) {
+      if (
+        (k.startsWith('sb-') && k.includes('auth-token')) ||
+        k.startsWith(MEMBER_CACHE_PREFIX) ||
+        k === 'mm_view_as_role' ||
+        k === 'mm_active_est' ||
+        k === 'mm_est_ids' ||
+        k.startsWith('mm_active_est:') ||
+        k.startsWith('mm_est_ids:') ||
+        k.startsWith('sm_ai_') ||
+        k === 'mm_login_attempts'
+      ) {
         keys.push(k);
       }
     }
@@ -919,10 +929,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (error) {
         registerLoginFailure();
+        void serverLoginThrottle(typeof login === 'string' ? login : '', 'fail');
         setLoading(false);
         return { error: safeErrorMessage(error, 'Identifiant ou mot de passe incorrect') };
       }
       registerLoginSuccess();
+      void serverLoginThrottle(login, 'success');
       const signedUser = data?.user ?? data?.session?.user ?? null;
       // signInWithPassword a déjà posé la session dans le client — ne PAS await setSession (bloquant mobile)
       if (data?.session) {
@@ -968,6 +980,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { error: null };
     } catch (e: any) {
       registerLoginFailure();
+        void serverLoginThrottle(typeof login === 'string' ? login : '', 'fail');
       setLoading(false);
       return {
         error:
@@ -1111,8 +1124,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await Promise.race([
         supabase.auth.signOut({ scope: 'local' }),
-        new Promise((r) => setTimeout(r, 1500)),
+        new Promise((r) => setTimeout(r, 1200)),
       ]);
+      // Double purge : jeton parfois réécrit par un refresh concurrent
+      clearLocalAuthStorage();
+      try {
+        await Promise.race([
+          supabase.auth.signOut({ scope: 'global' }),
+          new Promise((r) => setTimeout(r, 800)),
+        ]);
+      } catch { /* offline */ }
+      clearLocalAuthStorage();
     } catch { /* réseau : état déjà vidé */ }
     // Si le signOut réseau a expiré, le jeton resterait en localStorage et la session reviendrait au F5
     clearLocalAuthStorage();

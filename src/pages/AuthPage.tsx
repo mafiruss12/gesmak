@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { Beer, Mail, Lock, User, Loader2, KeyRound, ArrowLeft, AlertCircle, CheckCircle2, Package, TrendingUp, WifiOff, Shield, Bot, Users, ClipboardList, Sparkles } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { toAuthEmail } from '@/lib/login';
-import { makeSignupCaptcha, checkSignupCaptcha, getLoginLockRemaining } from '@/lib/security';
+import { makeSignupCaptcha, checkSignupCaptcha, getLoginLockRemaining, serverLoginThrottle } from '@/lib/security';
 import { logSecurityEvent } from '@/lib/securityEvents';
 import {
   enrollTotp,
@@ -288,6 +288,13 @@ async function resendConfirmation() {
         }, 25000);
         let err: string | null = null;
         try {
+          const throttle = await serverLoginThrottle(login, 'check');
+          if (throttle.locked) {
+            const min = Math.ceil((throttle.remainingMs || 0) / 60000) || 15;
+            setError(`Trop de tentatives. Réessayez dans ${min} min.`);
+            setSubmitting(false);
+            return;
+          }
           const res = await signIn(login, password);
           err = res.error;
         } catch (ex: any) {
@@ -304,6 +311,7 @@ async function resendConfirmation() {
         }
         // Succès Auth → dashboard tout de suite (MFA admin géré par MfaGate si besoin)
         void logSecurityEvent('login_success', {});
+        void serverLoginThrottle(login, 'success');
         setLoading(false);
         setSuccess('Connexion réussie…');
         try {
@@ -588,6 +596,10 @@ async function resendConfirmation() {
                   placeholder={mode === 'forgot' ? 'vous@exemple.com' : '0708091011, gerant1 ou email@gmail.com'}
                   className="input-field pl-10"
                 />
+              
+              <p className="text-[11px] text-stone-500 mt-1">
+                Téléphone ou pseudo → compte interne. E-mail complet → compte e-mail (réinitialisation possible).
+              </p>
               </div>
             </div>
             )}
