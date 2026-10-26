@@ -64,6 +64,7 @@ export default function OfflineBanner() {
   }, []);
 
   if (online && pending === 0 && !lastSync) return null;
+  // P3 : toujours visible hors-ligne pour rassurer le terrain
 
   return (
     <div

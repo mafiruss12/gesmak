@@ -334,19 +334,52 @@ export async function prefetchForOffline(
 ): Promise<void> {
   if (!isOnline() || !establishmentId) return;
   try {
-    const tables = ['products', 'expenses', 'sales', 'daily_reports'] as const;
-    for (const table of tables) {
+    // Données critiques terrain (caisse, stock, rapport)
+    const tables: Array<{ name: string; limit: number }> = [
+      { name: 'products', limit: 1200 },
+      { name: 'expenses', limit: 400 },
+      { name: 'sales', limit: 800 },
+      { name: 'daily_reports', limit: 60 },
+    ];
+    for (const { name, limit } of tables) {
       const { data } = await supabase
-        .from(table)
+        .from(name)
         .select('*')
         .eq('establishment_id', establishmentId)
-        .limit(800);
-      if (data) await cacheSet(`${table}:${establishmentId}`, data);
+        .limit(limit);
+      if (data) await cacheSet(`${name}:${establishmentId}`, data);
+    }
+    // Membres / rôles de l’établissement (lecture offline des droits)
+    try {
+      const { data: links } = await supabase
+        .from('member_establishments')
+        .select('user_id, role, establishment_id')
+        .eq('establishment_id', establishmentId)
+        .limit(200);
+      if (links) await cacheSet(`member_establishments:${establishmentId}`, links);
+    } catch {
+      /* table absente ou RLS */
     }
     await cacheSet(`prefetch:at:${establishmentId}`, Date.now());
   } catch {
     /* ignore */
   }
+}
+
+/** Indique si un cache offline frais existe (< 24 h) */
+export async function hasFreshOfflineCache(establishmentId: string, maxAgeMs = 24 * 60 * 60 * 1000): Promise<boolean> {
+  try {
+    const at = await cacheGet<number>(`prefetch:at:${establishmentId}`);
+    if (!at) return false;
+    return Date.now() - Number(at) < maxAgeMs;
+  } catch {
+    return false;
+  }
+}
+
+/** Bloque une action si hors-ligne et non mise en file (message UX unique) */
+export function offlineActionMessage(actionLabel = 'Cette action'): string {
+  return `${actionLabel} nécessite Internet, ou sera mise en file d’attente si supportée.`;
 }
 
 /** Prefetch toutes les X ms tant que l'onglet est ouvert et en ligne */

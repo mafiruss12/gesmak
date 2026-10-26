@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { UserCog, Building2, Users, Plus, Check, X, Loader2, Ban, KeyRound, Trash2, Clock, Mail, RefreshCw, Copy, CheckCircle2, Pencil, Activity, Megaphone, MapPin, LayoutDashboard, AlertTriangle, TrendingUp } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
+import { assertPrivilegedUser } from '@/lib/requireRole';
+import { Navigate } from 'react-router-dom';
 import type { Member, Establishment, AccessRequest, Role } from '@/lib/types';
 import { ROLE_LABELS } from '@/lib/types';
 import { Modal, Badge, EmptyState } from '@/components/ui';
@@ -33,8 +35,9 @@ import {
 
 type Tab = 'overview' | 'requests' | 'members' | 'establishments' | 'map' | 'subscriptions' | 'activity' | 'pubs';
 
-export default function SuperAdmin() {
+function SuperAdminInner() {
   const { member } = useAuth();
+
   const [tab, setTab] = useState<Tab>('overview');
   const [reportsToday, setReportsToday] = useState(0);
   const [requests, setRequests] = useState<AccessRequest[]>([]);
@@ -1826,7 +1829,6 @@ export default function SuperAdmin() {
 
 
 function DirectAccessForm({ establishments, onDone }: { establishments: Establishment[]; onDone: () => void }) {
-  const { member } = useAuth();
   const [login, setLogin] = useState('');
   const [fullName, setFullName] = useState('');
   const [password, setPassword] = useState(() => generatePassword());
@@ -2208,4 +2210,37 @@ function DirectAccessForm({ establishments, onDone }: { establishments: Establis
       </button>
     </div>
   );
+}
+
+export default function SuperAdmin() {
+  const { user, loading: authLoading } = useAuth();
+  const [gate, setGate] = useState<'loading' | 'ok' | 'deny'>('loading');
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (authLoading) return;
+      if (!user?.id) {
+        if (!cancelled) setGate('deny');
+        return;
+      }
+      const v = await assertPrivilegedUser(user.id);
+      if (!cancelled) setGate(v.ok ? 'ok' : 'deny');
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, authLoading]);
+
+  if (gate === 'loading' || authLoading) {
+    return (
+      <div className="min-h-[40vh] flex items-center justify-center text-stone-400 text-sm">
+        Vérification des droits…
+      </div>
+    );
+  }
+  if (gate === 'deny') {
+    return <Navigate to="/dashboard" replace />;
+  }
+  return <SuperAdminInner />;
 }

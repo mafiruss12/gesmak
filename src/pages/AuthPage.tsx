@@ -123,6 +123,19 @@ export default function AuthPage() {
     return () => window.clearInterval(id);
   }, []);
   const [fullName, setFullName] = useState('');
+  
+  const [netOnline, setNetOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
+  useEffect(() => {
+    const on = () => setNetOnline(true);
+    const off = () => setNetOnline(false);
+    window.addEventListener('online', on);
+    window.addEventListener('offline', off);
+    return () => {
+      window.removeEventListener('online', on);
+      window.removeEventListener('offline', off);
+    };
+  }, []);
+
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -529,6 +542,11 @@ async function resendConfirmation() {
           </div>
 
           {/* Alertes */}
+          {!netOnline && (
+            <div className="rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-sm px-3 py-2 mb-3">
+              Hors ligne : la connexion nécessite Internet. Après connexion, stock et rapports restent utilisables hors réseau.
+            </div>
+          )}
           {error && (error.toLowerCase().includes('confirm') || error.toLowerCase().includes('confirmé')) && (
               <button type="button" className="text-sm text-amber-400 underline mb-2" onClick={resendConfirmation}>
                 Renvoyer l&apos;e-mail de confirmation
