@@ -1,3 +1,8 @@
+/**
+ * Identifiants Stock Manager
+ * - E-mail réel (contient @ et un domaine public) → utilisé tel quel (reset MDP possible)
+ * - Téléphone / pseudo → transformé en compte interne …@maquis.local (pas de mail réel)
+ */
 /** Domaine interne pour les identifiants simples (sans email réel) */
 export const LOGIN_DOMAIN = 'maquis.local';
 

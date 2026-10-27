@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { Beer, Mail, Lock, User, Loader2, KeyRound, ArrowLeft, AlertCircle, CheckCircle2, Package, TrendingUp, WifiOff, Shield, Bot, Users, ClipboardList, Sparkles } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { toAuthEmail } from '@/lib/login';
-import { makeSignupCaptcha, checkSignupCaptcha, getLoginLockRemaining } from '@/lib/security';
+import { makeSignupCaptcha, checkSignupCaptcha, getLoginLockRemaining, serverLoginThrottle } from '@/lib/security';
 import { logSecurityEvent } from '@/lib/securityEvents';
 import {
   enrollTotp,
@@ -123,6 +123,19 @@ export default function AuthPage() {
     return () => window.clearInterval(id);
   }, []);
   const [fullName, setFullName] = useState('');
+  
+  const [netOnline, setNetOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
+  useEffect(() => {
+    const on = () => setNetOnline(true);
+    const off = () => setNetOnline(false);
+    window.addEventListener('online', on);
+    window.addEventListener('offline', off);
+    return () => {
+      window.removeEventListener('online', on);
+      window.removeEventListener('offline', off);
+    };
+  }, []);
+
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -288,6 +301,13 @@ async function resendConfirmation() {
         }, 25000);
         let err: string | null = null;
         try {
+          const throttle = await serverLoginThrottle(login, 'check');
+          if (throttle.locked) {
+            const min = Math.ceil((throttle.remainingMs || 0) / 60000) || 15;
+            setError(`Trop de tentatives. Réessayez dans ${min} min.`);
+            setSubmitting(false);
+            return;
+          }
           const res = await signIn(login, password);
           err = res.error;
         } catch (ex: any) {
@@ -304,6 +324,7 @@ async function resendConfirmation() {
         }
         // Succès Auth → dashboard tout de suite (MFA admin géré par MfaGate si besoin)
         void logSecurityEvent('login_success', {});
+        void serverLoginThrottle(login, 'success');
         setLoading(false);
         setSuccess('Connexion réussie…');
         try {
@@ -521,6 +542,11 @@ async function resendConfirmation() {
           </div>
 
           {/* Alertes */}
+          {!netOnline && (
+            <div className="rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-sm px-3 py-2 mb-3">
+              Hors ligne : la connexion nécessite Internet. Après connexion, stock et rapports restent utilisables hors réseau.
+            </div>
+          )}
           {error && (error.toLowerCase().includes('confirm') || error.toLowerCase().includes('confirmé')) && (
               <button type="button" className="text-sm text-amber-400 underline mb-2" onClick={resendConfirmation}>
                 Renvoyer l&apos;e-mail de confirmation
@@ -588,6 +614,10 @@ async function resendConfirmation() {
                   placeholder={mode === 'forgot' ? 'vous@exemple.com' : '0708091011, gerant1 ou email@gmail.com'}
                   className="input-field pl-10"
                 />
+              
+              <p className="text-[11px] text-stone-500 mt-1">
+                Téléphone ou pseudo → compte interne. E-mail complet → compte e-mail (réinitialisation possible).
+              </p>
               </div>
             </div>
             )}

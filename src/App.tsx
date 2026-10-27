@@ -1,37 +1,103 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Loader2 } from 'lucide-react';
 import { AuthProvider, useAuth } from '@/lib/auth';
-import AuthCallback from '@/pages/AuthCallback';
-import AuthPage from '@/pages/AuthPage';
-import PublicHome from '@/pages/PublicHome';
-import PublicEstablishments from '@/pages/public/PublicEstablishments';
-import PublicEvents from '@/pages/public/PublicEvents';
-import PublicServices from '@/pages/public/PublicServices';
-import PublicFavorites from '@/pages/public/PublicFavorites';
-import PublicDiscover from '@/pages/public/PublicDiscover';
-import PublicEstablishmentProfile from '@/pages/public/PublicEstablishmentProfile';
-import PublicCategory from '@/pages/public/PublicCategory';
-import PendingAccessPage from '@/pages/PendingAccessPage';
-import Dashboard from '@/pages/Dashboard';
-import Documents from '@/pages/Documents';
-import Caisse from '@/pages/Caisse';
-import Inventaire from '@/pages/Inventaire';
-import ScanInventaire from '@/pages/ScanInventaire';
-import DepotClients from '@/pages/DepotClients';
-import DepotDeliveries from '@/pages/DepotDeliveries';
-import DepotTours from '@/pages/depot/DepotTours';
-import DepotCreances from '@/pages/depot/DepotCreances';
-import DepotTracking from '@/pages/depot/DepotTracking';
-import DepotConsignes from '@/pages/depot/DepotConsignes';
-import DepotPrices from '@/pages/depot/DepotPrices';
-import PublicDepotsMap from '@/pages/public/PublicDepotsMap';
-import LiveDaySales from '@/pages/LiveDaySales';
-import MonService from '@/pages/MonService';
-import PrintTableQR from '@/pages/PrintTableQR';
-import PatronMode from '@/pages/PatronMode';
-import AITrain from '@/pages/AITrain';
-import DailyReportPage from '@/pages/DailyReport';
-import DailyReportHub, { RedirectToReportTab } from '@/pages/DailyReportHub';
+import PlanGate from '@/components/PlanGate';
+import { isLocationEvent, isBtp } from '@/lib/businessTypes';
+import { isHotelComplex } from '@/lib/hotel';
+import AppLayout from '@/components/AppLayout';
+import ErrorBoundary from '@/components/ErrorBoundary';
+import { isSupabaseConfigured, supabase } from '@/lib/supabase';
+
+const AuthCallback = lazy(() => import('@/pages/AuthCallback'));
+const AuthPage = lazy(() => import('@/pages/AuthPage'));
+const PublicHome = lazy(() => import('@/pages/PublicHome'));
+const PublicEstablishments = lazy(() => import('@/pages/public/PublicEstablishments'));
+const PublicEvents = lazy(() => import('@/pages/public/PublicEvents'));
+const PublicServices = lazy(() => import('@/pages/public/PublicServices'));
+const PublicFavorites = lazy(() => import('@/pages/public/PublicFavorites'));
+const PublicDiscover = lazy(() => import('@/pages/public/PublicDiscover'));
+const PublicEstablishmentProfile = lazy(() => import('@/pages/public/PublicEstablishmentProfile'));
+const PublicCategory = lazy(() => import('@/pages/public/PublicCategory'));
+const PendingAccessPage = lazy(() => import('@/pages/PendingAccessPage'));
+const Dashboard = lazy(() => import('@/pages/Dashboard'));
+const Documents = lazy(() => import('@/pages/Documents'));
+const Caisse = lazy(() => import('@/pages/Caisse'));
+const Inventaire = lazy(() => import('@/pages/Inventaire'));
+const ScanInventaire = lazy(() => import('@/pages/ScanInventaire'));
+const DepotClients = lazy(() => import('@/pages/DepotClients'));
+const DepotDeliveries = lazy(() => import('@/pages/DepotDeliveries'));
+const DepotTours = lazy(() => import('@/pages/depot/DepotTours'));
+const DepotCreances = lazy(() => import('@/pages/depot/DepotCreances'));
+const DepotTracking = lazy(() => import('@/pages/depot/DepotTracking'));
+const DepotConsignes = lazy(() => import('@/pages/depot/DepotConsignes'));
+const DepotPrices = lazy(() => import('@/pages/depot/DepotPrices'));
+const PublicDepotsMap = lazy(() => import('@/pages/public/PublicDepotsMap'));
+const LiveDaySales = lazy(() => import('@/pages/LiveDaySales'));
+const MonService = lazy(() => import('@/pages/MonService'));
+const PrintTableQR = lazy(() => import('@/pages/PrintTableQR'));
+const PatronMode = lazy(() => import('@/pages/PatronMode'));
+const AITrain = lazy(() => import('@/pages/AITrain'));
+const DailyReportPage = lazy(() => import('@/pages/DailyReport'));
+const DailyReportHub = lazy(() => import('@/pages/DailyReportHub'));
+const RedirectToReportTab = lazy(() =>
+  import('@/pages/DailyReportHub').then((m) => ({ default: m.RedirectToReportTab }))
+);
+const ClotureZPage = lazy(() => import('@/pages/ClotureZ'));
+const SuperAdmin = lazy(() => import('@/pages/SuperAdmin'));
+const Employees = lazy(() => import('@/pages/Employees'));
+const Expenses = lazy(() => import('@/pages/Expenses'));
+const Suppliers = lazy(() => import('@/pages/Suppliers'));
+const Purchases = lazy(() => import('@/pages/Purchases'));
+const Customers = lazy(() => import('@/pages/Customers'));
+const Tables = lazy(() => import('@/pages/Tables'));
+const MenuCarte = lazy(() => import('@/pages/restaurant/MenuCarte'));
+const Reservations = lazy(() => import('@/pages/restaurant/Reservations'));
+const Orders = lazy(() => import('@/pages/Orders'));
+const Kitchen = lazy(() => import('@/pages/Kitchen'));
+const Accounting = lazy(() => import('@/pages/Accounting'));
+const Statistics = lazy(() => import('@/pages/Statistics'));
+const Reports = lazy(() => import('@/pages/Reports'));
+const Notifications = lazy(() => import('@/pages/Notifications'));
+const SettingsPage = lazy(() => import('@/pages/Settings'));
+const SyncPending = lazy(() => import('@/pages/SyncPending'));
+const AIAssistant = lazy(() => import('@/pages/AIAssistant'));
+const CalendarPage = lazy(() => import('@/pages/CalendarPage'));
+const ChatPage = lazy(() => import('@/pages/Chat'));
+const SuiviGerant = lazy(() => import('@/pages/SuiviGerant'));
+const TeamPage = lazy(() => import('@/pages/Team'));
+const MesEmployes = lazy(() => import('@/pages/MesEmployes'));
+const PointManuel = lazy(() => import('@/pages/PointManuel'));
+const GuidePage = lazy(() => import('@/pages/Guide'));
+const SubscriptionPage = lazy(() => import('@/pages/Subscription'));
+const KitsPromos = lazy(() => import('@/pages/KitsPromos'));
+const MenuQR = lazy(() => import('@/pages/MenuQR'));
+const PublicMenu = lazy(() => import('@/pages/PublicMenu'));
+const PublicTableOrder = lazy(() => import('@/pages/public/PublicTableOrder'));
+const StockTransfer = lazy(() => import('@/pages/StockTransfer'));
+const RentDashboard = lazy(() => import('@/pages/rent/Dashboard'));
+const RentEquipment = lazy(() => import('@/pages/rent/Equipment'));
+const RentClients = lazy(() => import('@/pages/rent/Clients'));
+const RentOrders = lazy(() => import('@/pages/rent/Orders'));
+const RentMovements = lazy(() => import('@/pages/rent/Movements'));
+const RentPayments = lazy(() => import('@/pages/rent/Payments'));
+const RentCalendar = lazy(() => import('@/pages/rent/Calendar'));
+const RentPacks = lazy(() => import('@/pages/rent/Packs'));
+const RentInvoices = lazy(() => import('@/pages/rent/Invoices'));
+const BtpDashboard = lazy(() => import('@/pages/btp/Dashboard'));
+const BtpDocuments = lazy(() => import('@/pages/btp/Documents'));
+const BtpClients = lazy(() => import('@/pages/btp/Clients'));
+const BtpMaterials = lazy(() => import('@/pages/btp/Materials'));
+const HotelDashboard = lazy(() => import('@/pages/hotel/HotelDashboard'));
+const HotelRooms = lazy(() => import('@/pages/hotel/HotelRooms'));
+const HotelReservations = lazy(() => import('@/pages/hotel/HotelReservations'));
+const HotelGuests = lazy(() => import('@/pages/hotel/HotelGuests'));
+const HotelHousekeeping = lazy(() => import('@/pages/hotel/HotelHousekeeping'));
+const HotelMaintenance = lazy(() => import('@/pages/hotel/HotelMaintenance'));
+const HotelEvents = lazy(() => import('@/pages/hotel/HotelEvents'));
+const HotelServices = lazy(() => import('@/pages/hotel/HotelServices'));
+const HotelSettings = lazy(() => import('@/pages/hotel/HotelSettings'));
+
 
 function DailyReportSafe() {
   return (
@@ -41,68 +107,16 @@ function DailyReportSafe() {
   );
 }
 
-import ClotureZPage from '@/pages/ClotureZ';
-import SuperAdmin from '@/pages/SuperAdmin';
-import Employees from '@/pages/Employees';
-import Expenses from '@/pages/Expenses';
-import Suppliers from '@/pages/Suppliers';
-import Purchases from '@/pages/Purchases';
-import Customers from '@/pages/Customers';
-import Tables from '@/pages/Tables';
-import MenuCarte from '@/pages/restaurant/MenuCarte';
-import Reservations from '@/pages/restaurant/Reservations';
-import Orders from '@/pages/Orders';
-import Kitchen from '@/pages/Kitchen';
-import PlanGate from '@/components/PlanGate';
-import Accounting from '@/pages/Accounting';
-import Statistics from '@/pages/Statistics';
-import Reports from '@/pages/Reports';
-import Notifications from '@/pages/Notifications';
-import SettingsPage from '@/pages/Settings';
-import SyncPending from '@/pages/SyncPending';
-import AIAssistant from '@/pages/AIAssistant';
-import CalendarPage from '@/pages/CalendarPage';
-import ChatPage from '@/pages/Chat';
-import SuiviGerant from '@/pages/SuiviGerant';
-import TeamPage from '@/pages/Team';
-import MesEmployes from '@/pages/MesEmployes';
-import PointManuel from '@/pages/PointManuel';
-import GuidePage from '@/pages/Guide';
-import SubscriptionPage from '@/pages/Subscription';
-import KitsPromos from '@/pages/KitsPromos';
-import MenuQR from '@/pages/MenuQR';
-import PublicMenu from '@/pages/PublicMenu';
-import PublicTableOrder from '@/pages/public/PublicTableOrder';
-import StockTransfer from '@/pages/StockTransfer';
-import RentDashboard from '@/pages/rent/Dashboard';
-import RentEquipment from '@/pages/rent/Equipment';
-import RentClients from '@/pages/rent/Clients';
-import RentOrders from '@/pages/rent/Orders';
-import RentMovements from '@/pages/rent/Movements';
-import RentPayments from '@/pages/rent/Payments';
-import RentCalendar from '@/pages/rent/Calendar';
-import RentPacks from '@/pages/rent/Packs';
-import RentInvoices from '@/pages/rent/Invoices';
-import { isLocationEvent, isBtp } from '@/lib/businessTypes';
-import { isHotelComplex } from '@/lib/hotel';
-import BtpDashboard from '@/pages/btp/Dashboard';
-import BtpDocuments from '@/pages/btp/Documents';
-import BtpClients from '@/pages/btp/Clients';
-import BtpMaterials from '@/pages/btp/Materials';
-import HotelDashboard from '@/pages/hotel/HotelDashboard';
-import HotelRooms from '@/pages/hotel/HotelRooms';
-import HotelReservations from '@/pages/hotel/HotelReservations';
-import HotelGuests from '@/pages/hotel/HotelGuests';
-import HotelHousekeeping from '@/pages/hotel/HotelHousekeeping';
-import HotelMaintenance from '@/pages/hotel/HotelMaintenance';
-import HotelEvents from '@/pages/hotel/HotelEvents';
-import HotelServices from '@/pages/hotel/HotelServices';
-import HotelSettings from '@/pages/hotel/HotelSettings';
 
-import AppLayout from '@/components/AppLayout';
-import ErrorBoundary from '@/components/ErrorBoundary';
-import { Loader2 } from 'lucide-react';
-import { isSupabaseConfigured, supabase } from '@/lib/supabase';
+
+
+function PageFallback() {
+  return (
+    <div className="min-h-[40vh] flex items-center justify-center">
+      <Loader2 className="animate-spin text-[#FF7900]" size={28} />
+    </div>
+  );
+}
 
 function ConfigError() {
   return (
@@ -162,6 +176,7 @@ function ProtectedRoutes() {
 
   return (
     <AppLayout>
+      <Suspense fallback={<PageFallback />}>
       <Routes>
         <Route path="/dashboard" element={<DashboardSwitch />} />
         <Route path="/rent/equipment" element={<RentEquipment />} />
@@ -240,6 +255,7 @@ function ProtectedRoutes() {
         {/* /admin conservé en alias ; menu Administration retiré */}
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
+      </Suspense>
     </AppLayout>
   );
 }

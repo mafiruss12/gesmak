@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { Package, Plus, Pencil, Trash2, Search, AlertTriangle, Sparkles, Download, Upload, Calculator, Camera, Printer, Truck, MoreHorizontal, History, RefreshCw, Volume2, ImageIcon } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
+import { canWriteStock } from '@/lib/requireRole';
 import { usePlanAccess } from '@/lib/usePlanAccess';
 import { serverAssertCanAddProduct } from '@/lib/paymentRequests';
 import type { Product } from '@/lib/types';
@@ -25,13 +26,7 @@ import {
 import { qrCodeImageUrl } from '@/lib/exchangeRates';
 import { cacheSet, cacheGet, isOnline, queueAdd } from '@/lib/offline';
 import { speakFrench, playTone } from '@/lib/a11yVoice';
-
-function aiStatus(stock: number, min: number): { label: string; color: 'error' | 'warning' | 'success' | 'primary' } {
-  if (stock <= 0) return { label: 'RUPTURE', color: 'error' };
-  if (stock <= min) return { label: 'À COMMANDER', color: 'warning' };
-  if (stock <= min * 1.5) return { label: 'SURVEILLER', color: 'primary' };
-  return { label: 'OK', color: 'success' };
-}
+import { aiStockStatus as aiStatus, sortProductsByName, filterProductsBySearch } from '@/lib/inventaireHelpers';
 
 export default function Inventaire() {
   const navigate = useNavigate();
@@ -44,6 +39,7 @@ export default function Inventaire() {
   const roleNow = String(effectiveRole || member?.role || '');
   /** Propriétaire / admin, ou membre explicitement autorisé (can_edit_stock) */
   const canEditStock =
+    canWriteStock(roleNow) ||
     ['super_admin', 'admin', 'owner'].includes(roleNow) ||
     Boolean(member?.can_edit_stock);
   const isStaffOnly = ['employee', 'cashier', 'manager'].includes(roleNow) && !canEditStock;

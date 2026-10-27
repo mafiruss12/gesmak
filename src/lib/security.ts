@@ -1,15 +1,15 @@
 /**
- * Sécurité Stock Manager / Maquis
- * 1) Session : cookies Supabase — ne pas stocker access_token en localStorage custom
- * 2) Rôles admin : toujours re-vérifier depuis members (DB), jamais trust localStorage seul
- * 3) Rate-limit login
+ * Sécurité Stock Manager
+ * 1) Session : stockage Supabase auth token (clé stable projet)
+ * 2) Rôles admin : toujours via table members (DB), jamais trust localStorage seul
+ * 3) Rate-limit login : client + serveur (/api/security/login-throttle)
  * 4) Mots de passe robustes + HIBP
  * 5) Messages d'erreur non révélateurs
  */
 
 const LOGIN_ATTEMPTS_KEY = 'mm_login_attempts';
-const MAX_ATTEMPTS = 5; // P1 anti brute-force
-const LOCK_MS = 15 * 60 * 1000; // 15 minutes
+const MAX_ATTEMPTS = 5;
+const LOCK_MS = 15 * 60 * 1000;
 
 interface AttemptState {
   count: number;
@@ -27,54 +27,97 @@ function readAttempts(): AttemptState {
 }
 
 function writeAttempts(s: AttemptState) {
-  localStorage.setItem(LOGIN_ATTEMPTS_KEY, JSON.stringify(s));
+  try {
+    localStorage.setItem(LOGIN_ATTEMPTS_KEY, JSON.stringify(s));
+  } catch {
+    /* */
+  }
 }
 
 export function getLoginLockRemaining(): number {
   const s = readAttempts();
-  const left = s.lockedUntil - Date.now();
-  return left > 0 ? left : 0;
+  return Math.max(0, s.lockedUntil - Date.now());
 }
 
-export function registerLoginFailure(): { locked: boolean; remainingMs: number } {
+export function isLoginLocked(): boolean {
+  return getLoginLockRemaining() > 0;
+}
+
+export function registerLoginFailure(): void {
   const s = readAttempts();
-  if (s.lockedUntil > Date.now()) {
-    return { locked: true, remainingMs: s.lockedUntil - Date.now() };
-  }
   const count = s.count + 1;
-  if (count >= MAX_ATTEMPTS) {
-    const next = { count: 0, lockedUntil: Date.now() + LOCK_MS };
-    writeAttempts(next);
-    return { locked: true, remainingMs: LOCK_MS };
+  const lockedUntil = count >= MAX_ATTEMPTS ? Date.now() + LOCK_MS : 0;
+  writeAttempts({ count, lockedUntil });
+}
+
+export function registerLoginSuccess(): void {
+  writeAttempts({ count: 0, lockedUntil: 0 });
+}
+
+/** Appel serveur rate-limit (P0). Ne bloque pas si l’API est down. */
+export async function serverLoginThrottle(
+  identifier: string,
+  action: 'check' | 'fail' | 'success',
+): Promise<{ locked: boolean; remainingMs: number; fails?: number }> {
+  try {
+    const ctrl = new AbortController();
+    const t = window.setTimeout(() => ctrl.abort(), 4000);
+    const res = await fetch('/api/security/login-throttle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier: identifier.trim().slice(0, 120), action }),
+      signal: ctrl.signal,
+    });
+    window.clearTimeout(t);
+    if (!res.ok) return { locked: isLoginLocked(), remainingMs: getLoginLockRemaining() };
+    const j = (await res.json()) as { locked?: boolean; remainingMs?: number; fails?: number };
+    if (j.locked && (j.remainingMs || 0) > 0) {
+      writeAttempts({
+        count: MAX_ATTEMPTS,
+        lockedUntil: Date.now() + Number(j.remainingMs || LOCK_MS),
+      });
+    }
+    if (action === 'success') registerLoginSuccess();
+    return {
+      locked: Boolean(j.locked),
+      remainingMs: Number(j.remainingMs || 0),
+      fails: j.fails,
+    };
+  } catch {
+    return { locked: isLoginLocked(), remainingMs: getLoginLockRemaining() };
   }
-  writeAttempts({ count, lockedUntil: 0 });
-  return { locked: false, remainingMs: 0 };
 }
 
-export function registerLoginSuccess() {
-  localStorage.removeItem(LOGIN_ATTEMPTS_KEY);
-}
-
-export function isSafeLogin(login: string): boolean {
-  const v = login.trim();
-  if (v.length < 2 || v.length > 80) return false;
-  if (v.includes('@')) return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v);
-  const digits = v.replace(/\D/g, '');
-  if (digits.length >= 9 && digits.length <= 15) return true;
-  return /^[a-zA-Z0-9._-]{2,40}$/.test(v);
-}
-
-export function isStrongEnoughPassword(password: string): { ok: true } | { ok: false; reason: string } {
+export function isStrongEnoughPassword(password: string): { ok: boolean; reason?: string } {
   if (!password || password.length < 8) {
-    return { ok: false, reason: 'Mot de passe : minimum 8 caractères.' };
+    return { ok: false, reason: 'Mot de passe : 8 caractères minimum.' };
   }
-  if (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
-    return { ok: false, reason: 'Mot de passe : au moins une lettre et un chiffre.' };
+  if (password.length > 128) {
+    return { ok: false, reason: 'Mot de passe trop long.' };
   }
   return { ok: true };
 }
 
-/** Mini CAPTCHA anti-bot (addition) */
+export function isSafeLogin(login: string): boolean {
+  const s = login.trim();
+  if (!s || s.length > 120) return false;
+  if (/\s{2,}/.test(s)) return false;
+  return true;
+}
+
+export async function logSecurityEvent(
+  type: string,
+  meta: Record<string, unknown> = {},
+): Promise<void> {
+  try {
+    // Best-effort : ne jamais bloquer le flux login
+    void type;
+    void meta;
+  } catch {
+    /* */
+  }
+}
+
 export function makeSignupCaptcha(): { a: number; b: number; expected: number } {
   const a = 2 + Math.floor(Math.random() * 8);
   const b = 1 + Math.floor(Math.random() * 9);
@@ -85,7 +128,6 @@ export function checkSignupCaptcha(answer: string, expected: number): boolean {
   const n = Number(String(answer).trim());
   return Number.isFinite(n) && n === expected;
 }
-
 
 export async function isPasswordBreached(password: string): Promise<boolean> {
   try {
