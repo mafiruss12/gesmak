@@ -2,7 +2,7 @@ import BrandFooter from '@/components/BrandFooter';
 import AdMarquee from '@/components/AdMarquee';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Beer, Mail, Lock, User, Loader2, KeyRound, ArrowLeft, AlertCircle, CheckCircle2, Package, TrendingUp, WifiOff, Shield, Bot, Users, ClipboardList, Sparkles } from 'lucide-react';
+import { Beer, Mail, Lock, User, Loader2, KeyRound, ArrowLeft, AlertCircle, CheckCircle2, Package, TrendingUp, WifiOff, Shield, Bot, Users, ClipboardList, Sparkles, CircleUser, LockKeyhole } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { toAuthEmail } from '@/lib/login';
 import { makeSignupCaptcha, checkSignupCaptcha, getLoginLockRemaining, serverLoginThrottle } from '@/lib/security';
@@ -587,14 +587,16 @@ async function resendConfirmation() {
               <div>
                 <label className="label">Nom complet</label>
                 <div className="relative">
-                  <User size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-500" />
+                  <span className="pointer-events-none absolute left-2.5 top-1/2 z-10 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-lg bg-orange-50 text-orange-600 ring-1 ring-orange-100">
+                    <CircleUser size={16} strokeWidth={1.75} aria-hidden />
+                  </span>
                   <input
                     type="text"
                     required
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
                     placeholder="Jean Kouassi"
-                    className="input-field pl-10"
+                    className="input-field pl-12"
                   />
                 </div>
               </div>
@@ -604,7 +606,13 @@ async function resendConfirmation() {
             <div>
               <label className="label">{mode === 'forgot' ? 'E-mail du compte' : 'Identifiant ou email'}</label>
               <div className="relative">
-                <Mail size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-500" />
+                <span className="pointer-events-none absolute left-2.5 top-1/2 z-10 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-lg bg-orange-50 text-orange-600 ring-1 ring-orange-100">
+                  {mode === 'forgot' ? (
+                    <Mail size={16} strokeWidth={1.75} aria-hidden />
+                  ) : (
+                    <CircleUser size={16} strokeWidth={1.75} aria-hidden />
+                  )}
+                </span>
                 <input
                   type="text"
                   required
@@ -612,7 +620,7 @@ async function resendConfirmation() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder={mode === 'forgot' ? 'vous@exemple.com' : 'Téléphone, pseudo ou e-mail'}
-                  className="input-field pl-10"
+                  className="input-field pl-12"
                 />
               
               <p className="text-xs text-stone-500 mt-2 leading-snug">
@@ -658,7 +666,9 @@ async function resendConfirmation() {
                   )}
                 </div>
                 <div className="relative">
-                  <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-500" />
+                  <span className="pointer-events-none absolute left-2.5 top-1/2 z-10 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-lg bg-orange-50 text-orange-600 ring-1 ring-orange-100">
+                    <LockKeyhole size={16} strokeWidth={1.75} aria-hidden />
+                  </span>
                   <input
                     type="password"
                     required
@@ -666,7 +676,7 @@ async function resendConfirmation() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="input-field pl-10"
+                    className="input-field pl-12"
                     minLength={8}
                   />
                 </div>

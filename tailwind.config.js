@@ -86,7 +86,7 @@ export default {
         'float-medium': 'float 4s ease-in-out infinite',
         'float-fast': 'float 3s ease-in-out infinite',
         'rise': 'rise 8s linear infinite',
-        'marquee': 'marquee 20s linear infinite',
+        'marquee': 'marquee 55s linear infinite',
         'swing': 'swing 5s ease-in-out infinite',
       },
       keyframes: {
