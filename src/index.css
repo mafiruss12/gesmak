@@ -698,6 +698,8 @@ html.theme-light .startup-guide-card .bg-stone-950\/40 {
   background: #ffffff !important;
   color: #1A1A1A !important;
   border: 1px solid #E0E0E0 !important;
+  padding-top: 0.75rem !important;
+  padding-bottom: 0.75rem !important;
 }
 .auth-form-card .btn-primary {
   background: #FF7900 !important;

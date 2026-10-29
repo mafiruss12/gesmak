@@ -528,7 +528,7 @@ async function resendConfirmation() {
 
         {/* Formulaire connexion */}
         <div className="order-1 lg:order-2 w-full max-w-md mx-auto lg:mx-0 lg:ml-auto">
-        <div className="bg-white border border-stone-200 rounded-3xl p-8 shadow-xl auth-form-card">
+        <div className="bg-white border border-stone-200 rounded-3xl p-8 sm:p-10 shadow-xl auth-form-card">
           <div className="flex flex-col items-center mb-6">
             <img
               src="/logo-sm.png"
@@ -580,7 +580,7 @@ async function resendConfirmation() {
           )}
 
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-6">
             {/* Inscription publique desactivee : seul un admin cree les comptes membres. */}
 
             {mode === 'signup' && (
@@ -611,12 +611,12 @@ async function resendConfirmation() {
                   autoComplete="username"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder={mode === 'forgot' ? 'vous@exemple.com' : '0708091011, gerant1 ou email@gmail.com'}
+                  placeholder={mode === 'forgot' ? 'vous@exemple.com' : 'Téléphone, pseudo ou e-mail'}
                   className="input-field pl-10"
                 />
               
-              <p className="text-[11px] text-stone-500 mt-1">
-                Téléphone ou pseudo → compte interne. E-mail complet → compte e-mail (réinitialisation possible).
+              <p className="text-xs text-stone-500 mt-2 leading-snug">
+                Ex. 07 08 09 10 11, gerant1 ou votre e-mail
               </p>
               </div>
             </div>
@@ -717,7 +717,7 @@ async function resendConfirmation() {
               )}
             </button>
           </form>
-          <div className="mt-6"><BrandFooter /></div>
+          <div className="mt-8 pt-2"><BrandFooter compact light /></div>
 
           {mode === 'forgot' ? (
             <button
