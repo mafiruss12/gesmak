@@ -18,6 +18,7 @@ import {
   type VisionScanMode,
 } from '@/lib/visionScan';
 import { EmptyState } from '@/components/ui';
+import { COMMON_PACKAGE_SIZES, defaultUnitsPerPackage, unitsFromPackages } from '@/lib/packageUnits';
 
 export default function ScanInventaire() {
   const { member, activeEstablishment } = useAuth();
@@ -110,7 +111,22 @@ export default function ScanInventaire() {
         );
         setStep('pick');
       } else {
-        setLines(lines);
+        setLines(
+          lines.map((l) => {
+            const upp = l.units_per_package || defaultUnitsPerPackage({ name: l.name });
+            if (scanMode === 'receipt') {
+              const pc = l.package_count && l.package_count > 0 ? l.package_count : 1;
+              return {
+                ...l,
+                package_count: pc,
+                units_per_package: upp,
+                stock: unitsFromPackages(pc, upp),
+                stock_mode: 'add' as const,
+              };
+            }
+            return { ...l, units_per_package: upp, stock_mode: 'set' as const };
+          }),
+        );
         setStep('review'); // engine shown below
       }
     } catch (e: any) {
@@ -155,12 +171,24 @@ export default function ScanInventaire() {
           skipped++;
           continue;
         }
+        const packs = Number(line.package_count) || 0;
+        const upp = Number(line.units_per_package) || 0;
+        const fromPacks = packs > 0 && upp > 0 ? unitsFromPackages(packs, upp) : 0;
+        // Reçu d'achat : on AJOUTE au stock ; inventaire/casier : on POSE le stock compté
+        const isArrival =
+          scanMode === 'receipt' || line.stock_mode === 'add' || fromPacks > 0;
+
         if (line.action === 'update' && line.matchId) {
+          const existing = products.find((x) => x.id === line.matchId);
+          const prevStock = Number(existing?.stock) || 0;
+          const addQty = fromPacks > 0 ? fromPacks : Number(line.stock) || 0;
+          const nextStock = isArrival ? prevStock + addQty : Number(line.stock) || 0;
           const patch: Record<string, unknown> = {
-            stock: line.stock,
+            stock: nextStock,
             unit: line.unit,
             category: line.category,
           };
+          if (upp > 0) patch.units_per_package = upp;
           if (line.cost > 0) patch.cost = line.cost;
           if (line.price > 0) patch.price = line.price;
           const { error: err } = await supabase
@@ -168,17 +196,35 @@ export default function ScanInventaire() {
             .update(patch)
             .eq('id', line.matchId);
           if (err) throw err;
+          if (isArrival && estId && addQty > 0) {
+            try {
+              await supabase.from('stock_movements').insert({
+                establishment_id: estId,
+                product_id: line.matchId,
+                product_name: line.name,
+                qty: addQty,
+                movement_type: 'arrival',
+                unit_cost: Number(line.cost) || 0,
+                unit_price: Number(line.price) || 0,
+                reason: 'scan_receipt',
+                note: packs > 0 ? `Scan ${packs}×${upp}` : 'Scan reçu',
+                created_by: member?.user_id || null,
+              });
+            } catch { /* optional */ }
+          }
           updated++;
         } else {
+          const createStock = fromPacks > 0 ? fromPacks : Number(line.stock) || 0;
           const { error: err } = await supabase.from('products').insert({
             establishment_id: estId,
             name: line.name.trim(),
             category: line.category || 'Autre',
             unit: line.unit || 'unité',
-            stock: line.stock || 0,
+            stock: createStock,
             min_stock: line.min_stock || 12,
             cost: line.cost || 0,
             price: line.price || 0,
+            units_per_package: upp > 0 ? upp : defaultUnitsPerPackage({ name: line.name }),
           });
           if (err) throw err;
           created++;
@@ -366,12 +412,54 @@ export default function ScanInventaire() {
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   <div>
-                    <label className="text-[10px] text-stone-500">Stock</label>
+                    <label className="text-[10px] text-stone-500">Casiers/packs</label>
+                    <input
+                      type="number"
+                      min={0}
+                      className="input-field text-sm py-1"
+                      value={l.package_count ?? (scanMode === 'receipt' ? 1 : 0)}
+                      onChange={(e) => {
+                        const package_count = Number(e.target.value) || 0;
+                        const units_per_package = l.units_per_package || defaultUnitsPerPackage({ name: l.name });
+                        updateLine(l.id, {
+                          package_count,
+                          units_per_package,
+                          stock: unitsFromPackages(package_count, units_per_package),
+                          stock_mode: scanMode === 'receipt' ? 'add' : 'set',
+                        });
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-stone-500">Par casier/pack</label>
+                    <select
+                      className="input-field text-sm py-1"
+                      value={l.units_per_package || defaultUnitsPerPackage({ name: l.name })}
+                      onChange={(e) => {
+                        const units_per_package = Number(e.target.value) || 12;
+                        const package_count = l.package_count ?? (scanMode === 'receipt' ? 1 : 0);
+                        updateLine(l.id, {
+                          units_per_package,
+                          package_count,
+                          stock: unitsFromPackages(package_count, units_per_package),
+                          stock_mode: scanMode === 'receipt' ? 'add' : 'set',
+                        });
+                      }}
+                    >
+                      {COMMON_PACKAGE_SIZES.map((n) => (
+                        <option key={n} value={n}>{n}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-stone-500">
+                      {scanMode === 'receipt' ? 'Total (+)' : 'Stock'}
+                    </label>
                     <input
                       type="number"
                       className="input-field text-sm py-1"
                       value={l.stock}
-                      onChange={(e) => updateLine(l.id, { stock: Number(e.target.value) || 0 })}
+                      onChange={(e) => updateLine(l.id, { stock: Number(e.target.value) || 0, stock_mode: scanMode === 'receipt' ? 'add' : 'set' })}
                     />
                   </div>
                   <div>
