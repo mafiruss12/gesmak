@@ -2,7 +2,7 @@ import { DEFAULT_BRANDING, type BtpBranding } from '@/lib/btp';
 import { isBtp } from '@/lib/businessTypes';
 import { getStoredTheme, applyTheme, type ThemeMode } from '@/lib/theme';
 import { useEffect, useState, type ReactNode } from 'react';
-import { Building2, User, Save, CheckCircle2, Camera, Plus, Lock, KeyRound, RefreshCw, Download, Shield, MapPin, Loader2, Navigation, Fingerprint, CreditCard, LogOut, Palette, ChevronRight, Bell } from 'lucide-react';
+import { Building2, User, Save, CheckCircle2, Camera, Plus, Lock, KeyRound, RefreshCw, Download, Shield, MapPin, Loader2, Navigation, Fingerprint, CreditCard, LogOut, Palette, ChevronRight, Bell, Info } from 'lucide-react';
 // MapPin used for GPS
 import { requestMicrophone, resetPermissionsOnboarding, openAppSettings } from '@/lib/devicePermissions';
 import {
@@ -639,6 +639,7 @@ async function saveProfile() {
             <SettingsRow icon={<MapPin size={20} />} title="Position GPS" subtitle="Localisation" onClick={() => setOpenPanel('gps')} />
             <SettingsRow icon={<Palette size={20} />} title="Apparence" subtitle="Mode jour / sombre" onClick={() => setOpenPanel('theme')} />
             <SettingsRow icon={<RefreshCw size={20} />} title="Mises à jour" subtitle="Version de l’app" onClick={() => setOpenPanel('update')} />
+            <SettingsRow icon={<Info size={20} />} title="À propos" subtitle="GESMAK · Kevin Akoh · Kevin Tech Pro" onClick={() => setOpenPanel('about')} />
             <SettingsRow icon={<LogOut size={20} />} title="Session" subtitle="Déconnexion" onClick={() => setOpenPanel('session')} />
           </div>
         </div>
@@ -1119,6 +1120,29 @@ async function saveProfile() {
         </div>
 
         )}
+        {openPanel === 'about' && (
+        <div className="card space-y-4">
+          <h2 className="text-lg font-semibold text-stone-100 flex items-center gap-2">
+            <Info size={18} /> À propos
+          </h2>
+          <div className="flex flex-col items-center text-center gap-3 py-2">
+            <img src="/logo-gesmak-icon.png" alt="GESMAK" className="h-20 w-20 rounded-full object-cover border border-orange-200" />
+            <div>
+              <p className="text-xl font-bold text-stone-100">GESMAK</p>
+              <p className="text-sm text-orange-400 font-medium">Gestion simplifiée, business maîtrisé</p>
+            </div>
+          </div>
+          <ul className="text-sm text-stone-300 space-y-2 border-t border-stone-800 pt-3">
+            <li><span className="text-stone-500">Version</span> · {APP_VERSION}</li>
+            <li><span className="text-stone-500">Site</span> · <a className="text-orange-400 underline" href={WEB_APP_URL} target="_blank" rel="noreferrer">{WEB_APP_URL.replace('https://','')}</a></li>
+            <li><span className="text-stone-500">Créateur</span> · Kevin Akoh</li>
+            <li><span className="text-stone-500">Éditeur</span> · Kevin Tech Pro</li>
+            <li className="text-stone-500 text-xs pt-1">Stock · Caisse · Ventes · Dépenses · Rapports</li>
+          </ul>
+          <button type="button" className="btn-secondary w-full" onClick={() => setOpenPanel(null)}>Fermer</button>
+        </div>
+        )}
+
         {openPanel === 'session' && (
         <div className="card space-y-3">
           <h2 className="text-lg font-semibold text-stone-100">Session</h2>
