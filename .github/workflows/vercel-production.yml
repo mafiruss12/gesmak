@@ -1,54 +1,33 @@
-# Déploiement production forcé via API Vercel (évite BLOCKED si l'auteur Git
-# n'est pas reconnu comme membre d'équipe Vercel).
 name: Deploy production (Vercel)
 on:
   push:
     branches: [main]
   workflow_dispatch:
 
+concurrency:
+  group: vercel-prod
+  cancel-in-progress: true
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Trigger Vercel production deployment
+      - name: Install Vercel CLI
+        run: npm i -g vercel@39
+
+      - name: Pull Vercel env & deploy production
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
           set -euo pipefail
-          if [ -z "${VERCEL_TOKEN:-}" ]; then
-            echo "VERCEL_TOKEN manquant dans GitHub Secrets — skip (déploiement Git Vercel seul)."
-            exit 0
+          if [ -z "${VERCEL_TOKEN:-}" ] || [ -z "${VERCEL_ORG_ID:-}" ] || [ -z "${VERCEL_PROJECT_ID:-}" ]; then
+            echo "::error::Secrets manquants. Ajoute VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID dans GitHub → Settings → Secrets."
+            exit 1
           fi
-          SHA="${GITHUB_SHA}"
-          BODY=$(jq -n \
-            --arg org "mafiruss12" \
-            --arg repo "stock-manager-ai" \
-            --arg ref "main" \
-            --arg sha "$SHA" \
-            --arg name "maquis-manager" \
-            '{
-              name: $name,
-              project: $name,
-              target: "production",
-              gitSource: {
-                type: "github",
-                org: $org,
-                repo: $repo,
-                ref: $ref,
-                sha: $sha
-              }
-            }')
-          RESP=$(curl -sS -X POST "https://api.vercel.com/v13/deployments?forceNew=1&skipAutoDetectionConfirmation=1" \
-            -H "Authorization: Bearer ${VERCEL_TOKEN}" \
-            -H "Content-Type: application/json" \
-            -d "$BODY")
-          echo "$RESP" | jq -r '.id // .error // .'
-          URL=$(echo "$RESP" | jq -r '.url // empty')
-          if [ -n "$URL" ]; then
-            echo "Deployment started: https://${URL}"
-          fi
+          vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+          vercel build --prod --token="$VERCEL_TOKEN"
+          vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
