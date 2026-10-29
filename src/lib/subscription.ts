@@ -1,4 +1,4 @@
-/** Offre commerciale Stock Manager CI */
+/** Offre commerciale GESMAK CI */
 
 /** Tarifs de référence (affichage commercial) */
 export const PLAN = {
@@ -161,7 +161,7 @@ export function paymentWhatsAppLink(message?: string): string {
   const withPlus = d.startsWith('+') ? d : `+${d}`;
   const text =
     message ||
-    `Bonjour, je souhaite payer mon abonnement Stock Manager (${PLAN.monthlyFcfa.toLocaleString('fr-FR')} F/mois). Mon établissement : `;
+    `Bonjour, je souhaite payer mon abonnement GESMAK (${PLAN.monthlyFcfa.toLocaleString('fr-FR')} F/mois). Mon établissement : `;
   return `https://wa.me/${withPlus}?text=${encodeURIComponent(text)}`;
 }
 
@@ -345,7 +345,7 @@ export function formatPlanLimitsLine(limits: PlanLimits): string {
 
 export function paymentInstructions(): string {
   return (
-    `Offre Stock Manager\n` +
+    `Offre GESMAK\n` +
     `• Mise en place stock : ${PLAN.setupStockFcfa.toLocaleString('fr-FR')} F\n` +
     `• 1 mois d'essai Pro gratuit\n` +
     `• Après essai : Essentiel ${PLANS.starter.monthlyFcfa.toLocaleString('fr-FR')} F/mois` +

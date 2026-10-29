@@ -39,7 +39,7 @@ export default function PublicServices() {
   const [msg, setMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    document.title = 'Services · Stock Manager';
+    document.title = 'Services · GESMAK';
     (async () => {
       const { data } = await supabase
         .from('service_providers')

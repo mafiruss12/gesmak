@@ -1,5 +1,5 @@
 /**
- * Sécurité Stock Manager
+ * Sécurité GESMAK
  * 1) Session : stockage Supabase auth token (clé stable projet)
  * 2) Rôles admin : toujours via table members (DB), jamais trust localStorage seul
  * 3) Rate-limit login : client + serveur (/api/security/login-throttle)

@@ -58,7 +58,7 @@ export async function requestNotifications(): Promise<PermissionResult> {
       return {
         id: 'notifications',
         ok: false,
-        detail: 'Refusé — activez dans Réglages → Applications → Stock Manager',
+        detail: 'Refusé — activez dans Réglages → Applications → GESMAK',
       };
     }
     const res = await Notification.requestPermission();
@@ -107,7 +107,7 @@ export async function requestCamera(): Promise<PermissionResult> {
       id: 'camera',
       ok: false,
       detail: /denied|NotAllowed|Permission/i.test(msg)
-        ? 'Refusé — activez Micro dans Réglages → Applications → Stock Manager AI'
+        ? 'Refusé — activez Micro dans Réglages → Applications → GESMAK'
         : msg,
     };
   }
@@ -295,6 +295,6 @@ export async function openAppSettings(): Promise<{ ok: boolean; detail: string }
   return {
     ok: false,
     detail:
-      'Ouvrez manuellement : Réglages → Applications → Stock Manager AI → Autorisations (micro, caméra, localisation, notifications).',
+      'Ouvrez manuellement : Réglages → Applications → GESMAK → Autorisations (micro, caméra, localisation, notifications).',
   };
 }

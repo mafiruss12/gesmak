@@ -310,7 +310,7 @@ export async function shareAudioToWhatsApp(blob: Blob, filename = 'rapport-vocal
       await navigator.share({
         files: [file],
         title: 'Rapport du jour',
-        text: 'Vocal rapport du jour — Stock Manager',
+        text: 'Vocal rapport du jour — GESMAK',
       });
       return true;
     }

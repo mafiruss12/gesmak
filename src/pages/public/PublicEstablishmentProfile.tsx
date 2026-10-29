@@ -126,7 +126,7 @@ export default function PublicEstablishmentProfile() {
   }, [slugOrId]);
 
   const open = useMemo(() => isOpenNow(est?.opening_hours || null), [est]);
-  const wa = waLink(est?.phone, `Bonjour, je vous contacte via Stock Manager (${est?.name || ''})`);
+  const wa = waLink(est?.phone, `Bonjour, je vous contacte via GESMAK (${est?.name || ''})`);
 
   const maps =
     est?.latitude && est?.longitude

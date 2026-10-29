@@ -1,4 +1,4 @@
-/** Signature Kevin Tech Pro — logo KTP distinct du logo Stock Manager */
+/** Signature Kevin Tech Pro — logo KTP distinct du logo GESMAK */
 const SOCIALS = [
   { label: 'Facebook', href: 'https://www.facebook.com/search/top?q=kevin%20tech%20pro' },
   { label: 'TikTok', href: 'https://www.tiktok.com/search?q=kevin%20tech%20pro' },

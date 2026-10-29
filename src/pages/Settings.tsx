@@ -129,7 +129,7 @@ export default function SettingsPage() {
       return;
     }
     const ok = window.confirm(
-      'Autoriser Stock Manager à enregistrer la position GPS de cet établissement ?\n\n' +
+      'Autoriser GESMAK à enregistrer la position GPS de cet établissement ?\n\n' +
         'Utilisée uniquement pour que l’administrateur puisse mieux vous assister. Vous pouvez la mettre à jour à tout moment.',
     );
     if (!ok) return;
@@ -558,7 +558,7 @@ async function saveProfile() {
         <div className="flex flex-col sm:flex-row gap-2">
           <a
             href={paymentWhatsAppLink(
-              `Bonjour, je suis sur le forfait ${activeEstablishment ? getEffectivePlan(activeEstablishment as any).label : '—'} — ${activeEstablishment?.name || 'mon établissement'}. Je souhaite payer / changer d'abonnement Stock Manager.`
+              `Bonjour, je suis sur le forfait ${activeEstablishment ? getEffectivePlan(activeEstablishment as any).label : '—'} — ${activeEstablishment?.name || 'mon établissement'}. Je souhaite payer / changer d'abonnement GESMAK.`
             )}
             target="_blank"
             rel="noreferrer"

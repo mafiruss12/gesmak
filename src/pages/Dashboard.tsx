@@ -715,7 +715,7 @@ export default function Dashboard() {
       {data.aiAlerts.length > 0 && (
         <DashLink to="/inventory" className="mb-6">
         <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 space-y-2">
-          <p className="text-sm font-semibold text-amber-200">Alertes IA — Stock Manager →</p>
+          <p className="text-sm font-semibold text-amber-200">Alertes IA — GESMAK →</p>
           <ul className="space-y-1">
             {data.aiAlerts.map((a, i) => (
               <li key={i} className="text-sm text-amber-100/90">⚠️ {a}</li>

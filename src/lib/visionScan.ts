@@ -1,5 +1,5 @@
 /**
- * Reconnaissance d'images via Gemini Vision (déjà branché Stock Manager).
+ * Reconnaissance d'images via Gemini Vision (déjà branché GESMAK).
  * Clé : uniquement serveur (Cloudflare GEMINI_API_KEY via /api/gemini/proxy).
  * Option locale de secours : localStorage gemini_api_key (déconseillé).
  *

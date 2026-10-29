@@ -49,7 +49,7 @@ export function buildInvoiceWhatsAppMessage(opts: {
   note?: string;
 }): string {
   const lines = [
-    `*${opts.businessName}* — Stock Manager AI`,
+    `*${opts.businessName}* — GESMAK`,
     opts.clientName ? `Client : ${opts.clientName}` : null,
     opts.reference ? `Réf. : ${opts.reference}` : null,
     `Montant : ${opts.amount.toLocaleString('fr-FR')} FCFA`,

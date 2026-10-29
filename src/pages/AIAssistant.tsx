@@ -496,7 +496,7 @@ export default function AIAssistant() {
         let content = '';
         if (modelId === 'local-rules') {
           content = [
-            'Stock Manager AI — Export',
+            'GESMAK — Export',
             `Date: ${new Date().toLocaleString('fr-FR')}`,
             `Ventes 30j: ${ctx.salesTotal}`,
             `Dépenses 30j: ${ctx.expensesTotal}`,
@@ -820,7 +820,7 @@ export default function AIAssistant() {
                 ) : null}
                 {t.role === 'assistant' && t.escalate && (
                   <a
-                    href={supportMailto('Assistance Stock Manager AI', `Bonjour,\n\nÉtablissement : ${member?.establishment_id || ''}\n`)}
+                    href={supportMailto('Assistance GESMAK', `Bonjour,\n\nÉtablissement : ${member?.establishment_id || ''}\n`)}
                     className="mt-3 inline-flex items-center gap-2 rounded-xl bg-amber-500 text-stone-900 font-semibold text-xs px-3 py-2"
                   >
                     Contacter le support

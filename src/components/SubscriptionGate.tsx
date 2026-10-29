@@ -24,7 +24,7 @@ export default function SubscriptionGate() {
 
   const pathOk = ALLOWED_WHEN_BLOCKED.some((p) => location.pathname.startsWith(p));
   const wa = paymentWhatsAppLink(
-    `Bonjour, je souhaite payer l'abonnement Stock Manager.\nÉtablissement : ${estName}\nOffre : ${PLAN.monthlyFcfa} F/mois (1, 3, 6, 12 mois ou plus).`
+    `Bonjour, je souhaite payer l'abonnement GESMAK.\nÉtablissement : ${estName}\nOffre : ${PLAN.monthlyFcfa} F/mois (1, 3, 6, 12 mois ou plus).`
   );
 
   return (

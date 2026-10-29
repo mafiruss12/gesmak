@@ -1,5 +1,5 @@
 /**
- * Paiements abonnement Stock Manager — Paystack (principal) + WhatsApp (manuel)
+ * Paiements abonnement GESMAK — Paystack (principal) + WhatsApp (manuel)
  */
 import { PLAN, priceForMonths, paymentWhatsAppLink, SUB_PERIODS, type PlanTier } from '@/lib/subscription';
 
@@ -23,7 +23,7 @@ export function buildSubscriptionWhatsAppMessage(opts: {
 }): string {
   const amount = priceForMonths(opts.months);
   return [
-    '*Stock Manager AI — Paiement abonnement*',
+    '*GESMAK — Paiement abonnement*',
     `Établissement : ${opts.establishmentName}`,
     opts.planLabel ? `Forfait : ${opts.planLabel}` : null,
     `Durée : ${opts.months} mois`,

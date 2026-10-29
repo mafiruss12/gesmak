@@ -48,7 +48,7 @@ export default function LiveDaySales() {
   const [mobileConfirm, setMobileConfirm] = useState('');
 
   useEffect(() => {
-    document.title = 'Ventes journée · Stock Manager';
+    document.title = 'Ventes journée · GESMAK';
   }, []);
 
   useEffect(() => {

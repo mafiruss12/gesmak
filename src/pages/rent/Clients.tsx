@@ -164,7 +164,7 @@ export default function RentClients() {
                         openWhatsApp(
                           wa,
                           buildInvoiceWhatsAppMessage({
-                            businessName: 'Stock Manager AI',
+                            businessName: 'GESMAK',
                             clientName: c.full_name,
                             amount: 0,
                             note: `Bonjour ${c.full_name},`,

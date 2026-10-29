@@ -602,7 +602,7 @@ export default function Inventaire() {
     );
     const more = products.length > 40 ? `\n… +${products.length - 40} autres` : '';
     return (
-      `*Stock Manager AI — Catalogue*\n` +
+      `*GESMAK — Catalogue*\n` +
       `${products.length} produit(s)\n\n` +
       lines.join('\n') +
       more +
@@ -710,7 +710,7 @@ export default function Inventaire() {
         stock: Number(x.stock ?? 0) || 0,
       }));
     } catch {
-      alert('Texte invalide. Collez un catalogue JSON exporté depuis Stock Manager.');
+      alert('Texte invalide. Collez un catalogue JSON exporté depuis GESMAK.');
       return;
     }
     rows = rows.filter((r) => r.name);
@@ -781,7 +781,7 @@ export default function Inventaire() {
       if (file.name.toLowerCase().endsWith('.json') || text.trim().startsWith('{')) {
         const data = JSON.parse(text);
         if (data?.type && data.type !== 'stock-manager-catalog') {
-          if (!confirm('Ce fichier ne semble pas être un catalogue Stock Manager. Continuer ?')) return;
+          if (!confirm('Ce fichier ne semble pas être un catalogue GESMAK. Continuer ?')) return;
         }
         const list = Array.isArray(data) ? data : data.products || data.items || [];
         rows = list.map((x: any) => ({
@@ -1234,7 +1234,7 @@ export default function Inventaire() {
   .sign div { width: 30%; border-top: 1px solid #333; padding-top: 4px; text-align: center; }
   @media print { .no-print { display: none; } }
 </style></head><body>
-  <h1>${ui.inventoryTitle} physique — Stock Manager AI</h1>
+  <h1>${ui.inventoryTitle} physique — GESMAK</h1>
   <div class="meta">${dateStr} · Mode : ${mode === 'blank' ? 'Feuille manuscrite (comptage)' : 'État du stock'}</div>
   <table>
     <thead><tr>${mode === 'blank' ? headersBlank : headersStock}</tr></thead>
@@ -1243,7 +1243,7 @@ export default function Inventaire() {
   <div class="foot">
     ${mode === 'blank'
       ? 'Remplissez la colonne « Comptage manuscrit », calculez l’écart, puis scannez la feuille dans l’app (Inventaire → Scanner photo IA).'
-      : 'Document généré depuis Stock Manager AI — valeur au coût d’achat.'}
+      : 'Document généré depuis GESMAK — valeur au coût d’achat.'}
   </div>
   <div class="sign">
     <div>Gérant</div>

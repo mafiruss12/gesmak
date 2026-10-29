@@ -18,7 +18,7 @@ type PubEst = {
 };
 
 export default function PublicEstablishments() {
-  useEffect(() => { document.title = 'Établissements · Stock Manager'; }, []);
+  useEffect(() => { document.title = 'Établissements · GESMAK'; }, []);
   const { user, signOut } = useAuth();
   const [params] = useSearchParams();
   const [authOpen, setAuthOpen] = useState(false);

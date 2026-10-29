@@ -114,7 +114,7 @@ export default function AuthModal({
         <div className="p-5">
           {mode === 'signup' && step === 'intent' ? (
             <div className="space-y-3">
-              <p className="text-sm text-slate-600 mb-2">Bienvenue sur Stock Manager. Que souhaitez-vous faire ?</p>
+              <p className="text-sm text-slate-600 mb-2">Bienvenue sur GESMAK. Que souhaitez-vous faire ?</p>
               {INTENTS.map((it) => {
                 const Icon = it.icon;
                 return (
