@@ -401,11 +401,11 @@ async function resendConfirmation() {
 
   return (
     <div className="min-h-screen bg-[#F5F5F5] flex items-center justify-center p-4 relative overflow-hidden">
-      <div className="absolute top-0 left-0 right-0 h-10 bg-primary-600/90 overflow-hidden flex items-center z-20">
-        <div className="flex whitespace-nowrap animate-marquee">
+      <div className="auth-marquee-bar absolute top-0 left-0 right-0">
+        <div className="auth-marquee-track">
           {MARQUEE_MESSAGES.concat(MARQUEE_MESSAGES).map((msg, i) => (
-            <span key={i} className="mx-8 text-sm font-medium text-white flex items-center gap-2">
-              <Beer size={14} /> {msg}
+            <span key={i}>
+              <Beer size={14} aria-hidden /> {msg}
             </span>
           ))}
         </div>
@@ -587,8 +587,8 @@ async function resendConfirmation() {
               <div>
                 <label className="label">Nom complet</label>
                 <div className="relative">
-                  <span className="pointer-events-none absolute left-2.5 top-1/2 z-10 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-lg bg-orange-50 text-orange-600 ring-1 ring-orange-100">
-                    <CircleUser size={16} strokeWidth={1.75} aria-hidden />
+                  <span className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-orange-500">
+                    <CircleUser size={18} strokeWidth={1.75} aria-hidden />
                   </span>
                   <input
                     type="text"
@@ -596,7 +596,7 @@ async function resendConfirmation() {
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
                     placeholder="Jean Kouassi"
-                    className="input-field pl-12"
+                    className="input-field pl-11"
                   />
                 </div>
               </div>
@@ -606,11 +606,11 @@ async function resendConfirmation() {
             <div>
               <label className="label">{mode === 'forgot' ? 'E-mail du compte' : 'Identifiant ou email'}</label>
               <div className="relative">
-                <span className="pointer-events-none absolute left-2.5 top-1/2 z-10 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-lg bg-orange-50 text-orange-600 ring-1 ring-orange-100">
+                <span className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-orange-500">
                   {mode === 'forgot' ? (
-                    <Mail size={16} strokeWidth={1.75} aria-hidden />
+                    <Mail size={18} strokeWidth={1.75} aria-hidden />
                   ) : (
-                    <CircleUser size={16} strokeWidth={1.75} aria-hidden />
+                    <CircleUser size={18} strokeWidth={1.75} aria-hidden />
                   )}
                 </span>
                 <input
@@ -620,13 +620,12 @@ async function resendConfirmation() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder={mode === 'forgot' ? 'vous@exemple.com' : 'Téléphone, pseudo ou e-mail'}
-                  className="input-field pl-12"
+                  className="input-field pl-11"
                 />
-              
+              </div>
               <p className="text-xs text-stone-500 mt-2 leading-snug">
                 Ex. 07 08 09 10 11, gerant1 ou votre e-mail
               </p>
-              </div>
             </div>
             )}
 
@@ -666,8 +665,8 @@ async function resendConfirmation() {
                   )}
                 </div>
                 <div className="relative">
-                  <span className="pointer-events-none absolute left-2.5 top-1/2 z-10 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-lg bg-orange-50 text-orange-600 ring-1 ring-orange-100">
-                    <LockKeyhole size={16} strokeWidth={1.75} aria-hidden />
+                  <span className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-orange-500">
+                    <LockKeyhole size={18} strokeWidth={1.75} aria-hidden />
                   </span>
                   <input
                     type="password"
@@ -676,7 +675,7 @@ async function resendConfirmation() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="input-field pl-12"
+                    className="input-field pl-11"
                     minLength={8}
                   />
                 </div>

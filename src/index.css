@@ -867,3 +867,35 @@ html.theme-light .nav-section-card .opacity-80,
 html.theme-light main .opacity-80 {
   opacity: 1 !important;
 }
+
+
+/* Bandeau messages login — défilement lent et toujours visible */
+.auth-marquee-bar {
+  height: 2.5rem;
+  background: #FF7900;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  z-index: 30;
+}
+.auth-marquee-track {
+  display: flex;
+  width: max-content;
+  animation: auth-marquee-scroll 40s linear infinite;
+  will-change: transform;
+}
+.auth-marquee-track span {
+  flex-shrink: 0;
+  padding: 0 2rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+@keyframes auth-marquee-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
