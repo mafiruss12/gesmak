@@ -709,9 +709,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           </button>
           <div className="flex items-center gap-2 min-w-0 flex-1 justify-center px-1">
             <img
-              src="/logo-gesmak.png"
+              src="/logo-gesmak-icon.png"
               alt="GESMAK"
-              className="h-9 w-auto max-w-[120px] object-contain shrink-0"
+              className="h-10 w-10 rounded-full object-cover shrink-0 border border-orange-200/40 bg-white"
             />
             <span className="font-display font-bold text-stone-100 truncate text-sm">
               {estName || 'GESMAK'}

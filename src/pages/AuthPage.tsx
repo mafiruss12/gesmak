@@ -531,9 +531,9 @@ async function resendConfirmation() {
         <div className="bg-white border border-stone-200 rounded-3xl p-8 sm:p-10 shadow-xl auth-form-card">
           <div className="flex flex-col items-center mb-6">
             <img
-              src="/logo-gesmak.png"
+              src="/logo-gesmak-wide.png"
               alt="GESMAK — Gestion Simplifiée, Business Maîtrisé"
-              className="h-auto w-full max-w-[280px] object-contain mb-3"
+              className="h-auto w-full max-w-[320px] object-contain mb-3"
             />
             <h1 className="sr-only">GESMAK</h1>
             <p className="text-sm text-stone-500 mt-1">
