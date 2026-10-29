@@ -212,7 +212,7 @@ ${d.client_location ? 'Lieu : ' + d.client_location : ''}</p>
 <table><thead><tr><th>Désignation</th><th>Qté</th><th>P.U.</th><th>Total</th></tr></thead><tbody>${lines}</tbody></table>
 <p style="text-align:right;margin-top:16px;font-size:18px"><strong>Total : ${formatFCFA(Number(d.total))}</strong></p>
 ${d.notes ? `<p class="muted">${d.notes}</p>` : ''}
-<p class="muted">Powered by Kevin Tech Pro — Stock Manager AI</p>
+<p class="muted">App créée par Kevin Akoh de Kevin Tech Pro — Stock Manager AI</p>
 </div><script>window.print()</script></body></html>`);
     w.document.close();
   }

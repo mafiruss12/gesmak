@@ -22,7 +22,7 @@ const MARQUEE_MESSAGES = [
   'Pourquoi Stock Manager ? Zéro perte de stock invisible',
   'Rapport du jour, inventaire, caisse et équipe au même endroit',
   'Fonctionne hors ligne · synchronise dès le retour du réseau',
-  'Images boissons, casiers, Mobile Money · Powered by Kevin Tech Pro',
+  'Images boissons, casiers, Mobile Money · App créée par Kevin Akoh de Kevin Tech Pro',
   'Propriétaire et gérant : chacun son rôle, un seul tableau de bord',
 ];
 

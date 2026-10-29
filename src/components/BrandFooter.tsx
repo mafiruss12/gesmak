@@ -40,7 +40,7 @@ export default function BrandFooter({
               <span className={`${titleStrong} font-semibold`}>Stock Manager AI</span>
             </p>
             <p className={`text-xs font-bold ${powered} leading-tight`}>
-              Powered by Kevin Tech Pro
+              App créée par Kevin Akoh de Kevin Tech Pro
             </p>
           </div>
         </div>
@@ -60,13 +60,13 @@ export default function BrandFooter({
               ))}
             </div>
             <p className={`text-[10px] ${copy}`}>
-              © {new Date().getFullYear()} Kevin Tech Pro — Tous droits réservés
+              © {new Date().getFullYear()} Kevin Akoh — Kevin Tech Pro
             </p>
           </>
         )}
         {compact && light && (
           <p className={`text-[10px] ${copy}`}>
-            © {new Date().getFullYear()} Kevin Tech Pro
+            © {new Date().getFullYear()} Kevin Akoh — Kevin Tech Pro
           </p>
         )}
       </div>

@@ -56,7 +56,7 @@ export function buildInvoiceWhatsAppMessage(opts: {
     opts.note || null,
     '',
     'Merci pour votre confiance.',
-    'Powered by Kevin Tech Pro',
+    'App créée par Kevin Akoh de Kevin Tech Pro',
   ].filter(Boolean);
   return lines.join('\n');
 }
