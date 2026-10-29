@@ -571,7 +571,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           </div>
           <div className="min-w-0">
             <p className="font-bold font-display text-stone-100 text-sm truncate">
-              {estName || 'Stock Manager AI'}
+              {estName || 'GESMAK'}
             </p>
             <p className="text-xs text-stone-500 truncate">{member ? ROLE_LABELS[member.role] : ''}</p>
           </div>
@@ -709,12 +709,12 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           </button>
           <div className="flex items-center gap-2 min-w-0 flex-1 justify-center px-1">
             <img
-              src="/logo-sm.png"
-              alt="Stock Manager"
-              className="w-8 h-8 rounded-full object-cover shrink-0 border border-amber-500/30"
+              src="/logo-gesmak.png"
+              alt="GESMAK"
+              className="h-9 w-auto max-w-[120px] object-contain shrink-0"
             />
             <span className="font-display font-bold text-stone-100 truncate text-sm">
-              {estName || 'Stock Manager AI'}
+              {estName || 'GESMAK'}
             </span>
           </div>
 

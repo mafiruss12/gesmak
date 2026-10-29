@@ -37,7 +37,7 @@ export default function BrandFooter({
           />
           <div className="text-left">
             <p className={`text-[11px] ${titleMuted} leading-tight`}>
-              <span className={`${titleStrong} font-semibold`}>Stock Manager AI</span>
+              <span className={`${titleStrong} font-semibold`}>GESMAK</span>
             </p>
             <p className={`text-xs font-bold ${powered} leading-tight`}>
               App créée par Kevin Akoh de Kevin Tech Pro

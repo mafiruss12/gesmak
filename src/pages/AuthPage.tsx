@@ -18,8 +18,8 @@ import {
 import { supabase } from '@/lib/supabase';
 
 const MARQUEE_MESSAGES = [
-  'Stock Manager AI — la solution complète pour maquis, bars & restaurants',
-  'Pourquoi Stock Manager ? Zéro perte de stock invisible',
+  'GESMAK — Gestion simplifiée, business maîtrisé',
+  'Pourquoi GESMAK ? Zéro perte de stock invisible',
   'Rapport du jour, inventaire, caisse et équipe au même endroit',
   'Fonctionne hors ligne · synchronise dès le retour du réseau',
   'Images boissons, casiers, Mobile Money · App créée par Kevin Akoh de Kevin Tech Pro',
@@ -449,7 +449,7 @@ async function resendConfirmation() {
         <aside className="order-2 lg:order-1 space-y-5 auth-showcase">
           <div className="space-y-2">
             <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-amber-400/90">
-              <Sparkles size={14} className="auth-pulse" /> Pourquoi Stock Manager AI ?
+              <Sparkles size={14} className="auth-pulse" /> Pourquoi GESMAK ?
             </p>
             <h2 className="text-2xl sm:text-3xl font-bold text-stone-900 leading-tight font-display">
               La solution qui fait gagner du temps
@@ -531,13 +531,13 @@ async function resendConfirmation() {
         <div className="bg-white border border-stone-200 rounded-3xl p-8 sm:p-10 shadow-xl auth-form-card">
           <div className="flex flex-col items-center mb-6">
             <img
-              src="/logo-sm.png"
-              alt="Stock Manager AI"
-              className="h-20 w-20 rounded-full object-cover mb-3 shadow-md border border-orange-200"
+              src="/logo-gesmak.png"
+              alt="GESMAK — Gestion Simplifiée, Business Maîtrisé"
+              className="h-auto w-full max-w-[280px] object-contain mb-3"
             />
-            <h1 className="text-3xl font-bold font-display text-stone-900">Stock Manager AI</h1>
+            <h1 className="sr-only">GESMAK</h1>
             <p className="text-sm text-stone-500 mt-1">
-              {mode === 'forgot' ? 'Réinitialiser le mot de passe' : 'Gestion intelligente multi-métiers'}
+              {mode === 'forgot' ? 'Réinitialiser le mot de passe' : 'Gestion simplifiée · Business maîtrisé'}
             </p>
           </div>
 
@@ -687,7 +687,7 @@ async function resendConfirmation() {
               <div className="space-y-3">
                 <label className="flex items-start gap-2 text-xs text-stone-400">
                   <input type="checkbox" className="mt-0.5" checked={acceptedTerms} onChange={(e) => setAcceptedTerms(e.target.checked)} />
-                  <span>J&apos;accepte les conditions d&apos;utilisation et la politique de confidentialité de Stock Manager AI.</span>
+                  <span>J&apos;accepte les conditions d&apos;utilisation et la politique de confidentialité de GESMAK.</span>
                 </label>
                 <div>
                   <label className="text-xs text-stone-400">Anti-robot : combien font {captcha.a} + {captcha.b} ?</label>
