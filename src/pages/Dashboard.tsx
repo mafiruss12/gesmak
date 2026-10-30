@@ -176,7 +176,7 @@ export default function Dashboard() {
         if (!cancelled) {
           setData((prev) => prev ?? emptyFallback);
           setLoading(false);
-          setError((e) => e || 'Chargement partiel — vérifiez la connexion');
+          setError((e) => e || 'Chargement incomplet — vérifiez la connexion puis actualisez.');
         }
       }, 5000);
 
@@ -200,7 +200,15 @@ export default function Dashboard() {
         .filter(Boolean);
       const dataPartial = queryErrors.length > 0;
       if (dataPartial) {
-        setError(`Données partielles : ${queryErrors[0]}`);
+        const raw = String(queryErrors[0] || '');
+        const network =
+          /failed to fetch|network|timeout|offline|load failed/i.test(raw) ||
+          (typeof navigator !== 'undefined' && !navigator.onLine);
+        setError(
+          network
+            ? 'Connexion instable — chiffres partiels. Réessayez dès que le réseau revient.'
+            : 'Certaines données n’ont pas pu être chargées. Tirez pour actualiser.'
+        );
       }
 
       const todaySales = (salesRes.data ?? []).reduce((s, x) => s + Number(x.total), 0);
