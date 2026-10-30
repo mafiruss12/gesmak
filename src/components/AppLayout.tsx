@@ -772,7 +772,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       <BrandFooter />
       
       {/* Barre bas mobile — adaptée au type d'établissement */}
-      <nav data-no-print className="bottom-nav-maquis lg:hidden fixed bottom-0 inset-x-0 z-40 border-t border-stone-800 bg-stone-900/95 backdrop-blur-md pb-[env(safe-area-inset-bottom)]">
+      <nav data-no-print className="bottom-nav-maquis lg:hidden fixed bottom-0 inset-x-0 z-50 border-t border-stone-800 bg-stone-900/95 backdrop-blur-md pb-[env(safe-area-inset-bottom)]">
         <div className="grid grid-cols-5 gap-0 max-w-lg mx-auto">
           {(false
             ? [
