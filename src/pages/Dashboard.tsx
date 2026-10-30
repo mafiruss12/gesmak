@@ -449,7 +449,7 @@ export default function Dashboard() {
       <AdMarquee className="mb-4" />
       <OwnerSitesBar />
       {error && (
-        <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-2 text-sm text-red-200 mb-3">
+        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-sm text-amber-900 dark:text-amber-100 mb-3">
           {error}
         </div>
       )}
