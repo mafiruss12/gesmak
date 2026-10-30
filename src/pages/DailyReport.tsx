@@ -695,7 +695,7 @@ export default function DailyReportPage({ embedded = false }: { embedded?: boole
       `${stockDeducted ? '📦 Stock déduit\n' : ''}` +
       (comment ? `📝 ${comment}\n` : '') +
       (signature ? `✍️ ${signature}\n` : '') +
-      `\nOuvrir dans l'app : Rapport du jour → ${date}\n— Stock Manager AI`
+      `\nOuvrir dans l'app : Rapport du jour → ${date}\n— GESMAK`
     );
   }
 
@@ -943,7 +943,7 @@ export default function DailyReportPage({ embedded = false }: { embedded?: boole
       <h1>🍺 Facture — Rapport du jour</h1>
       <p class="sub">${escapeHtml(est)}</p>
       <div class="beer-row" aria-hidden="true">🍺 🍻 🥂 🥤 🍹</div>
-      <span class="brand">Stock Manager AI</span>
+      <span class="brand">GESMAK</span>
     </div>
     <div class="body">
       <div class="meta">
@@ -991,7 +991,7 @@ export default function DailyReportPage({ embedded = false }: { embedded?: boole
         ${comment ? '<p><strong>Commentaire :</strong> ' + escapeHtml(comment) + '</p>' : ''}
         ${signature ? '<p><strong>Signature :</strong> ' + escapeHtml(signature) + '</p>' : '<p><strong>Signature :</strong> —</p>'}
       </div>
-      <p class="footer">Document généré par <strong>Stock Manager AI</strong> · Conservez ce rapport comme facture du jour</p>
+      <p class="footer">Document généré par <strong>GESMAK</strong> · Conservez ce rapport comme facture du jour</p>
     </div>
     <div class="actions no-print">
       <button type="button" onclick="window.print()">📄 Enregistrer en PDF / Imprimer</button>
@@ -1098,7 +1098,7 @@ export default function DailyReportPage({ embedded = false }: { embedded?: boole
         `Espèces: ${formatFCFA(Number(cashCounted) || 0)} · Mobile: ${formatFCFA(Number(mobileCounted) || 0)}`,
         match ? 'Caisse: OK' : `Écart: ${formatFCFA(diff)}`,
         '',
-        'Stock Manager AI',
+        'GESMAK',
       ].filter((x) => x !== undefined);
       const H = Math.max(480, 40 + lines.length * lineH + 40);
       const canvas = document.createElement('canvas');
@@ -1142,7 +1142,7 @@ export default function DailyReportPage({ embedded = false }: { embedded?: boole
   async function shareReportToWhatsApp() {
     const msg =
       reportText() +
-      '\n\n📎 Rapport du jour — Stock Manager AI\n(Joindre l’image / fichier si le partage l’a proposé)';
+      '\n\n📎 Rapport du jour — GESMAK\n(Joindre l’image / fichier si le partage l’a proposé)';
     const imageBlob = await buildReportImageBlob();
     const html = buildReportHtml();
     const htmlFile = new File([html], `rapport-${date}.html`, { type: 'text/html' });

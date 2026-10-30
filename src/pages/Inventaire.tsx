@@ -26,6 +26,7 @@ import {
 import { qrCodeImageUrl } from '@/lib/exchangeRates';
 import { cacheSet, cacheGet, isOnline, queueAdd } from '@/lib/offline';
 import { speakFrench, playTone } from '@/lib/a11yVoice';
+import { COMMON_PACKAGE_SIZES, defaultUnitsPerPackage, unitsFromPackages } from '@/lib/packageUnits';
 import { aiStockStatus as aiStatus, sortProductsByName, filterProductsBySearch } from '@/lib/inventaireHelpers';
 
 export default function Inventaire() {
@@ -73,7 +74,12 @@ export default function Inventaire() {
 
   const [auditRows, setAuditRows] = useState<any[]>([]);
   const [liveNote, setLiveNote] = useState('');
-  const [arrivageForm, setArrivageForm] = useState({ productId: '', qty: '', note: '' });
+  const [arrivageForm, setArrivageForm] = useState({
+    productId: '',
+    packages: '1',
+    unitsPerPackage: '12',
+    note: '',
+  });
   const [perteForm, setPerteForm] = useState({ productId: '', qty: '', kind: 'perte' as 'perte' | 'casse', note: '' });
 
   const [form, setForm] = useState({
@@ -596,7 +602,7 @@ export default function Inventaire() {
     );
     const more = products.length > 40 ? `\n… +${products.length - 40} autres` : '';
     return (
-      `*Stock Manager AI — Catalogue*\n` +
+      `*GESMAK — Catalogue*\n` +
       `${products.length} produit(s)\n\n` +
       lines.join('\n') +
       more +
@@ -704,7 +710,7 @@ export default function Inventaire() {
         stock: Number(x.stock ?? 0) || 0,
       }));
     } catch {
-      alert('Texte invalide. Collez un catalogue JSON exporté depuis Stock Manager.');
+      alert('Texte invalide. Collez un catalogue JSON exporté depuis GESMAK.');
       return;
     }
     rows = rows.filter((r) => r.name);
@@ -775,7 +781,7 @@ export default function Inventaire() {
       if (file.name.toLowerCase().endsWith('.json') || text.trim().startsWith('{')) {
         const data = JSON.parse(text);
         if (data?.type && data.type !== 'stock-manager-catalog') {
-          if (!confirm('Ce fichier ne semble pas être un catalogue Stock Manager. Continuer ?')) return;
+          if (!confirm('Ce fichier ne semble pas être un catalogue GESMAK. Continuer ?')) return;
         }
         const list = Array.isArray(data) ? data : data.products || data.items || [];
         rows = list.map((x: any) => ({
@@ -996,11 +1002,21 @@ export default function Inventaire() {
 
   async function receiveArrivage() {
     if (!canEditStock) { alert('Arrivage réservé au propriétaire / gérant.'); return; }
-    if (!estId || !arrivageForm.productId || !arrivageForm.qty) {
-      alert('Choisissez une boisson et une quantité.');
+    if (!estId || !arrivageForm.productId) {
+      alert('Choisissez une boisson.');
       return;
     }
-    const qty = Number(arrivageForm.qty);
+    const packages = Number(arrivageForm.packages);
+    const unitsPer = Number(arrivageForm.unitsPerPackage);
+    if (!packages || packages <= 0) {
+      alert('Indiquez le nombre de casiers / packs.');
+      return;
+    }
+    if (!unitsPer || unitsPer <= 0) {
+      alert('Indiquez le nombre de bouteilles (ou unités) par casier / pack.');
+      return;
+    }
+    const qty = unitsFromPackages(packages, unitsPer);
     if (!qty || qty <= 0) {
       alert('Quantité invalide');
       return;
@@ -1010,10 +1026,15 @@ export default function Inventaire() {
       alert('Produit introuvable');
       return;
     }
-    if (!confirm(`Confirmer l'arrivage de +${qty} « ${p.name} » ?`)) return;
+    if (
+      !confirm(
+        `Confirmer l'arrivage ?\n${packages} casier(s)/pack(s) × ${unitsPer} = +${qty} unité(s)\n« ${p.name} »`,
+      )
+    )
+      return;
     const next = (Number(p.stock) || 0) + qty;
     if (isOnline()) {
-      const { error } = await supabase.from('products').update({ stock: next }).eq('id', p.id);
+      const { error } = await supabase.from('products').update({ stock: next, units_per_package: unitsPer }).eq('id', p.id);
       if (error) {
         alert(error.message);
         return;
@@ -1041,7 +1062,7 @@ export default function Inventaire() {
           unit_cost: Number(p.cost) || 0,
           unit_price: Number(p.price) || 0,
           reason: 'arrivage',
-          note: arrivageForm.note || 'Nouvel arrivage',
+          note: arrivageForm.note || `Arrivage ${packages}×${unitsPer}=${qty}`,
           created_by: member?.user_id || null,
         });
       } catch { /* table optionnelle */ }
@@ -1073,7 +1094,7 @@ export default function Inventaire() {
       await queueAdd('products', 'update', { stock: next, _prev_stock: Number(p.stock) || 0 }, { id: p.id });
       setProducts((prev) => prev.map((x) => (x.id === p.id ? { ...x, stock: next } : x)));
     }
-    setArrivageForm({ productId: '', qty: '', note: '' });
+    setArrivageForm({ productId: '', packages: '1', unitsPerPackage: String(unitsPer || 12), note: '' });
     setTab('stock');
     alert(`Arrivage enregistré : +${qty} ${p.name}`);
   }
@@ -1213,7 +1234,7 @@ export default function Inventaire() {
   .sign div { width: 30%; border-top: 1px solid #333; padding-top: 4px; text-align: center; }
   @media print { .no-print { display: none; } }
 </style></head><body>
-  <h1>${ui.inventoryTitle} physique — Stock Manager AI</h1>
+  <h1>${ui.inventoryTitle} physique — GESMAK</h1>
   <div class="meta">${dateStr} · Mode : ${mode === 'blank' ? 'Feuille manuscrite (comptage)' : 'État du stock'}</div>
   <table>
     <thead><tr>${mode === 'blank' ? headersBlank : headersStock}</tr></thead>
@@ -1222,7 +1243,7 @@ export default function Inventaire() {
   <div class="foot">
     ${mode === 'blank'
       ? 'Remplissez la colonne « Comptage manuscrit », calculez l’écart, puis scannez la feuille dans l’app (Inventaire → Scanner photo IA).'
-      : 'Document généré depuis Stock Manager AI — valeur au coût d’achat.'}
+      : 'Document généré depuis GESMAK — valeur au coût d’achat.'}
   </div>
   <div class="sign">
     <div>Gérant</div>
@@ -1379,34 +1400,70 @@ export default function Inventaire() {
             <Truck className="text-amber-400" size={18} /> Enregistrer un arrivage
           </h2>
           <p className="text-sm text-stone-400">
-            Ajoutez la quantité reçue : le stock est mis à jour pour toute l&apos;équipe (temps réel).
+            Saisissez le <strong>nombre de casiers / packs</strong>, puis le <strong>contenu</strong> (12, 24, 6…).
+            Le stock augmente de : casiers × contenu.
           </p>
           <div>
             <label className="label">Boisson / produit</label>
             <select
               className="input-field"
               value={arrivageForm.productId}
-              onChange={(e) => setArrivageForm({ ...arrivageForm, productId: e.target.value })}
+              onChange={(e) => {
+                const id = e.target.value;
+                const prod = products.find((x) => x.id === id);
+                setArrivageForm({
+                  ...arrivageForm,
+                  productId: id,
+                  unitsPerPackage: String(defaultUnitsPerPackage(prod || undefined)),
+                });
+              }}
             >
               <option value="">— Choisir —</option>
               {products.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.name} (stock : {p.stock})
+                  {p.name} (stock : {p.stock}
+                  {p.units_per_package ? ` · ×${p.units_per_package}` : ''})
                 </option>
               ))}
             </select>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="label">Quantité reçue</label>
+              <label className="label">Nombre de casiers / packs</label>
               <input
                 type="number"
                 min={1}
                 className="input-field"
-                value={arrivageForm.qty}
-                onChange={(e) => setArrivageForm({ ...arrivageForm, qty: e.target.value })}
-                placeholder="ex: 24"
+                value={arrivageForm.packages}
+                onChange={(e) => setArrivageForm({ ...arrivageForm, packages: e.target.value })}
+                placeholder="ex: 5"
               />
+            </div>
+            <div>
+              <label className="label">Bouteilles / unités par casier ou pack</label>
+              <select
+                className="input-field"
+                value={arrivageForm.unitsPerPackage}
+                onChange={(e) => setArrivageForm({ ...arrivageForm, unitsPerPackage: e.target.value })}
+              >
+                {COMMON_PACKAGE_SIZES.map((n) => (
+                  <option key={n} value={String(n)}>
+                    {n} (casier/pack de {n})
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <p className="text-xs text-amber-200/90">
+            Total à ajouter :{' '}
+            <strong>
+              {unitsFromPackages(Number(arrivageForm.packages), Number(arrivageForm.unitsPerPackage))} unité(s)
+            </strong>
+            {' '}({arrivageForm.packages || 0} × {arrivageForm.unitsPerPackage || 0})
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="hidden">
+              {/* conservé pour compat éventuelle */}
             </div>
             <div>
               <label className="label">Note (optionnel)</label>

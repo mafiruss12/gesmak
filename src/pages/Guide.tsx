@@ -31,7 +31,7 @@ export default function GuidePage() {
           Guide de démarrage
         </h1>
         <p className="text-sm text-stone-400 mt-1">
-          Suivez ces étapes pour configurer et utiliser Stock Manager au quotidien.
+          Suivez ces étapes pour configurer et utiliser GESMAK au quotidien.
         </p>
       </div>
 

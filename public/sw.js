@@ -1,5 +1,5 @@
-/* Stock Manager AI — Service Worker v5 (network-first assets) */
-const CACHE_NAME = 'maquis-shell-v5';
+/* GESMAK — Service Worker v6 (network-first assets) */
+const CACHE_NAME = 'gesmak-shell-v6';
 const PRECACHE = [
   '/',
   '/index.html',

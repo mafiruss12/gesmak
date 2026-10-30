@@ -20,7 +20,7 @@ type Item = {
 };
 
 export default function PublicEvents() {
-  useEffect(() => { document.title = 'Événements · Stock Manager'; }, []);
+  useEffect(() => { document.title = 'Événements · GESMAK'; }, []);
   const { user } = useAuth();
   const [authOpen, setAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>('signin');

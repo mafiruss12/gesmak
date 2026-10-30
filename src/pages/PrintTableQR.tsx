@@ -30,7 +30,7 @@ const TEMPLATES: {
   {
     id: 'affiche',
     label: 'Affiche pro',
-    desc: 'Orange Stock Manager · A4',
+    desc: 'Orange GESMAK · A4',
     frame: 'from-orange-600 via-amber-500 to-orange-700',
     accent: '#FF7900',
     bg: '#fff7ed',
@@ -171,7 +171,7 @@ export default function PrintTableQR() {
       ctx.fillStyle = '#fff';
       ctx.font = 'bold 26px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText((estName || 'Stock Manager').slice(0, 28), 300, 50);
+      ctx.fillText((estName || 'GESMAK').slice(0, 28), 300, 50);
       ctx.font = '14px sans-serif';
       ctx.fillText('COMMANDE À TABLE', 300, 85);
       ctx.fillStyle = '#7c2d12';
@@ -392,7 +392,7 @@ export default function PrintTableQR() {
                       Commande à table
                     </p>
                     <p className={`font-black leading-tight ${compact ? 'text-sm' : 'text-lg'}`}>
-                      {(estName || 'Stock Manager').slice(0, compact ? 22 : 32)}
+                      {(estName || 'GESMAK').slice(0, compact ? 22 : 32)}
                     </p>
                   </div>
 

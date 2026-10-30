@@ -40,7 +40,7 @@ export default function BiometricGate({ children }: { children: React.ReactNode 
           <Fingerprint size={32} />
         </div>
         <div>
-          <h1 className="text-xl font-bold text-stone-100">Déverrouiller Stock Manager</h1>
+          <h1 className="text-xl font-bold text-stone-100">Déverrouiller GESMAK</h1>
           <p className="text-sm text-stone-400 mt-2">
             Utilisez votre empreinte, Face ID ou le déverrouillage de l’appareil.
           </p>

@@ -18,7 +18,7 @@ type Est = {
 
 export default function PublicFavorites() {
   useEffect(() => {
-    document.title = 'Favoris · Stock Manager';
+    document.title = 'Favoris · GESMAK';
   }, []);
   const { user } = useAuth();
   const [authOpen, setAuthOpen] = useState(false);

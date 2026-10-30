@@ -220,7 +220,7 @@ export default function PublicMenu() {
         )}
 
         <p className="text-center text-[11px] text-stone-600 mt-10">
-          Menu propulsé par Stock Manager
+          Menu propulsé par GESMAK
         </p>
       </main>
     </div>

@@ -2,7 +2,7 @@ import BrandFooter from '@/components/BrandFooter';
 import AdMarquee from '@/components/AdMarquee';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Beer, Mail, Lock, User, Loader2, KeyRound, ArrowLeft, AlertCircle, CheckCircle2, Package, TrendingUp, WifiOff, Shield, Bot, Users, ClipboardList, Sparkles } from 'lucide-react';
+import { Beer, Mail, Lock, User, Loader2, KeyRound, ArrowLeft, AlertCircle, CheckCircle2, Package, TrendingUp, WifiOff, Shield, Bot, Users, ClipboardList, Sparkles, CircleUser, LockKeyhole } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { toAuthEmail } from '@/lib/login';
 import { makeSignupCaptcha, checkSignupCaptcha, getLoginLockRemaining, serverLoginThrottle } from '@/lib/security';
@@ -18,11 +18,11 @@ import {
 import { supabase } from '@/lib/supabase';
 
 const MARQUEE_MESSAGES = [
-  'Stock Manager AI — la solution complète pour maquis, bars & restaurants',
-  'Pourquoi Stock Manager ? Zéro perte de stock invisible',
+  'GESMAK — Gestion simplifiée, business maîtrisé',
+  'Pourquoi GESMAK ? Zéro perte de stock invisible',
   'Rapport du jour, inventaire, caisse et équipe au même endroit',
   'Fonctionne hors ligne · synchronise dès le retour du réseau',
-  'Images boissons, casiers, Mobile Money · Powered by Kevin Tech Pro',
+  'Images boissons, casiers, Mobile Money · App créée par Kevin Akoh de Kevin Tech Pro',
   'Propriétaire et gérant : chacun son rôle, un seul tableau de bord',
 ];
 
@@ -401,11 +401,11 @@ async function resendConfirmation() {
 
   return (
     <div className="min-h-screen bg-[#F5F5F5] flex items-center justify-center p-4 relative overflow-hidden">
-      <div className="absolute top-0 left-0 right-0 h-10 bg-primary-600/90 overflow-hidden flex items-center z-20">
-        <div className="flex whitespace-nowrap animate-marquee">
+      <div className="auth-marquee-bar absolute top-0 left-0 right-0">
+        <div className="auth-marquee-track">
           {MARQUEE_MESSAGES.concat(MARQUEE_MESSAGES).map((msg, i) => (
-            <span key={i} className="mx-8 text-sm font-medium text-white flex items-center gap-2">
-              <Beer size={14} /> {msg}
+            <span key={i}>
+              <Beer size={14} aria-hidden /> {msg}
             </span>
           ))}
         </div>
@@ -449,7 +449,7 @@ async function resendConfirmation() {
         <aside className="order-2 lg:order-1 space-y-5 auth-showcase">
           <div className="space-y-2">
             <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-amber-400/90">
-              <Sparkles size={14} className="auth-pulse" /> Pourquoi Stock Manager AI ?
+              <Sparkles size={14} className="auth-pulse" /> Pourquoi GESMAK ?
             </p>
             <h2 className="text-2xl sm:text-3xl font-bold text-stone-900 leading-tight font-display">
               La solution qui fait gagner du temps
@@ -528,16 +528,16 @@ async function resendConfirmation() {
 
         {/* Formulaire connexion */}
         <div className="order-1 lg:order-2 w-full max-w-md mx-auto lg:mx-0 lg:ml-auto">
-        <div className="bg-white border border-stone-200 rounded-3xl p-8 shadow-xl auth-form-card">
+        <div className="bg-white border border-stone-200 rounded-3xl p-8 sm:p-10 shadow-xl auth-form-card">
           <div className="flex flex-col items-center mb-6">
             <img
-              src="/logo-sm.png"
-              alt="Stock Manager AI"
-              className="h-20 w-20 rounded-full object-cover mb-3 shadow-md border border-orange-200"
+              src="/logo-gesmak-wide.png"
+              alt="GESMAK — Gestion Simplifiée, Business Maîtrisé"
+              className="h-auto w-full max-w-[320px] object-contain mb-3"
             />
-            <h1 className="text-3xl font-bold font-display text-stone-900">Stock Manager AI</h1>
+            <h1 className="sr-only">GESMAK</h1>
             <p className="text-sm text-stone-500 mt-1">
-              {mode === 'forgot' ? 'Réinitialiser le mot de passe' : 'Gestion intelligente multi-métiers'}
+              {mode === 'forgot' ? 'Réinitialiser le mot de passe' : 'Gestion simplifiée · Business maîtrisé'}
             </p>
           </div>
 
@@ -580,21 +580,23 @@ async function resendConfirmation() {
           )}
 
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-6">
             {/* Inscription publique desactivee : seul un admin cree les comptes membres. */}
 
             {mode === 'signup' && (
               <div>
                 <label className="label">Nom complet</label>
                 <div className="relative">
-                  <User size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-500" />
+                  <span className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-orange-500">
+                    <CircleUser size={18} strokeWidth={1.75} aria-hidden />
+                  </span>
                   <input
                     type="text"
                     required
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
                     placeholder="Jean Kouassi"
-                    className="input-field pl-10"
+                    className="input-field pl-11"
                   />
                 </div>
               </div>
@@ -604,21 +606,26 @@ async function resendConfirmation() {
             <div>
               <label className="label">{mode === 'forgot' ? 'E-mail du compte' : 'Identifiant ou email'}</label>
               <div className="relative">
-                <Mail size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-500" />
+                <span className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-orange-500">
+                  {mode === 'forgot' ? (
+                    <Mail size={18} strokeWidth={1.75} aria-hidden />
+                  ) : (
+                    <CircleUser size={18} strokeWidth={1.75} aria-hidden />
+                  )}
+                </span>
                 <input
                   type="text"
                   required
                   autoComplete="username"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder={mode === 'forgot' ? 'vous@exemple.com' : '0708091011, gerant1 ou email@gmail.com'}
-                  className="input-field pl-10"
+                  placeholder={mode === 'forgot' ? 'vous@exemple.com' : 'Téléphone, pseudo ou e-mail'}
+                  className="input-field pl-11"
                 />
-              
-              <p className="text-[11px] text-stone-500 mt-1">
-                Téléphone ou pseudo → compte interne. E-mail complet → compte e-mail (réinitialisation possible).
-              </p>
               </div>
+              <p className="text-xs text-stone-500 mt-2 leading-snug">
+                Ex. 07 08 09 10 11, gerant1 ou votre e-mail
+              </p>
             </div>
             )}
 
@@ -658,7 +665,9 @@ async function resendConfirmation() {
                   )}
                 </div>
                 <div className="relative">
-                  <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-500" />
+                  <span className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-orange-500">
+                    <LockKeyhole size={18} strokeWidth={1.75} aria-hidden />
+                  </span>
                   <input
                     type="password"
                     required
@@ -666,7 +675,7 @@ async function resendConfirmation() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="input-field pl-10"
+                    className="input-field pl-11"
                     minLength={8}
                   />
                 </div>
@@ -678,7 +687,7 @@ async function resendConfirmation() {
               <div className="space-y-3">
                 <label className="flex items-start gap-2 text-xs text-stone-400">
                   <input type="checkbox" className="mt-0.5" checked={acceptedTerms} onChange={(e) => setAcceptedTerms(e.target.checked)} />
-                  <span>J&apos;accepte les conditions d&apos;utilisation et la politique de confidentialité de Stock Manager AI.</span>
+                  <span>J&apos;accepte les conditions d&apos;utilisation et la politique de confidentialité de GESMAK.</span>
                 </label>
                 <div>
                   <label className="text-xs text-stone-400">Anti-robot : combien font {captcha.a} + {captcha.b} ?</label>
@@ -717,7 +726,7 @@ async function resendConfirmation() {
               )}
             </button>
           </form>
-          <div className="mt-6"><BrandFooter /></div>
+          <div className="mt-8 pt-2"><BrandFooter compact light /></div>
 
           {mode === 'forgot' ? (
             <button

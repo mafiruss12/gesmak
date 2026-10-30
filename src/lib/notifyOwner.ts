@@ -72,13 +72,13 @@ export async function notifyOwnerOnReport(opts: {
   }
   if (owner?.owner_email) {
     const subject = encodeURIComponent(title);
-    const text = encodeURIComponent(body + '\n\nStock Manager AI');
+    const text = encodeURIComponent(body + '\n\nGESMAK');
     (window as any).__ownerMailHref = `mailto:${owner.owner_email}?subject=${subject}&body=${text}`;
     result.mail = true;
   }
   if (owner?.owner_phone) {
     (window as any).__ownerWaPhone = owner.owner_phone;
-    (window as any).__ownerWaMsg = `*${owner.name}* — Rapport journalier\nDate : ${opts.reportDate}\nDe : ${opts.senderName} (${opts.senderRole})\n\n${opts.reportSummary}\n\nStock Manager AI`;
+    (window as any).__ownerWaMsg = `*${owner.name}* — Rapport journalier\nDate : ${opts.reportDate}\nDe : ${opts.senderName} (${opts.senderRole})\n\n${opts.reportSummary}\n\nGESMAK`;
     result.whatsapp = true;
   }
   return result;

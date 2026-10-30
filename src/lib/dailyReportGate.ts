@@ -89,12 +89,12 @@ export function buildReminderMessage(opts: {
     `Bonjour ${opts.staffName},\n\n` +
     `Le rapport journalier de « ${opts.establishmentName} » n'est pas encore enregistré pour le ${opts.date}.\n` +
     missing +
-    `Merci de le compléter dans Stock Manager AI (menu Rapport du jour).\n` +
+    `Merci de le compléter dans GESMAK (menu Rapport du jour).\n` +
     `Aucun jour ne doit être raté — c'est obligatoire pour le suivi du propriétaire.`;
   return {
     title,
     body,
-    waText: `*Stock Manager AI*\n${title}\n\n${body}`,
+    waText: `*GESMAK*\n${title}\n\n${body}`,
     mailSubject: title,
     mailBody: body,
   };

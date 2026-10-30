@@ -60,7 +60,7 @@ export default function PublicTableOrder() {
   useEffect(() => {
     document.title = tableNum
       ? `Commander · Table ${tableNum}`
-      : 'Commander · Stock Manager';
+      : 'Commander · GESMAK';
   }, [tableNum]);
 
   useEffect(() => {

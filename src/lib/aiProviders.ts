@@ -1,4 +1,4 @@
-/** Catalogue modèles IA — Stock Manager AI (vérifié Oct 2026) */
+/** Catalogue modèles IA — GESMAK (vérifié Oct 2026) */
 export type AiCapability = 'chat' | 'vision' | 'image' | 'video' | 'file';
 
 export type AiProviderId = 'gemini' | 'groq' | 'openrouter' | 'pollinations' | 'local';

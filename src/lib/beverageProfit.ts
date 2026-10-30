@@ -236,7 +236,7 @@ export function formatWeeklyProfitMessage(
       ? `\n🏦 Fonds de commerce (stock au coût): ${Math.round(fonds.stockValueAtCost).toLocaleString('fr-FR')} F\n_(Capital à reconduire pour racheter le stock — pas un bénéfice)_`
       : '',
     '',
-    'Stock Manager AI',
+    'GESMAK',
   ]
     .filter(Boolean)
     .join('\n');

@@ -81,7 +81,7 @@ export async function needsMfaStepUp(): Promise<boolean> {
   return f.has && aal.currentLevel === 'aal1';
 }
 
-export async function enrollTotp(friendlyName = 'Stock Manager Admin'): Promise<{
+export async function enrollTotp(friendlyName = 'GESMAK Admin'): Promise<{
   factorId: string;
   qrCode: string;
   secret: string;

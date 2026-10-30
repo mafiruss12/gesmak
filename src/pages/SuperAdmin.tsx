@@ -334,7 +334,7 @@ function SuperAdminInner() {
   async function enableAdminMfa() {
     if (!member?.user_id) return;
     setError(null);
-    const res = await enrollTotp('Stock Manager Admin');
+    const res = await enrollTotp('GESMAK Admin');
     if (res.error || !res.factorId) {
       setError(res.error || 'Impossible de démarrer la MFA Supabase');
       return;
@@ -1329,7 +1329,7 @@ function SuperAdminInner() {
                 Enregistrer
               </button>
             </div>
-            <a className="text-sm text-emerald-400" href={paymentWhatsAppLink('Test Stock Manager')} target="_blank" rel="noreferrer">
+            <a className="text-sm text-emerald-400" href={paymentWhatsAppLink('Test GESMAK')} target="_blank" rel="noreferrer">
               Tester le lien WhatsApp
             </a>
           </div>

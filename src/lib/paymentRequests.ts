@@ -78,7 +78,7 @@ export async function createPaymentRequest(opts: {
   const planLabel = PLANS[opts.planTier].label;
 
   const waMsg = [
-    '*Stock Manager AI — Demande d’activation*',
+    '*GESMAK — Demande d’activation*',
     `Code : ${reference_code}`,
     `Établissement : ${opts.establishmentName}`,
     `Forfait : ${planLabel}`,

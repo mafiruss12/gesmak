@@ -86,7 +86,7 @@ export default {
         'float-medium': 'float 4s ease-in-out infinite',
         'float-fast': 'float 3s ease-in-out infinite',
         'rise': 'rise 8s linear infinite',
-        'marquee': 'marquee 20s linear infinite',
+        'marquee': 'marquee 40s linear infinite',
         'swing': 'swing 5s ease-in-out infinite',
       },
       keyframes: {
@@ -101,8 +101,8 @@ export default {
           '100%': { transform: 'translateY(-10vh) scale(1.2)', opacity: '0' },
         },
         marquee: {
-          '0%': { transform: 'translateX(100%)' },
-          '100%': { transform: 'translateX(-100%)' },
+          '0%': { transform: 'translateX(0)' },
+          '100%': { transform: 'translateX(-50%)' },
         },
         swing: {
           '0%, 100%': { transform: 'rotate(-3deg)' },

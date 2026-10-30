@@ -292,7 +292,7 @@ export default function Accounting() {
 <p style="font-size:1.25rem">Bénéfice (marge) : <strong style="color:${m.profit >= 0 ? '#047857' : '#b91c1c'}">${formatFCFA(m.profit)}</strong></p>
 <p style="font-size:0.9rem;color:#666">Achats stock (fonds de commerce, hors bénéfice) : ${formatFCFA(m.purchases)} · Autres dépenses : ${formatFCFA(m.expenses)}</p>
 <table><thead><tr><th>Semaine lun→dim</th><th>CA</th><th>Coût vendu</th><th>Bénéfice</th><th>Achats stock</th></tr></thead><tbody>${rows}</tbody></table>
-<p style="margin-top:24px;font-size:12px;color:#666">Stock Manager AI · Bénéfice = ventes − coût des boissons vendues</p>
+<p style="margin-top:24px;font-size:12px;color:#666">GESMAK · Bénéfice = ventes − coût des boissons vendues</p>
 <script>window.onload=function(){window.print()}<\/script></body></html>`;
     const win = window.open('', '_blank');
     if (win) {

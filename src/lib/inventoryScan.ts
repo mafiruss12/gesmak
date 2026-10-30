@@ -14,6 +14,12 @@ export interface ScannedLine {
   action: 'update' | 'create' | 'skip';
   confidence: number;
   raw: string;
+  /** Nombre de casiers / packs achetés (reçu) */
+  package_count?: number;
+  /** Bouteilles par casier ou unités par pack (6, 12, 24, 32…) */
+  units_per_package?: number;
+  /** add = réappro (stock += qty) ; set = inventaire (stock = qty) */
+  stock_mode?: 'add' | 'set';
 }
 
 /** Normalise pour détecter doublons */

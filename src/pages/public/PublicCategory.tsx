@@ -14,7 +14,7 @@ export default function PublicCategory() {
   const type = MAP[loc.pathname] || '';
   useEffect(() => {
     const label = type || 'Établissements';
-    document.title = `${label.charAt(0).toUpperCase() + label.slice(1)} · Stock Manager`;
+    document.title = `${label.charAt(0).toUpperCase() + label.slice(1)} · GESMAK`;
   }, [type]);
   return <Navigate to={type ? `/establishments?type=${encodeURIComponent(type)}` : '/establishments'} replace />;
 }

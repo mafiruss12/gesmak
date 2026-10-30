@@ -145,7 +145,7 @@ export default function Customers() {
                 <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="input-field flex-1" placeholder="07 XX XX XX XX" />
                 {form.phone && (
                   <button type="button" className="btn-secondary px-3" title="WhatsApp"
-                    onClick={() => openWhatsApp(form.phone, buildInvoiceWhatsAppMessage({ businessName: 'Stock Manager AI', clientName: form.name, amount: 0, note: 'Bonjour,' }))}>
+                    onClick={() => openWhatsApp(form.phone, buildInvoiceWhatsAppMessage({ businessName: 'GESMAK', clientName: form.name, amount: 0, note: 'Bonjour,' }))}>
                     <MessageCircle size={16} />
                   </button>
                 )}

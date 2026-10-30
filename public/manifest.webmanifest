@@ -1,7 +1,7 @@
 {
-  "name": "Stock Manager AI",
-  "short_name": "Stock AI",
-  "description": "Plateforme SaaS africaine intelligente — stock, caisse, IA. Powered by Kevin Tech Pro.",
+  "name": "GESMAK",
+  "short_name": "GESMAK",
+  "description": "Gestion simplifiée, business maîtrisé — stock, caisse, ventes, dépenses, rapports",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0D0D0D",
@@ -22,5 +22,9 @@
       "purpose": "any maskable"
     }
   ],
-  "categories": ["business", "finance", "productivity"]
+  "categories": [
+    "business",
+    "finance",
+    "productivity"
+  ]
 }

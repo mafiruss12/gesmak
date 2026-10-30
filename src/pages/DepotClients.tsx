@@ -162,7 +162,7 @@ export default function DepotClients() {
                   )}
                   {c.linked_establishment_id && (
                     <span className="px-2 py-0.5 rounded-full bg-teal-500/20 text-teal-300 flex items-center gap-1">
-                      <Link2 size={10} /> Lié Stock Manager
+                      <Link2 size={10} /> Lié GESMAK
                     </span>
                   )}
                 </div>
@@ -216,7 +216,7 @@ export default function DepotClients() {
               <option value="credit">Crédit / encours</option>
             </select>
             <div>
-              <label className="text-xs text-stone-400 mb-1 block">Lier un établissement Stock Manager (sync stock)</label>
+              <label className="text-xs text-stone-400 mb-1 block">Lier un établissement GESMAK (sync stock)</label>
               <select
                 className="input-field"
                 value={form.linked_establishment_id}
