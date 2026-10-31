@@ -374,6 +374,19 @@ export default function Orders() {
     return m ? m[1].trim() : null;
   }
 
+  const boardCounts = useMemo(() => ({
+    pending: orders.filter((o) => o.status === 'pending').length,
+    preparing: orders.filter((o) => o.status === 'preparing').length,
+    ready: orders.filter((o) => o.status === 'ready').length,
+  }), [orders]);
+
+  async function advanceLikeKitchen(o: OrderRow) {
+    if (o.status === 'pending') return sendToKitchen(o.id);
+    if (o.status === 'preparing') return updateStatus(o.id, 'ready');
+    if (o.status === 'ready') return updateStatus(o.id, 'served');
+  }
+
+
   const itemsByCat = useMemo(() => {
     const map = new Map<string, MenuItem[]>();
     for (const it of menuItems) {
@@ -451,6 +464,27 @@ export default function Orders() {
         )}
       </div>
 
+      {(statusFilter === 'open' || statusFilter === 'pending') && (
+        <div className="grid grid-cols-3 gap-2">
+          <button
+            type="button"
+            onClick={() => setStatusFilter('pending')}
+            className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3 text-center"
+          >
+            <p className="text-[10px] uppercase text-amber-200/80">Nouvelles</p>
+            <p className="text-xl font-bold text-amber-300">{boardCounts.pending}</p>
+          </button>
+          <div className="rounded-2xl border border-sky-500/30 bg-sky-500/10 p-3 text-center">
+            <p className="text-[10px] uppercase text-sky-200/80">Préparation</p>
+            <p className="text-xl font-bold text-sky-300">{boardCounts.preparing}</p>
+          </div>
+          <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-center">
+            <p className="text-[10px] uppercase text-emerald-200/80">Prêtes</p>
+            <p className="text-xl font-bold text-emerald-300">{boardCounts.ready}</p>
+          </div>
+        </div>
+      )}
+
       {orders.length === 0 ? (
         <EmptyState
           icon={<ShoppingBag size={48} />}
@@ -460,18 +494,35 @@ export default function Orders() {
       ) : (
         <ul className="space-y-3">
           {orders.map((o) => (
-            <li key={o.id} className="card p-4 space-y-2">
+            <li
+              key={o.id}
+              className={`card p-4 space-y-2 border-l-4 ${
+                o.status === 'pending'
+                  ? 'border-l-amber-500'
+                  : o.status === 'preparing'
+                    ? 'border-l-sky-500'
+                    : o.status === 'ready'
+                      ? 'border-l-emerald-500'
+                      : 'border-l-stone-600'
+              }`}
+            >
               <button type="button" className="w-full text-left" onClick={() => void openDetail(o)}>
               <div className="flex justify-between gap-2 items-start">
-                <div>
+                <div className="min-w-0 flex-1">
+                  {clientLabel(o) ? (
+                    <div className="text-lg font-black text-amber-300 truncate mb-0.5">
+                      👤 {clientLabel(o)}
+                    </div>
+                  ) : (
+                    <div className="text-sm font-semibold text-stone-400 mb-0.5">Client non renseigné</div>
+                  )}
                   <div className="font-semibold text-stone-100">
                     {o.table_number ? `Table ${o.table_number}` : ORDER_TYPE_LABELS[o.order_type] || o.order_type}
-                    {clientLabel(o) ? ` · ${clientLabel(o)}` : ''}
                     {o.source === 'qr_table' ? ' · QR' : ''}
                   </div>
                   <div className="text-xs text-stone-500">
                     {formatTime(o.created_at)} · {formatFCFA(Number(o.total) || 0)}
-                    {o.server_name ? ` · ${o.server_name}` : ''}
+                    {o.server_name ? ` · Serveur ${o.server_name}` : ''}
                   </div>
                 </div>
                 <Badge>{ORDER_STATUS_LABELS[o.status] || o.status}</Badge>
@@ -484,7 +535,7 @@ export default function Orders() {
                     className="btn-primary text-xs flex items-center gap-1"
                     onClick={() => void sendToKitchen(o.id)}
                   >
-                    <UtensilsCrossed size={14} /> Envoyer en cuisine
+                    <UtensilsCrossed size={14} /> Préparer (comme cuisine)
                   </button>
                 )}
                 {o.status === 'preparing' && (

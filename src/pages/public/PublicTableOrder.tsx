@@ -176,15 +176,30 @@ export default function PublicTableOrder() {
   }, [lastOrderId, done]);
 
 
+  function isDrinkProduct(p: Prod): boolean {
+    const c = `${p.category || ''} ${p.name || ''}`.toLowerCase();
+    const keys = [
+      'boisson', 'bière', 'biere', 'bierre', 'soft', 'jus', 'eau', 'vin', 'cocktail',
+      'alcool', 'soda', 'coca', 'café', 'cafe', 'thé', 'the', 'drink', 'liqueur',
+      'whisky', 'gin', 'rhum', 'castel', 'flag', 'bock', 'guinness', 'sucrerie',
+    ];
+    return keys.some((k) => c.includes(k));
+  }
+
+  const sectionProducts = useMemo(() => {
+    if (section === 'boissons') return products.filter(isDrinkProduct);
+    return products.filter((p) => !isDrinkProduct(p));
+  }, [products, section]);
+
   const categories = useMemo(() => {
-    const s = new Set(products.map((p) => p.category || 'Autres'));
+    const s = new Set(sectionProducts.map((p) => p.category || 'Autres'));
     return ['Tous', ...Array.from(s).sort()];
-  }, [products]);
+  }, [sectionProducts]);
 
   const visible = useMemo(() => {
-    if (cat === 'Tous') return products;
-    return products.filter((p) => (p.category || 'Autres') === cat);
-  }, [products, cat]);
+    if (cat === 'Tous') return sectionProducts;
+    return sectionProducts.filter((p) => (p.category || 'Autres') === cat);
+  }, [sectionProducts, cat]);
 
   const lines = useMemo(() => {
     return products
@@ -461,22 +476,42 @@ export default function PublicTableOrder() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0c0a09] text-stone-100 pb-36">
-      <header className="sticky top-0 z-10 border-b border-stone-800 bg-[#0c0a09]/90 backdrop-blur px-4 py-3">
-        <div className="max-w-lg mx-auto flex items-center gap-2">
-          <Beer className="text-amber-400" size={22} />
-          <div className="min-w-0">
-            <h1 className="font-bold truncate">{est?.name || 'Menu'}</h1>
-            <p className="text-xs text-stone-400">
-              {tableNum ? `Table ${tableNum} · commande QR` : 'Commande QR'}
+    <div className="min-h-screen text-stone-100 pb-36 relative overflow-hidden" style={{ background: 'radial-gradient(ellipse at top, #1c1917 0%, #0c0a09 55%, #0a0a0a 100%)' }}>
+      <style>{`
+        @keyframes floaty { 0%,100%{ transform: translateY(0);} 50%{ transform: translateY(-6px);} }
+        @keyframes shimmer { 0%{ background-position: 0% 50%; } 100%{ background-position: 100% 50%; } }
+        @keyframes popin { from{ opacity:0; transform: scale(.92) translateY(8px);} to{ opacity:1; transform: scale(1) translateY(0);} }
+        .gesmak-float { animation: floaty 3.2s ease-in-out infinite; }
+        .gesmak-pop { animation: popin .45s ease-out both; }
+        .gesmak-shimmer {
+          background: linear-gradient(90deg, #f59e0b, #fbbf24, #f97316, #f59e0b);
+          background-size: 200% 100%;
+          animation: shimmer 2.8s linear infinite;
+        }
+      `}</style>
+      <div className="pointer-events-none absolute -top-20 -right-16 w-56 h-56 rounded-full bg-amber-500/15 blur-3xl" />
+      <div className="pointer-events-none absolute top-40 -left-20 w-48 h-48 rounded-full bg-orange-600/10 blur-3xl" />
+
+      <header className="sticky top-0 z-10 border-b border-amber-500/20 bg-[#0c0a09]/85 backdrop-blur-md px-4 py-3">
+        <div className="max-w-lg mx-auto flex items-center gap-3">
+          <div className="gesmak-float rounded-2xl bg-gradient-to-br from-amber-400 to-orange-600 p-2 shadow-lg shadow-amber-900/40">
+            <Beer className="text-stone-950" size={22} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h1 className="font-black truncate text-lg tracking-tight">{est?.name || 'Menu'}</h1>
+            <p className="text-xs text-amber-200/80 font-medium">
+              {tableNum ? `Table ${tableNum}` : 'Commande'} · scan & commandez
             </p>
           </div>
+          {logoUrl && (
+            <img src={logoUrl} alt="" className="w-11 h-11 rounded-xl object-cover ring-2 ring-amber-400/40" />
+          )}
         </div>
       </header>
 
       <div className="max-w-lg mx-auto px-3 pt-3 space-y-3">
         {!tableNum && (
-          <p className="text-xs text-amber-200/90 bg-amber-500/10 border border-amber-500/30 rounded-xl px-3 py-2">
+          <p className="text-xs text-amber-200/90 bg-amber-500/10 border border-amber-500/30 rounded-xl px-3 py-2 gesmak-pop">
             Astuce : le QR de table contient le numéro (ex. table=5).
           </p>
         )}
@@ -486,14 +521,67 @@ export default function PublicTableOrder() {
           </p>
         )}
 
+        {/* Nom client EN HAUT */}
+        <div className="rounded-2xl border border-amber-500/30 bg-gradient-to-br from-amber-500/15 to-orange-600/10 p-3 space-y-2 gesmak-pop shadow-lg shadow-amber-950/20">
+          <label className="block text-xs font-bold uppercase tracking-wide text-amber-200/90">
+            Votre prénom / nom <span className="text-amber-400">(affiché en cuisine)</span>
+          </label>
+          <input
+            className="w-full rounded-xl bg-stone-950/80 border border-amber-500/40 px-3 py-3 text-base font-semibold text-stone-50 placeholder:text-stone-500 focus:outline-none focus:ring-2 focus:ring-amber-400"
+            placeholder="Ex. Kouassi, Awa…"
+            value={customerName}
+            onChange={(e) => setCustomerName(e.target.value)}
+            onBlur={() => void loadClientHistory(customerName)}
+            maxLength={60}
+            autoComplete="name"
+          />
+          <input
+            className="w-full rounded-xl bg-stone-950/60 border border-stone-700 px-3 py-2 text-sm text-stone-200 placeholder:text-stone-600 focus:outline-none focus:ring-1 focus:ring-amber-500/50"
+            placeholder="Téléphone (optionnel)"
+            value={customerPhone}
+            onChange={(e) => setCustomerPhone(e.target.value)}
+            inputMode="tel"
+          />
+        </div>
+
+        {(welcome) && (
+          <p className="text-center text-sm text-stone-300/90 italic px-2">{welcome}</p>
+        )}
+
+        {/* Deux côtés : Boissons | Nourriture */}
+        <div className="grid grid-cols-2 gap-2 p-1 rounded-2xl bg-stone-900/80 border border-stone-700/80">
+          <button
+            type="button"
+            onClick={() => { setSection('boissons'); setCat('Tous'); }}
+            className={`flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition ${
+              section === 'boissons'
+                ? 'gesmak-shimmer text-stone-950 shadow-md'
+                : 'text-stone-400 hover:text-stone-200'
+            }`}
+          >
+            <Beer size={18} /> Boissons
+          </button>
+          <button
+            type="button"
+            onClick={() => { setSection('nourriture'); setCat('Tous'); }}
+            className={`flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition ${
+              section === 'nourriture'
+                ? 'bg-emerald-500 text-stone-950 shadow-md'
+                : 'text-stone-400 hover:text-stone-200'
+            }`}
+          >
+            <UtensilsCrossed size={18} /> Nourriture
+          </button>
+        </div>
+
         <div className="flex gap-1 overflow-x-auto pb-1">
           {categories.map((c) => (
             <button
               key={c}
               type="button"
               onClick={() => setCat(c)}
-              className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold ${
-                cat === c ? 'bg-amber-500 text-stone-950' : 'bg-stone-800 text-stone-300'
+              className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition ${
+                cat === c ? 'bg-amber-500 text-stone-950 scale-105' : 'bg-stone-800/90 text-stone-300'
               }`}
             >
               {c}
@@ -501,20 +589,15 @@ export default function PublicTableOrder() {
           ))}
         </div>
 
-        {(logoUrl || welcome) && (
-          <div className="rounded-2xl border border-stone-800 bg-stone-900/60 p-3 flex items-center gap-3 mb-2">
-            {logoUrl && (
-              <img src={logoUrl} alt="" className="w-12 h-12 rounded-xl object-cover bg-stone-800" />
-            )}
-            <div className="min-w-0">
-              <p className="font-semibold text-stone-100 truncate">{est?.name}</p>
-              <p className="text-xs text-stone-400">{welcome}</p>
-            </div>
-          </div>
-        )}
-        <p className="text-center text-xs text-stone-500 pb-1">
-          Touchez l&apos;image pour ajouter · lecture non obligatoire
+        <p className="text-center text-xs text-stone-500 flex items-center justify-center gap-1">
+          <Sparkles size={12} className="text-amber-400" />
+          Touchez l&apos;image pour ajouter · {section === 'boissons' ? 'boissons' : 'plats & grillades'}
         </p>
+        {visible.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-stone-700 p-8 text-center text-stone-500 text-sm">
+            Aucun article dans « {section === 'boissons' ? 'Boissons' : 'Nourriture'} » pour l&apos;instant.
+          </div>
+        ) : null}
         <div className="grid grid-cols-2 gap-3">
           {visible.map((p) => {
             const q = cart[p.id] || 0;
@@ -525,7 +608,7 @@ export default function PublicTableOrder() {
                 type="button"
                 disabled={soldOut}
                 onClick={() => !soldOut && bump(p.id, 1)}
-                className={`relative text-left rounded-2xl border overflow-hidden transition active:scale-[0.98] ${
+                className={`relative text-left rounded-2xl border overflow-hidden transition active:scale-[0.97] gesmak-pop ${
                   q > 0
                     ? 'border-amber-400 ring-2 ring-amber-400/40 bg-amber-500/10'
                     : 'border-stone-800 bg-stone-900/80'
@@ -582,46 +665,19 @@ export default function PublicTableOrder() {
           })}
         </div>
 
-        <div className="space-y-2">
-          <label className="block text-xs text-stone-400">
-            Votre nom <span className="text-amber-400">*</span>
-            <input
-              className="mt-1 w-full rounded-xl border border-stone-700 bg-stone-900 px-3 py-2 text-sm text-stone-100"
-              placeholder="Ex. Koffi, Aya…"
-              value={customerName}
-              onChange={(e) => setCustomerName(e.target.value)}
-              onBlur={() => void loadClientHistory(customerName)}
-              maxLength={60}
-              autoComplete="name"
-              required
-            />
-          </label>
-          <label className="block text-xs text-stone-400">
-            Téléphone <span className="text-stone-500">(optionnel — pour mieux vous reconnaître)</span>
-            <input
-              className="mt-1 w-full rounded-xl border border-stone-700 bg-stone-900 px-3 py-2 text-sm text-stone-100"
-              placeholder="07…"
-              value={customerPhone}
-              onChange={(e) => setCustomerPhone(e.target.value)}
-              inputMode="tel"
-            />
-          </label>
-          {clientHistory.length > 0 && (
-            <div className="rounded-xl border border-stone-700 bg-stone-900/80 p-3 text-xs space-y-1">
-              <p className="text-stone-400 font-medium">
-                Commandes précédentes (même nom — limite : d&apos;autres clients peuvent avoir le même nom)
-              </p>
-              {clientHistory.map((h) => (
-                <div key={h.id} className="flex justify-between text-stone-300">
-                  <span>{new Date(h.created_at).toLocaleString('fr-FR')}</span>
-                  <span>
-                    {Math.round(Number(h.total) || 0)} F · {h.status}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        {clientHistory.length > 0 && (
+          <div className="rounded-xl border border-stone-700 bg-stone-900/80 p-3 text-xs space-y-1 gesmak-pop">
+            <p className="text-stone-400 font-medium">Commandes précédentes (même nom)</p>
+            {clientHistory.map((h) => (
+              <div key={h.id} className="flex justify-between text-stone-300">
+                <span>{new Date(h.created_at).toLocaleString('fr-FR')}</span>
+                <span>
+                  {Math.round(Number(h.total) || 0)} F · {h.status}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
         <label className="block text-xs text-stone-400">
           Note (optionnel)
           <input
@@ -644,7 +700,7 @@ export default function PublicTableOrder() {
               type="button"
               disabled={busy || customerName.trim().length < 2}
               onClick={() => void submit()}
-              className="w-full min-h-[48px] rounded-xl bg-amber-500 text-stone-950 font-bold flex items-center justify-center gap-2 disabled:opacity-60"
+              className="w-full min-h-[52px] rounded-2xl gesmak-shimmer text-stone-950 font-black text-base flex items-center justify-center gap-2 disabled:opacity-60 shadow-lg shadow-amber-900/30"
             >
               {busy ? <Loader2 className="animate-spin" size={18} /> : <Send size={18} />}
               Envoyer la commande
