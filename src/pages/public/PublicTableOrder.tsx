@@ -353,7 +353,7 @@ export default function PublicTableOrder() {
 
   if (!tableNum && !loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0c0a09] text-stone-200 p-6 text-center">
+      <div className="min-h-screen flex items-center justify-center bg-white text-stone-800 p-6 text-center">
         <div>
           <Beer className="mx-auto text-amber-400 mb-3" size={36} />
           <p className="font-bold text-lg">Scannez le QR de votre table</p>
@@ -365,7 +365,7 @@ export default function PublicTableOrder() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0c0a09] text-stone-400">
+      <div className="min-h-screen flex items-center justify-center bg-white text-stone-500">
         <Loader2 className="animate-spin" />
       </div>
     );
@@ -373,7 +373,7 @@ export default function PublicTableOrder() {
 
   if (error && !est) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0c0a09] text-stone-300 p-6 text-center">
+      <div className="min-h-screen flex items-center justify-center bg-white text-stone-700 p-6 text-center">
         {error}
       </div>
     );
@@ -384,7 +384,7 @@ export default function PublicTableOrder() {
     const steps = ['pending', 'preparing', 'ready', 'served'] as const;
     const stepIdx = Math.max(0, steps.indexOf(trackStatus as any));
     return (
-      <div className="min-h-screen bg-[#0c0a09] text-stone-100 px-4 py-6 pb-24">
+      <div className="min-h-screen bg-white text-stone-900 px-4 py-6 pb-24">
         <div className="max-w-lg mx-auto space-y-4">
           <div className="text-center space-y-2">
             <CheckCircle2 className="text-emerald-400 mx-auto" size={48} />
@@ -481,46 +481,117 @@ export default function PublicTableOrder() {
   }
 
   return (
-    <div className="min-h-screen text-stone-900 pb-36 relative overflow-hidden qr-order-page">
+    <div className="min-h-screen text-stone-900 pb-40 relative overflow-x-hidden overflow-y-auto qr-order-page bg-white">
       <style>{`
         .qr-order-page {
-          background:
-            radial-gradient(ellipse 120% 80% at 10% -10%, #fdba74 0%, transparent 50%),
-            radial-gradient(ellipse 100% 70% at 100% 0%, #fcd34d 0%, transparent 45%),
-            radial-gradient(ellipse 80% 50% at 50% 100%, #fed7aa 0%, transparent 55%),
-            linear-gradient(165deg, #fff7ed 0%, #ffedd5 40%, #fef3c7 100%);
+          background: #ffffff !important;
         }
-        @keyframes floaty { 0%,100%{ transform: translateY(0) rotate(0deg);} 50%{ transform: translateY(-10px) rotate(4deg);} }
+        .qr-order-page::before {
+          content: '';
+          position: fixed;
+          inset: 0;
+          pointer-events: none;
+          z-index: 0;
+          background:
+            radial-gradient(circle at 15% 10%, rgba(251,146,60,0.18), transparent 42%),
+            radial-gradient(circle at 85% 5%, rgba(250,204,21,0.2), transparent 40%),
+            radial-gradient(circle at 50% 90%, rgba(249,115,22,0.12), transparent 45%),
+            #ffffff;
+          animation: bgShift 10s ease-in-out infinite alternate;
+        }
+        @keyframes bgShift {
+          0% { filter: hue-rotate(0deg); }
+          100% { filter: hue-rotate(12deg); }
+        }
+        @keyframes floaty {
+          0%,100% { transform: translateY(0) rotate(0deg); }
+          50% { transform: translateY(-12px) rotate(6deg); }
+        }
         @keyframes drift {
           0% { transform: translate(0,0) scale(1); }
-          33% { transform: translate(18px,-22px) scale(1.05); }
-          66% { transform: translate(-14px,12px) scale(0.96); }
+          50% { transform: translate(24px,-28px) scale(1.08); }
           100% { transform: translate(0,0) scale(1); }
         }
-        @keyframes bubble {
-          0% { transform: translateY(100vh) scale(0.4); opacity: 0; }
-          10% { opacity: 0.5; }
-          90% { opacity: 0.35; }
-          100% { transform: translateY(-20vh) scale(1); opacity: 0; }
+        @keyframes bubbleUp {
+          0% { transform: translateY(110vh) scale(0.3); opacity: 0; }
+          15% { opacity: 0.55; }
+          85% { opacity: 0.4; }
+          100% { transform: translateY(-15vh) scale(1.1); opacity: 0; }
         }
-        @keyframes shimmer { 0%{ background-position: 0% 50%; } 100%{ background-position: 100% 50%; } }
-        @keyframes popin { from{ opacity:0; transform: scale(.94) translateY(10px);} to{ opacity:1; transform: scale(1) translateY(0);} }
-        @keyframes softPulse { 0%,100%{ opacity:0.45;} 50%{ opacity:0.85;} }
-        .gesmak-float { animation: floaty 3.5s ease-in-out infinite; }
-        .gesmak-pop { animation: popin .5s cubic-bezier(.22,1,.36,1) both; }
+        @keyframes shimmer {
+          0% { background-position: 0% 50%; }
+          100% { background-position: 200% 50%; }
+        }
+        @keyframes popin {
+          from { opacity: 0; transform: translateY(16px) scale(0.92); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes neonPulse {
+          0%,100% { box-shadow: 0 0 0 0 rgba(249,115,22,0.55), 0 8px 28px rgba(249,115,22,0.45); }
+          50% { box-shadow: 0 0 0 10px rgba(249,115,22,0), 0 12px 36px rgba(234,88,12,0.55); }
+        }
+        @keyframes cardShine {
+          0% { background-position: -120% 0; }
+          100% { background-position: 220% 0; }
+        }
+        .gesmak-float { animation: floaty 3s ease-in-out infinite; }
+        .gesmak-pop { animation: popin 0.55s cubic-bezier(0.22,1,0.36,1) both; }
         .gesmak-shimmer {
-          background: linear-gradient(90deg, #f59e0b, #fbbf24, #fb923c, #f59e0b);
-          background-size: 220% 100%;
-          animation: shimmer 2.5s linear infinite;
+          background: linear-gradient(105deg, #ea580c, #f59e0b, #fbbf24, #f97316, #ea580c);
+          background-size: 280% 100%;
+          animation: shimmer 2.2s linear infinite;
+          color: #fff !important;
         }
-        .qr-orb { position:absolute; border-radius:50%; filter: blur(2px); pointer-events:none; animation: drift 12s ease-in-out infinite; }
-        .qr-bubble { position:absolute; border-radius:50%; pointer-events:none; background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.9), rgba(251,191,36,0.35)); animation: bubble linear infinite; }
+        .qr-orb {
+          position: absolute;
+          border-radius: 50%;
+          pointer-events: none;
+          z-index: 0;
+          animation: drift 11s ease-in-out infinite;
+          filter: blur(0.5px);
+        }
+        .qr-bubble {
+          position: absolute;
+          border-radius: 50%;
+          pointer-events: none;
+          z-index: 0;
+          background: radial-gradient(circle at 30% 28%, #fff, rgba(251,191,36,0.55));
+          animation: bubbleUp linear infinite;
+          box-shadow: 0 0 12px rgba(251,146,60,0.35);
+        }
+        .qr-send-btn {
+          background: linear-gradient(90deg, #ea580c, #f59e0b, #fb923c, #ea580c) !important;
+          background-size: 250% 100% !important;
+          animation: shimmer 2s linear infinite, neonPulse 1.8s ease-in-out infinite !important;
+          color: #fff !important;
+          font-weight: 900 !important;
+          letter-spacing: 0.02em;
+          border: none !important;
+        }
+        .qr-send-btn:disabled {
+          animation: none !important;
+          background: #fdba74 !important;
+          color: #fff !important;
+          opacity: 0.85 !important;
+        }
+        .qr-product-card {
+          background: #fff;
+          border: 2px solid #ffedd5;
+          box-shadow: 0 10px 28px rgba(251,146,60,0.12);
+          transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+        }
+        .qr-product-card:active { transform: scale(0.97); }
+        .qr-product-card.is-in-cart {
+          border-color: #f97316;
+          box-shadow: 0 0 0 3px rgba(249,115,22,0.25), 0 12px 32px rgba(249,115,22,0.2);
+        }
+        .qr-content { position: relative; z-index: 1; }
       `}</style>
 
       {/* Décors animés */}
-      <div className="qr-orb w-72 h-72 bg-orange-300/40 -top-16 -right-20" style={{ animationDuration: '14s' }} />
-      <div className="qr-orb w-56 h-56 bg-amber-200/50 top-1/3 -left-16" style={{ animationDuration: '18s', animationDelay: '-3s' }} />
-      <div className="qr-orb w-40 h-40 bg-yellow-200/40 bottom-24 right-8" style={{ animationDuration: '11s', animationDelay: '-6s' }} />
+      <div className="qr-orb w-72 h-72 bg-orange-400/30 -top-16 -right-20" style={{ animationDuration: '14s' }} />
+      <div className="qr-orb w-56 h-56 bg-yellow-300/35 top-1/3 -left-16" style={{ animationDuration: '18s', animationDelay: '-3s' }} />
+      <div className="qr-orb w-40 h-40 bg-rose-300/25 bottom-24 right-8" style={{ animationDuration: '11s', animationDelay: '-6s' }} />
       <div className="qr-bubble w-8 h-8 left-[12%]" style={{ animationDuration: '14s', animationDelay: '0s' }} />
       <div className="qr-bubble w-5 h-5 left-[45%]" style={{ animationDuration: '11s', animationDelay: '2s' }} />
       <div className="qr-bubble w-10 h-10 left-[72%]" style={{ animationDuration: '16s', animationDelay: '4s' }} />
@@ -528,7 +599,7 @@ export default function PublicTableOrder() {
       <div className="qr-bubble w-4 h-4 left-[88%]" style={{ animationDuration: '10s', animationDelay: '1s' }} />
       <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-white/50 to-transparent" />
 
-      <header className="sticky top-0 z-10 border-b border-orange-200/80 bg-white/75 backdrop-blur-md px-4 py-3 shadow-sm shadow-orange-100/80">
+      <header className="sticky top-0 z-20 border-b border-orange-100 bg-white px-4 py-3 shadow-md shadow-orange-100/50">
         <div className="max-w-lg mx-auto flex items-center gap-3">
           <div className="gesmak-float rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 p-2.5 shadow-lg shadow-orange-300/60">
             <Beer className="text-white" size={22} />
@@ -545,7 +616,7 @@ export default function PublicTableOrder() {
         </div>
       </header>
 
-      <div className="max-w-lg mx-auto px-3 pt-3 space-y-3">
+      <div className="max-w-lg mx-auto px-3 pt-3 space-y-3 qr-content">
         {!tableNum && (
           <p className="text-xs text-orange-800 bg-amber-500/10 border border-amber-500/30 rounded-xl px-3 py-2 gesmak-pop">
             Astuce : le QR de table contient le numéro (ex. table=5).
@@ -558,13 +629,13 @@ export default function PublicTableOrder() {
         )}
 
         {/* Nom client EN HAUT */}
-        <div className="rounded-2xl border border-orange-200 bg-white/90 shadow-lg shadow-orange-100/70 p-3 space-y-2 gesmak-pop shadow-lg shadow-amber-950/20">
+        <div className="rounded-3xl border-2 border-orange-200 bg-white p-4 space-y-2.5 gesmak-pop shadow-xl shadow-orange-200/40 shadow-lg shadow-amber-950/20">
           <label className="block text-xs font-bold uppercase tracking-wide text-orange-800">
-            Votre prénom / nom <span className="text-amber-400">(affiché en cuisine)</span>
+            Comment vous appeler ?
           </label>
           <input
             className="w-full rounded-xl bg-white border border-orange-200 px-3 py-3 text-base font-semibold text-stone-900 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-amber-400"
-            placeholder="Ex. Kouassi, Awa…"
+            placeholder="Votre prénom"
             value={customerName}
             onChange={(e) => setCustomerName(e.target.value)}
             onBlur={() => void loadClientHistory(customerName)}
@@ -644,10 +715,8 @@ export default function PublicTableOrder() {
                 type="button"
                 disabled={soldOut}
                 onClick={() => !soldOut && bump(p.id, 1)}
-                className={`relative text-left rounded-2xl border overflow-hidden transition active:scale-[0.97] gesmak-pop ${
-                  q > 0
-                    ? 'border-amber-400 ring-2 ring-amber-400/40 bg-amber-500/10'
-                    : 'border-orange-100 bg-white shadow-md shadow-orange-100/80'
+                className={`relative text-left rounded-3xl overflow-hidden gesmak-pop qr-product-card ${
+                  q > 0 ? 'is-in-cart' : ''
                 } ${soldOut ? 'opacity-45 grayscale' : ''}`}
               >
                 <div className="aspect-square w-full bg-gradient-to-b from-orange-50 to-white flex items-center justify-center p-3">
@@ -669,7 +738,7 @@ export default function PublicTableOrder() {
                   </span>
                 )}
                 <div className="px-2 py-2 border-t border-stone-800/80">
-                  <p className="text-base font-black text-amber-300 leading-none">
+                  <p className="text-lg font-black text-orange-600 leading-none">
                     {formatFCFA(Number(p.price) || 0)}
                   </p>
                   {/* Nom en petit pour ceux qui lisent — l’image reste principale */}
@@ -726,20 +795,20 @@ export default function PublicTableOrder() {
       </div>
 
       {lines.length > 0 && (
-        <div className="fixed bottom-0 inset-x-0 border-t border-orange-200 bg-white/95 backdrop-blur p-3">
+        <div className="fixed bottom-0 inset-x-0 z-30 border-t-2 border-orange-200 bg-white p-3 shadow-[0_-8px_30px_rgba(249,115,22,0.15)]">
           <div className="max-w-lg mx-auto space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-stone-600">{lines.reduce((s, l) => s + l.qty, 0)} article(s)</span>
-              <span className="font-bold text-amber-300">{formatFCFA(total)}</span>
+            <div className="flex justify-between text-sm items-center">
+              <span className="text-stone-700 font-semibold">{lines.reduce((s, l) => s + l.qty, 0)} article(s)</span>
+              <span className="font-black text-xl text-orange-600">{formatFCFA(total)}</span>
             </div>
             <button
               type="button"
               disabled={busy || customerName.trim().length < 2}
               onClick={() => void submit()}
-              className="w-full min-h-[52px] rounded-2xl gesmak-shimmer text-stone-950 font-black text-base flex items-center justify-center gap-2 disabled:opacity-60 shadow-lg shadow-amber-900/30"
+              className="qr-send-btn w-full min-h-[56px] rounded-2xl text-base flex items-center justify-center gap-2"
             >
-              {busy ? <Loader2 className="animate-spin" size={18} /> : <Send size={18} />}
-              Envoyer la commande
+              {busy ? <Loader2 className="animate-spin" size={20} /> : <Send size={20} />}
+              ENVOYER LA COMMANDE
             </button>
             {customerName.trim().length < 2 && (
               <p className="text-[10px] text-center text-amber-400/90">
