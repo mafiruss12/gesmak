@@ -1,4 +1,4 @@
-import AdMarquee from '@/components/AdMarquee';
+import DashboardOrdersPanel from '@/components/DashboardOrdersPanel';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   TrendingUp, DollarSign, Package, Users, AlertTriangle, Receipt, ShoppingCart,
@@ -446,7 +446,7 @@ export default function Dashboard() {
 
   return (
     <div>
-      <AdMarquee className="mb-4" />
+      <DashboardOrdersPanel />
       <OwnerSitesBar />
       {error && (
         <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-sm text-amber-900 dark:text-amber-100 mb-3">
