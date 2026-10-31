@@ -1347,7 +1347,7 @@ function SuperAdminInner() {
               </button>
             </div>
             <p className="text-xs text-stone-500">
-              Clients ayant demandé une activation via WhatsApp / Mobile Money. Approuver après réception du paiement.
+              Clients ayant demandé une activation via Wave + WhatsApp. Approuver après vérification du paiement.
             </p>
             {payReqs.length === 0 ? (
               <p className="text-sm text-stone-500">Aucune demande en attente (ou table non migrée).</p>

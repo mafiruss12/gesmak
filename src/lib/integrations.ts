@@ -1,6 +1,6 @@
 import { toWhatsAppNumber } from '@/lib/login';
 /**
- * Intégrations P3 — WhatsApp & Mobile Money
+ * Intégrations P3 — WhatsApp & notifications
  * Sans clés API : liens wa.me + méthodes de paiement locales.
  * Pour une vraie API (Orange/MTN/Wave/WhatsApp Cloud), brancher les secrets côté serveur.
  */
