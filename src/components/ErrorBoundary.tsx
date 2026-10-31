@@ -14,6 +14,18 @@ function isChunkLoadError(err: Error | null): boolean {
   );
 }
 
+/** Pages ouvertes au public (QR, menu) — pas de lien dashboard / login */
+function isPublicPath(pathname: string): boolean {
+  return (
+    pathname.startsWith('/commander') ||
+    pathname.startsWith('/order') ||
+    pathname.startsWith('/m/') ||
+    pathname.startsWith('/menu') ||
+    pathname.startsWith('/public') ||
+    pathname.startsWith('/t/')
+  );
+}
+
 export default class ErrorBoundary extends Component<Props, State> {
   state: State = { error: null };
 
@@ -22,14 +34,12 @@ export default class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error) {
-    // Une seule auto-recharge après un déploiement (chunks hash changés)
     if (isChunkLoadError(error) && typeof window !== 'undefined') {
       const key = 'gesmak_chunk_reload';
       const last = sessionStorage.getItem(key);
       const now = String(Date.now());
       if (!last || Date.now() - Number(last) > 60_000) {
         sessionStorage.setItem(key, now);
-        // Purge SW + caches puis reload
         void (async () => {
           try {
             if ('serviceWorker' in navigator) {
@@ -57,16 +67,19 @@ export default class ErrorBoundary extends Component<Props, State> {
     if (isChunkLoadError(err)) {
       return !navigator.onLine
         ? 'Connexion internet requise pour ouvrir cette page. Réactivez le réseau puis appuyez sur Réessayer.'
-        : 'Une mise à jour de l’application est disponible. Appuyez sur Réessayer pour charger la dernière version.';
+        : 'Une mise à jour est disponible. Appuyez sur Réessayer pour recharger la page.';
     }
     if (/NetworkError|Failed to fetch|Load failed/i.test(err.message)) {
       return 'Problème de connexion. Vérifiez votre réseau et réessayez.';
     }
-    return 'Une erreur temporaire est survenue. Vous pouvez réessayer sans perdre votre session.';
+    return 'Une erreur temporaire est survenue. Réessayez pour continuer votre commande.';
   }
 
   render() {
     if (this.state.error) {
+      const publicPage =
+        typeof window !== 'undefined' && isPublicPath(window.location.pathname);
+
       return (
         <div className="min-h-[50vh] bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-stone-100 flex items-center justify-center p-6">
           <div className="max-w-md text-center space-y-4">
@@ -76,10 +89,10 @@ export default class ErrorBoundary extends Component<Props, State> {
             <p className="text-sm text-stone-600 dark:text-stone-400 leading-relaxed">
               {this.friendlyMessage()}
             </p>
-            <div className="flex flex-col sm:flex-row gap-2 justify-center">
+            <div className="flex flex-col gap-2 justify-center">
               <button
                 type="button"
-                className="btn-primary"
+                className="btn-primary min-h-[48px]"
                 onClick={() => {
                   this.setState({ error: null });
                   window.location.reload();
@@ -87,16 +100,24 @@ export default class ErrorBoundary extends Component<Props, State> {
               >
                 Réessayer
               </button>
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() => {
-                  this.setState({ error: null });
-                  window.location.assign('/dashboard');
-                }}
-              >
-                Accueil
-              </button>
+              {/* Jamais de lien dashboard / login pour le public (commande QR) */}
+              {!publicPage && (
+                <button
+                  type="button"
+                  className="btn-secondary min-h-[44px]"
+                  onClick={() => {
+                    this.setState({ error: null });
+                    window.location.assign('/');
+                  }}
+                >
+                  Page de connexion
+                </button>
+              )}
+              {publicPage && (
+                <p className="text-xs text-stone-500">
+                  Si le problème continue, rescannez le QR de la table ou demandez au serveur.
+                </p>
+              )}
             </div>
           </div>
         </div>

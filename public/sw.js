@@ -1,5 +1,5 @@
-/* GESMAK — Service Worker v6 (network-first assets) */
-const CACHE_NAME = 'gesmak-shell-v7';
+/* GESMAK — Service Worker v8 (network-first assets) */
+const CACHE_NAME = 'gesmak-shell-v8';
 const PRECACHE = [
   '/',
   '/index.html',
