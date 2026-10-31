@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { Loader2, Minus, Plus, Send, CheckCircle2, Beer } from 'lucide-react';
+import { Loader2, Minus, Plus, Send, CheckCircle2, Beer, UtensilsCrossed, Sparkles } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { formatFCFA } from '@/lib/format';
 import ProductThumb from '@/components/ProductThumb';
@@ -188,8 +188,12 @@ export default function PublicTableOrder() {
   }
 
   const sectionProducts = useMemo(() => {
-    if (section === 'boissons') return products.filter(isDrinkProduct);
-    return products.filter((p) => !isDrinkProduct(p));
+    const drinks = products.filter(isDrinkProduct);
+    const food = products.filter((p) => !isDrinkProduct(p));
+    // Si aucun mot-clé boisson : tout le catalogue en "Boissons" (maquis typique)
+    if (section === 'boissons') return drinks.length ? drinks : products;
+    // Nourriture : plats détectés, sinon message vide (pas de doublon de tout le stock)
+    return food;
   }, [products, section]);
 
   const categories = useMemo(() => {
