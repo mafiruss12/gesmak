@@ -402,7 +402,7 @@ export default function PublicTableOrder() {
           )}
 
           <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 text-center">
-            <p className="text-xs text-amber-200/90 uppercase tracking-wide">Délai estimé</p>
+            <p className="text-xs text-orange-800 uppercase tracking-wide">Délai estimé</p>
             <p className="text-4xl font-black text-amber-300 my-1">
               {trackStatus === 'served' ? '0' : `~${waitMin}`}
               <span className="text-lg font-bold"> min</span>
@@ -481,42 +481,73 @@ export default function PublicTableOrder() {
   }
 
   return (
-    <div className="min-h-screen text-stone-100 pb-36 relative overflow-hidden" style={{ background: 'radial-gradient(ellipse at top, #1c1917 0%, #0c0a09 55%, #0a0a0a 100%)' }}>
+    <div className="min-h-screen text-stone-900 pb-36 relative overflow-hidden qr-order-page">
       <style>{`
-        @keyframes floaty { 0%,100%{ transform: translateY(0);} 50%{ transform: translateY(-6px);} }
-        @keyframes shimmer { 0%{ background-position: 0% 50%; } 100%{ background-position: 100% 50%; } }
-        @keyframes popin { from{ opacity:0; transform: scale(.92) translateY(8px);} to{ opacity:1; transform: scale(1) translateY(0);} }
-        .gesmak-float { animation: floaty 3.2s ease-in-out infinite; }
-        .gesmak-pop { animation: popin .45s ease-out both; }
-        .gesmak-shimmer {
-          background: linear-gradient(90deg, #f59e0b, #fbbf24, #f97316, #f59e0b);
-          background-size: 200% 100%;
-          animation: shimmer 2.8s linear infinite;
+        .qr-order-page {
+          background:
+            radial-gradient(ellipse 120% 80% at 10% -10%, #fdba74 0%, transparent 50%),
+            radial-gradient(ellipse 100% 70% at 100% 0%, #fcd34d 0%, transparent 45%),
+            radial-gradient(ellipse 80% 50% at 50% 100%, #fed7aa 0%, transparent 55%),
+            linear-gradient(165deg, #fff7ed 0%, #ffedd5 40%, #fef3c7 100%);
         }
+        @keyframes floaty { 0%,100%{ transform: translateY(0) rotate(0deg);} 50%{ transform: translateY(-10px) rotate(4deg);} }
+        @keyframes drift {
+          0% { transform: translate(0,0) scale(1); }
+          33% { transform: translate(18px,-22px) scale(1.05); }
+          66% { transform: translate(-14px,12px) scale(0.96); }
+          100% { transform: translate(0,0) scale(1); }
+        }
+        @keyframes bubble {
+          0% { transform: translateY(100vh) scale(0.4); opacity: 0; }
+          10% { opacity: 0.5; }
+          90% { opacity: 0.35; }
+          100% { transform: translateY(-20vh) scale(1); opacity: 0; }
+        }
+        @keyframes shimmer { 0%{ background-position: 0% 50%; } 100%{ background-position: 100% 50%; } }
+        @keyframes popin { from{ opacity:0; transform: scale(.94) translateY(10px);} to{ opacity:1; transform: scale(1) translateY(0);} }
+        @keyframes softPulse { 0%,100%{ opacity:0.45;} 50%{ opacity:0.85;} }
+        .gesmak-float { animation: floaty 3.5s ease-in-out infinite; }
+        .gesmak-pop { animation: popin .5s cubic-bezier(.22,1,.36,1) both; }
+        .gesmak-shimmer {
+          background: linear-gradient(90deg, #f59e0b, #fbbf24, #fb923c, #f59e0b);
+          background-size: 220% 100%;
+          animation: shimmer 2.5s linear infinite;
+        }
+        .qr-orb { position:absolute; border-radius:50%; filter: blur(2px); pointer-events:none; animation: drift 12s ease-in-out infinite; }
+        .qr-bubble { position:absolute; border-radius:50%; pointer-events:none; background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.9), rgba(251,191,36,0.35)); animation: bubble linear infinite; }
       `}</style>
-      <div className="pointer-events-none absolute -top-20 -right-16 w-56 h-56 rounded-full bg-amber-500/15 blur-3xl" />
-      <div className="pointer-events-none absolute top-40 -left-20 w-48 h-48 rounded-full bg-orange-600/10 blur-3xl" />
 
-      <header className="sticky top-0 z-10 border-b border-amber-500/20 bg-[#0c0a09]/85 backdrop-blur-md px-4 py-3">
+      {/* Décors animés */}
+      <div className="qr-orb w-72 h-72 bg-orange-300/40 -top-16 -right-20" style={{ animationDuration: '14s' }} />
+      <div className="qr-orb w-56 h-56 bg-amber-200/50 top-1/3 -left-16" style={{ animationDuration: '18s', animationDelay: '-3s' }} />
+      <div className="qr-orb w-40 h-40 bg-yellow-200/40 bottom-24 right-8" style={{ animationDuration: '11s', animationDelay: '-6s' }} />
+      <div className="qr-bubble w-8 h-8 left-[12%]" style={{ animationDuration: '14s', animationDelay: '0s' }} />
+      <div className="qr-bubble w-5 h-5 left-[45%]" style={{ animationDuration: '11s', animationDelay: '2s' }} />
+      <div className="qr-bubble w-10 h-10 left-[72%]" style={{ animationDuration: '16s', animationDelay: '4s' }} />
+      <div className="qr-bubble w-6 h-6 left-[28%]" style={{ animationDuration: '13s', animationDelay: '7s' }} />
+      <div className="qr-bubble w-4 h-4 left-[88%]" style={{ animationDuration: '10s', animationDelay: '1s' }} />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-white/50 to-transparent" />
+
+      <header className="sticky top-0 z-10 border-b border-orange-200/80 bg-white/75 backdrop-blur-md px-4 py-3 shadow-sm shadow-orange-100/80">
         <div className="max-w-lg mx-auto flex items-center gap-3">
-          <div className="gesmak-float rounded-2xl bg-gradient-to-br from-amber-400 to-orange-600 p-2 shadow-lg shadow-amber-900/40">
-            <Beer className="text-stone-950" size={22} />
+          <div className="gesmak-float rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 p-2.5 shadow-lg shadow-orange-300/60">
+            <Beer className="text-white" size={22} />
           </div>
           <div className="min-w-0 flex-1">
-            <h1 className="font-black truncate text-lg tracking-tight">{est?.name || 'Menu'}</h1>
-            <p className="text-xs text-amber-200/80 font-medium">
-              {tableNum ? `Table ${tableNum}` : 'Commande'} · scan & commandez
+            <h1 className="font-black truncate text-lg tracking-tight text-stone-900">{est?.name || 'Menu'}</h1>
+            <p className="text-xs text-orange-700 font-semibold">
+              {tableNum ? `Table ${tableNum}` : 'Commande'} · scan &amp; commandez
             </p>
           </div>
           {logoUrl && (
-            <img src={logoUrl} alt="" className="w-11 h-11 rounded-xl object-cover ring-2 ring-amber-400/40" />
+            <img src={logoUrl} alt="" className="w-11 h-11 rounded-xl object-cover ring-2 ring-orange-300 shadow-md" />
           )}
         </div>
       </header>
 
       <div className="max-w-lg mx-auto px-3 pt-3 space-y-3">
         {!tableNum && (
-          <p className="text-xs text-amber-200/90 bg-amber-500/10 border border-amber-500/30 rounded-xl px-3 py-2 gesmak-pop">
+          <p className="text-xs text-orange-800 bg-amber-500/10 border border-amber-500/30 rounded-xl px-3 py-2 gesmak-pop">
             Astuce : le QR de table contient le numéro (ex. table=5).
           </p>
         )}
@@ -527,12 +558,12 @@ export default function PublicTableOrder() {
         )}
 
         {/* Nom client EN HAUT */}
-        <div className="rounded-2xl border border-amber-500/30 bg-gradient-to-br from-amber-500/15 to-orange-600/10 p-3 space-y-2 gesmak-pop shadow-lg shadow-amber-950/20">
-          <label className="block text-xs font-bold uppercase tracking-wide text-amber-200/90">
+        <div className="rounded-2xl border border-orange-200 bg-white/90 shadow-lg shadow-orange-100/70 p-3 space-y-2 gesmak-pop shadow-lg shadow-amber-950/20">
+          <label className="block text-xs font-bold uppercase tracking-wide text-orange-800">
             Votre prénom / nom <span className="text-amber-400">(affiché en cuisine)</span>
           </label>
           <input
-            className="w-full rounded-xl bg-stone-950/80 border border-amber-500/40 px-3 py-3 text-base font-semibold text-stone-50 placeholder:text-stone-500 focus:outline-none focus:ring-2 focus:ring-amber-400"
+            className="w-full rounded-xl bg-white border border-orange-200 px-3 py-3 text-base font-semibold text-stone-900 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-amber-400"
             placeholder="Ex. Kouassi, Awa…"
             value={customerName}
             onChange={(e) => setCustomerName(e.target.value)}
@@ -541,7 +572,7 @@ export default function PublicTableOrder() {
             autoComplete="name"
           />
           <input
-            className="w-full rounded-xl bg-stone-950/60 border border-stone-700 px-3 py-2 text-sm text-stone-200 placeholder:text-stone-600 focus:outline-none focus:ring-1 focus:ring-amber-500/50"
+            className="w-full rounded-xl bg-white/90 border border-orange-100 px-3 py-2 text-sm text-stone-800 placeholder:text-stone-400 focus:outline-none focus:ring-1 focus:ring-amber-500/50"
             placeholder="Téléphone (optionnel)"
             value={customerPhone}
             onChange={(e) => setCustomerPhone(e.target.value)}
@@ -550,18 +581,18 @@ export default function PublicTableOrder() {
         </div>
 
         {(welcome) && (
-          <p className="text-center text-sm text-stone-300/90 italic px-2">{welcome}</p>
+          <p className="text-center text-sm text-stone-600 italic px-2">{welcome}</p>
         )}
 
         {/* Deux côtés : Boissons | Nourriture */}
-        <div className="grid grid-cols-2 gap-2 p-1 rounded-2xl bg-stone-900/80 border border-stone-700/80">
+        <div className="grid grid-cols-2 gap-2 p-1 rounded-2xl bg-white/90 border border-orange-200 shadow-md">
           <button
             type="button"
             onClick={() => { setSection('boissons'); setCat('Tous'); }}
             className={`flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition ${
               section === 'boissons'
                 ? 'gesmak-shimmer text-stone-950 shadow-md'
-                : 'text-stone-400 hover:text-stone-200'
+                : 'text-stone-500 hover:text-stone-800'
             }`}
           >
             <Beer size={18} /> Boissons
@@ -572,7 +603,7 @@ export default function PublicTableOrder() {
             className={`flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition ${
               section === 'nourriture'
                 ? 'bg-emerald-500 text-stone-950 shadow-md'
-                : 'text-stone-400 hover:text-stone-200'
+                : 'text-stone-500 hover:text-stone-800'
             }`}
           >
             <UtensilsCrossed size={18} /> Nourriture
@@ -586,7 +617,7 @@ export default function PublicTableOrder() {
               type="button"
               onClick={() => setCat(c)}
               className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition ${
-                cat === c ? 'bg-amber-500 text-stone-950 scale-105' : 'bg-stone-800/90 text-stone-300'
+                cat === c ? 'bg-amber-500 text-stone-950 scale-105' : 'bg-white/80 text-stone-600 border border-orange-100'
               }`}
             >
               {c}
@@ -594,7 +625,7 @@ export default function PublicTableOrder() {
           ))}
         </div>
 
-        <p className="text-center text-xs text-stone-500 flex items-center justify-center gap-1">
+        <p className="text-center text-xs text-stone-600 flex items-center justify-center gap-1">
           <Sparkles size={12} className="text-amber-400" />
           Touchez l&apos;image pour ajouter · {section === 'boissons' ? 'boissons' : 'plats & grillades'}
         </p>
@@ -616,10 +647,10 @@ export default function PublicTableOrder() {
                 className={`relative text-left rounded-2xl border overflow-hidden transition active:scale-[0.97] gesmak-pop ${
                   q > 0
                     ? 'border-amber-400 ring-2 ring-amber-400/40 bg-amber-500/10'
-                    : 'border-stone-800 bg-stone-900/80'
+                    : 'border-orange-100 bg-white shadow-md shadow-orange-100/80'
                 } ${soldOut ? 'opacity-45 grayscale' : ''}`}
               >
-                <div className="aspect-square w-full bg-stone-950 flex items-center justify-center p-3">
+                <div className="aspect-square w-full bg-gradient-to-b from-orange-50 to-white flex items-center justify-center p-3">
                   <ProductThumb
                     name={p.name}
                     category={p.category}
@@ -642,7 +673,7 @@ export default function PublicTableOrder() {
                     {formatFCFA(Number(p.price) || 0)}
                   </p>
                   {/* Nom en petit pour ceux qui lisent — l’image reste principale */}
-                  <p className="text-[10px] text-stone-500 truncate mt-1 leading-tight">{p.name}</p>
+                  <p className="text-[10px] text-stone-600 truncate mt-1 leading-tight">{p.name}</p>
                 </div>
                 {!soldOut && (
                   <div
@@ -651,7 +682,7 @@ export default function PublicTableOrder() {
                   >
                     <span
                       role="button"
-                      className="flex-1 min-h-[40px] rounded-xl bg-stone-800 flex items-center justify-center"
+                      className="flex-1 min-h-[40px] rounded-xl bg-orange-50 text-stone-700 flex items-center justify-center"
                       onClick={() => bump(p.id, -1)}
                     >
                       <Minus size={18} />
@@ -695,10 +726,10 @@ export default function PublicTableOrder() {
       </div>
 
       {lines.length > 0 && (
-        <div className="fixed bottom-0 inset-x-0 border-t border-stone-800 bg-[#0c0a09]/95 backdrop-blur p-3">
+        <div className="fixed bottom-0 inset-x-0 border-t border-orange-200 bg-white/95 backdrop-blur p-3">
           <div className="max-w-lg mx-auto space-y-2">
             <div className="flex justify-between text-sm">
-              <span className="text-stone-400">{lines.reduce((s, l) => s + l.qty, 0)} article(s)</span>
+              <span className="text-stone-600">{lines.reduce((s, l) => s + l.qty, 0)} article(s)</span>
               <span className="font-bold text-amber-300">{formatFCFA(total)}</span>
             </div>
             <button
