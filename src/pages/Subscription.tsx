@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  ArrowLeft, MessageCircle, Wallet, CheckCircle2, Loader2, Crown, CreditCard,
+  ArrowLeft, MessageCircle, Wallet, CheckCircle2, Loader2, Crown,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import {
   PLAN, PLANS, getSubscriptionState, getActivePlanLimits, formatPlanLimitsLine,
   getPlanDisplayTitle, isOnTrial, priceForPlanMonths, type PlanTier,
 } from '@/lib/subscription';
-import { listPeriods, initPaystackCheckout } from '@/lib/payments';
+import { listPeriods, openSubscriptionWhatsApp, WAVE_NUMBER_DISPLAY } from '@/lib/payments';
 import { createPaymentRequest, listMyPendingRequests } from '@/lib/paymentRequests';
 
 export default function SubscriptionPage() {
@@ -59,83 +59,6 @@ useEffect(() => {
     });
   }, [activeEstablishment?.id]);
 
-  // Retour Paystack → vérifier + activer abonnement
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const params = new URLSearchParams(window.location.search);
-    const fromPs = params.get('paystack') === '1' || params.has('reference') || params.has('trxref');
-    if (!fromPs) return;
-    const ref =
-      params.get('reference') ||
-      params.get('trxref') ||
-      sessionStorage.getItem('sm_paystack_ref') ||
-      '';
-    if (!ref) {
-      setStatusKind('error');
-      setStatus('Retour Paystack sans référence. Contactez le support avec la capture du paiement.');
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      setStatusKind('info');
-      setStatus('Vérification du paiement et activation de l’abonnement…');
-      try {
-        // 1) Vérifier auprès de Paystack
-        const vRes = await fetch(`/api/paystack/verify?reference=${encodeURIComponent(ref)}`);
-        const v = await vRes.json().catch(() => ({}));
-        if (cancelled) return;
-        if (!v?.ok && v?.status !== 'success') {
-          setStatusKind('error');
-          setStatus(v?.error || `Paiement non confirmé (${v?.status || 'inconnu'}).`);
-          return;
-        }
-        // 2) Activer l’abonnement côté serveur (service role)
-        const aRes = await fetch('/api/paystack/verify', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ reference: ref, activate: true }),
-        });
-        const act = await aRes.json().catch(() => ({}));
-        if (cancelled) return;
-        if (aRes.ok && (act?.ok || act?.activation?.ok || act?.status === 'ALREADY_PROCESSED')) {
-          setStatusKind('ok');
-          setStatus(
-            'Paiement validé. Votre abonnement est activé. Rechargez la page si le forfait ne s’affiche pas encore.',
-          );
-          try {
-            sessionStorage.removeItem('sm_paystack_ref');
-          } catch { /* */ }
-          // recharger le profil établissement après court délai
-          setTimeout(() => {
-            try {
-              window.location.href = '/subscription';
-            } catch { /* */ }
-          }, 1800);
-        } else {
-          setStatusKind('ok');
-          setStatus(
-            `Paiement reçu (${v?.amount_fcfa?.toLocaleString?.('fr-FR') || '—'} F). Activation en cours — si le forfait ne change pas sous 1 min, contactez le support avec la référence ${ref}.`,
-          );
-        }
-      } catch (e: unknown) {
-        if (!cancelled) {
-          setStatusKind('error');
-          setStatus(e instanceof Error ? e.message : 'Erreur de vérification');
-        }
-      } finally {
-        try {
-          const url = new URL(window.location.href);
-          url.searchParams.delete('paystack');
-          url.searchParams.delete('reference');
-          url.searchParams.delete('trxref');
-          window.history.replaceState({}, '', url.pathname + (url.search || ''));
-        } catch { /* */ }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const periods = listPeriods?.() ?? [
     { months: 1, label: '1 mois' },
@@ -150,16 +73,15 @@ useEffect(() => {
   }
 
   function validateIdentity(): string | null {
-    if (!String(prenom).trim()) return 'Indiquez votre prénom.';
-    if (!String(nom).trim()) return 'Indiquez votre nom.';
-    const em = String(email).trim();
-    if (!em.includes('@') || em.length < 5) return 'Indiquez un e-mail valide pour le reçu.';
+    if (!String(prenom).trim() && !String(nom).trim()) return 'Indiquez au moins votre nom ou prénom.';
     return null;
   }
 
-  async function payPaystack() {
+
+
+  function payWaveWhatsApp() {
     if (!activeEstablishment?.id) {
-      showError('Choisissez un établissement avant de payer.');
+      showError('Choisissez un établissement avant de continuer.');
       return;
     }
     const err = validateIdentity();
@@ -167,91 +89,21 @@ useEffect(() => {
       showError(err);
       return;
     }
-    setBusy(true);
+    const payAmount = priceForPlanMonths(targetTier, months);
+    const payerName = `${String(prenom).trim()} ${String(nom).trim()}`.trim();
     setStatusKind('info');
-    setStatus('Préparation du paiement sécurisé…');
-    try {
-      const payAmount = priceForPlanMonths(targetTier, months);
-      if (!payAmount || payAmount < 100) {
-        showError('Montant invalide. Choisissez un forfait et une durée.');
-        return;
-      }
-      const fullName = `${prenom.trim()} ${nom.trim()}`.trim();
-      const ref = `SM-${activeEstablishment.id.slice(0, 8)}-${targetTier}-${months}-${Date.now()}`.slice(0, 50);
-      const res = await initPaystackCheckout({
-        amount: payAmount,
-        email: email.trim(),
-        reference: ref,
-        description: `Abonnement ${targetPlan.label} — ${months} mois — ${estName} — ${fullName}`,
-        callback_url: `${window.location.origin}/subscription?paystack=1`,
-        metadata: {
-          establishment_id: activeEstablishment.id,
-          plan_tier: targetTier,
-          months,
-          user_id: member?.user_id || '',
-          customer_first_name: prenom.trim(),
-          customer_last_name: nom.trim(),
-          customer_name: fullName,
-          customer_phone: phone.trim() || null,
-          custom_meta: `${activeEstablishment.id}|${months}|${member?.user_id || ''}|${targetTier}`,
-        },
-      });
-      if (res.error || !res.authorization_url) {
-        showError(res.error || 'Paiement indisponible. Réessayez dans un instant.');
-        return;
-      }
-      if (res.reference) {
-        try {
-          sessionStorage.setItem('sm_paystack_ref', res.reference);
-          sessionStorage.setItem('sm_pay_name', fullName);
-        } catch { /* */ }
-      }
-      setStatusKind('ok');
-      setStatus('Redirection vers la page de paiement sécurisée…');
-      window.location.assign(res.authorization_url);
-    } catch (e: unknown) {
-      showError(e instanceof Error ? e.message : 'Erreur réseau paiement');
-    } finally {
-      setBusy(false);
-    }
+    setStatus(
+      `1) Payez ${payAmount.toLocaleString('fr-FR')} F sur Wave ${WAVE_NUMBER_DISPLAY}. 2) Confirmez sur WhatsApp — activation après vérification.`,
+    );
+    openSubscriptionWhatsApp({
+      establishmentName: activeEstablishment.name || 'Mon établissement',
+      months,
+      planLabel: PLANS[targetTier]?.label || targetTier,
+      amount: payAmount,
+      payerName: payerName || undefined,
+    });
   }
 
-  async function payAssistance() {
-    if (!activeEstablishment?.id || !member?.user_id) {
-      showError('Choisissez un établissement et reconnectez-vous si besoin.');
-      return;
-    }
-    const err = validateIdentity();
-    if (err) {
-      showError(err);
-      return;
-    }
-    setAssistBusy(true);
-    setStatusKind('info');
-    setStatus('Ouverture de l’assistance paiement…');
-    try {
-      const r = await createPaymentRequest({
-        establishmentId: activeEstablishment.id,
-        userId: member.user_id,
-        planTier: targetTier,
-        months,
-        paymentMethod: `Assistance — ${prenom.trim()} ${nom.trim()}`.trim(),
-        establishmentName: estName,
-      });
-      if (r.request?.reference_code) setPendingCode(r.request.reference_code);
-      setStatusKind('ok');
-      setStatus(
-        r.request
-          ? `Demande ${r.request.reference_code} — ${targetPlan.label} · ${months} mois · ${r.request.amount_fcfa.toLocaleString('fr-FR')} F.`
-          : 'Assistance ouverte.',
-      );
-      if (r.waUrl) window.open(r.waUrl, '_blank', 'noopener,noreferrer');
-    } catch (e: unknown) {
-      showError(e instanceof Error ? e.message : 'Impossible d’ouvrir l’assistance');
-    } finally {
-      setAssistBusy(false);
-    }
-  }
 
   const inputCls =
     'w-full rounded-xl border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-950 px-3 py-3 text-sm text-stone-900 dark:text-stone-100 min-h-[48px]';
@@ -434,30 +286,25 @@ useEffect(() => {
           />
         </div>
 
-        <p className="text-xs text-stone-500 dark:text-stone-400">
-          Carte bancaire ou Mobile Money : saisis sur la page sécurisée Paystack après validation (nous ne stockons pas vos numéros de carte).
-        </p>
+        <div className="rounded-xl border border-amber-500/40 bg-amber-50 dark:bg-amber-950/30 px-4 py-3 text-sm text-stone-800 dark:text-amber-50 space-y-2">
+          <p className="font-semibold text-amber-900 dark:text-amber-200">Paiement par Wave uniquement</p>
+          <p>
+            Envoyez <strong>{amount.toLocaleString('fr-FR')} F</strong> au numéro Wave :
+          </p>
+          <p className="text-lg font-bold tracking-wide text-center py-1">{WAVE_NUMBER_DISPLAY}</p>
+          <p className="text-xs text-stone-600 dark:text-stone-400">
+            Puis cliquez sur le bouton WhatsApp pour nous envoyer la confirmation. Après vérification, nous activons votre abonnement.
+          </p>
+        </div>
 
         <button
           type="button"
-          disabled={busy || !activeEstablishment}
-          className="w-full rounded-xl bg-sky-600 hover:bg-sky-500 active:bg-sky-700 text-white font-semibold py-3.5 px-4 flex items-center justify-center gap-2 min-h-[52px] disabled:opacity-50 shadow-lg shadow-sky-900/20"
-          onClick={() => void payPaystack()}
+          disabled={!activeEstablishment}
+          className="w-full rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-3.5 px-4 flex items-center justify-center gap-2 min-h-[52px] disabled:opacity-50 shadow-lg shadow-emerald-900/20"
+          onClick={() => payWaveWhatsApp()}
         >
-          {busy ? <Loader2 className="animate-spin" size={20} /> : <CreditCard size={20} />}
-          {busy
-            ? 'Connexion au paiement…'
-            : `Valider et payer ${amount.toLocaleString('fr-FR')} F`}
-        </button>
-
-        <button
-          type="button"
-          disabled={assistBusy || !activeEstablishment}
-          className="w-full rounded-xl border-2 border-emerald-600/60 bg-transparent hover:bg-emerald-50 dark:hover:bg-emerald-950/30 text-emerald-800 dark:text-emerald-200 font-medium py-3 px-4 flex items-center justify-center gap-2 min-h-[48px] disabled:opacity-50"
-          onClick={() => void payAssistance()}
-        >
-          {assistBusy ? <Loader2 className="animate-spin" size={18} /> : <MessageCircle size={18} />}
-          Besoin d’aide ? Assistance paiement (App / WhatsApp)
+          <MessageCircle size={20} />
+          J&apos;ai payé sur Wave — confirmer sur WhatsApp
         </button>
 
         {!activeEstablishment && (
@@ -472,9 +319,9 @@ useEffect(() => {
           <CheckCircle2 size={14} className="text-amber-500" /> Après validation
         </p>
         <ul className="space-y-1 list-disc list-inside">
-          <li>Vous renseignez nom, prénom et e-mail ici.</li>
-          <li>Paystack gère carte / Mobile Money de façon sécurisée.</li>
-          <li>Dès confirmation, l’abonnement est accordé automatiquement à votre établissement.</li>
+          <li>Payez le montant affiché sur Wave ({WAVE_NUMBER_DISPLAY}).</li>
+          <li>Confirmez par WhatsApp (capture ou message).</li>
+          <li>Nous vérifions le paiement puis activons votre abonnement manuellement.</li>
         </ul>
       </div>
     </div>

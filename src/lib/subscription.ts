@@ -352,6 +352,6 @@ export function paymentInstructions(): string {
     ` · Pro ${PLANS.pro.monthlyFcfa.toLocaleString('fr-FR')} F/mois` +
     ` · Business ${PLANS.business.monthlyFcfa.toLocaleString('fr-FR')} F/mois\n` +
     `• Durées : 1, 3, 6 mois, 1 an, 2 ans, 5 ans\n` +
-    `Paiement : WhatsApp (Wave / Orange Money / MTN)`
+    `Paiement : Wave 05 02 01 20 11 puis WhatsApp pour confirmer (activation manuelle)`
   );
 }
