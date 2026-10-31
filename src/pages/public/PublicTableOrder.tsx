@@ -56,6 +56,7 @@ export default function PublicTableOrder() {
   const [pendingAhead, setPendingAhead] = useState(0);
   const [trackServer, setTrackServer] = useState<string | null>(null);
   const [cat, setCat] = useState('Tous');
+  const [section, setSection] = useState<'boissons' | 'nourriture'>('boissons');
 
   useEffect(() => {
     document.title = tableNum
