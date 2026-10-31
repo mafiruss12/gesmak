@@ -1,5 +1,5 @@
-/* GESMAK — Service Worker v6 (network-first assets) */
-const CACHE_NAME = 'gesmak-shell-v6';
+/* GESMAK — Service Worker v8 (network-first assets) */
+const CACHE_NAME = 'gesmak-shell-v8';
 const PRECACHE = [
   '/',
   '/index.html',
@@ -55,18 +55,21 @@ self.addEventListener('fetch', (event) => {
     url.origin === self.location.origin &&
     (url.pathname.endsWith('.js') ||
       url.pathname.endsWith('.css') ||
+      url.pathname.endsWith('.mjs') ||
       url.pathname.includes('/assets/'))
   ) {
     event.respondWith(
       fetch(request)
         .then((res) => {
-          if (res && res.ok) {
-            const clone = res.clone();
-            caches.open(CACHE_NAME).then((c) => c.put(request, clone));
-          }
+          if (!res || !res.ok) return res;
+          const ct = (res.headers.get('content-type') || '').toLowerCase();
+          // Ne jamais mettre en cache une page HTML à la place d'un chunk JS
+          if (ct.includes('text/html')) return res;
+          const clone = res.clone();
+          caches.open(CACHE_NAME).then((c) => c.put(request, clone));
           return res;
         })
-        .catch(() => caches.match(request))
+        .catch(() => caches.match(request).then((c) => c || Response.error()))
     );
     return;
   }

@@ -156,13 +156,13 @@ export default function OrderRealtimeAlert() {
         .filter(Boolean)
         .join(' · ');
 
-      showOrderBrowserNotification('Nouvelle commande', body);
+      showOrderBrowserNotification('🚨 Nouvelle commande', body);
 
       try {
         if (user?.id) {
           await supabase.from('notifications').insert({
             user_id: user.id,
-            title: 'Nouvelle commande',
+            title: '🚨 Nouvelle commande',
             message: body,
             type: 'qr_order',
             link: '/kitchen',
@@ -207,11 +207,11 @@ export default function OrderRealtimeAlert() {
     <>
       {popup && (
         <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-3 bg-black/55">
-          <div className="w-full max-w-md rounded-2xl border-2 border-red-500 bg-stone-900 shadow-2xl shadow-red-900/50 overflow-hidden">
+          <div className="w-full max-w-md rounded-2xl border-2 border-red-500 bg-stone-900 shadow-2xl shadow-red-900/50 overflow-hidden animate-pulse">
             <div className="bg-red-600 px-4 py-3 flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 font-bold text-white text-lg">
                 <Bell className="animate-bounce" size={24} />
-                Nouvelle commande
+                🚨 Nouvelle commande
               </div>
               <button type="button" className="text-white/90 p-1" onClick={() => setPopup(null)} aria-label="Fermer">
                 <X size={22} />
@@ -254,10 +254,10 @@ export default function OrderRealtimeAlert() {
                   className="btn-primary flex-1 min-h-[44px]"
                   onClick={() => {
                     setPopup(null);
-                    navigate('/kitchen');
+                    navigate('/orders');
                   }}
                 >
-                  Traiter en cuisine / bar
+                  Voir les commandes
                 </button>
                 <button
                   type="button"

@@ -68,7 +68,7 @@ export default function OfflineBanner() {
 
   return (
     <div
-      className={`fixed bottom-4 left-4 right-4 z-50 mx-auto max-w-md rounded-2xl px-4 py-3 shadow-xl border flex items-center gap-3 ${
+      className={`fixed left-3 right-3 bottom-[calc(3.75rem+env(safe-area-inset-bottom,0px))] lg:bottom-4 z-[35] mx-auto max-w-md rounded-2xl px-4 py-2.5 shadow-xl border flex items-center gap-3 pointer-events-auto ${
         online
           ? 'bg-stone-900/95 border-primary-500/40 text-stone-100'
           : 'bg-amber-950/95 border-amber-500/40 text-amber-100'

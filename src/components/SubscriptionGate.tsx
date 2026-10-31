@@ -78,7 +78,7 @@ export default function SubscriptionGate() {
               to="/subscription"
               className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-sky-600 text-white font-medium"
             >
-              Voir les forfaits et payer (Paystack)
+              Voir les forfaits et payer (Wave)
             </Link>
             <a
               href={wa}
