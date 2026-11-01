@@ -53,13 +53,9 @@ jobs:
       - name: Build GESMAK-plus.apk
         working-directory: android
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path('app/build.gradle')
-          t = p.read_text(encoding='utf-8')
-          t = t.replace('applicationId "com.gesmak.app"', 'applicationId "com.gesmak.plus"')
-          p.write_text(t, encoding='utf-8')
-          PY
+          sed -i 's/applicationId "com.gesmak.app"/applicationId "com.gesmak.plus"/' app/build.gradle
+          # Icône distincte : fond indigo (app principale = ambre)
+          printf '%s\n' '<?xml version="1.0" encoding="utf-8"?>' '<resources>' '    <color name="ic_launcher_background">#6366F1</color>' '</resources>' > app/src/main/res/values/ic_launcher_background.xml
           ./gradlew :app:assembleDebug --no-daemon --stacktrace
           cp app/build/outputs/apk/debug/*.apk ../out-apk/GESMAK-plus.apk
           ls -lh ../out-apk
