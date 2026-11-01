@@ -56,7 +56,8 @@ const NAV_SECTIONS: NavSection[] = [
       { to: '/hotel/settings', label: 'Paramètres hôtel', icon: <Settings size={20} />, roles: ['super_admin', 'admin', 'owner'] },
       { to: '/patron', label: 'Mode patron', icon: <Crown size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager'] },
       { to: '/mon-service', label: 'Mon service', icon: <Users size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'cashier', 'employee'] },
-      { to: '/daily-report', label: 'Rapport du jour', icon: <ClipboardCheck size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'cashier', 'employee'] },
+      { to: '/live-sales', label: 'Ventes journée', icon: <ShoppingCart size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'cashier', 'employee'] },
+      { to: '/daily-report', label: 'Point avancé', icon: <ClipboardCheck size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager'] },
       { to: '/live-sales', label: 'Ventes journée', icon: <ShoppingCart size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'cashier', 'employee'] },
       { to: '/point-manuel', label: 'Point manuel', icon: <ClipboardList size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'cashier', 'employee'] },
       { to: '/orders', label: 'Commandes', icon: <Receipt size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'cashier', 'employee'] },
@@ -344,7 +345,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       if (item.to === '/admin') return member.role === 'super_admin';
 
       // Filtre métier : uniquement les routes du type d'établissement
-      const alwaysOn = item.to === '/daily-report' || item.to === '/dashboard' || item.to === '/settings' || item.to === '/subscription' || item.to === '/notifications' || item.to === '/chat';
+      const alwaysOn = item.to === '/dashboard' || item.to === '/settings' || item.to === '/subscription' || item.to === '/notifications' || item.to === '/chat';
       if (!alwaysOn && !allowedRoutes.has(item.to)) return false;
 
       // Limites de palier (Essentiel / Pro / Business)
@@ -780,7 +781,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 { to: '/depot/deliveries', label: 'Livraisons', icon: <Truck size={22} /> },
                 { to: '/depot/clients', label: 'Clients', icon: <Users size={22} /> },
                 { to: '/inventory', label: 'Stock', icon: <Package size={22} /> },
-                { to: '/daily-report', label: 'Journal', icon: <ClipboardCheck size={22} /> },
+                { to: '/orders', label: 'Commandes', icon: <Receipt size={22} /> },
               ]
             : false
             ? [
@@ -805,7 +806,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 { to: '/print-qr', label: 'Imprimer QR', icon: <QrCode size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager'] },
       { to: '/tables', label: 'Tables', icon: <UtensilsCrossed size={22} /> },
                 { to: '/kitchen', label: 'Cuisine', icon: <Package size={22} /> },
-                { to: '/daily-report', label: 'Journal', icon: <ClipboardCheck size={22} /> },
+                { to: '/orders', label: 'Commandes', icon: <Receipt size={22} /> },
               ]
             : bizType === 'complexe'
             ? [
@@ -828,7 +829,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                       { to: '/pos', label: 'Caisse', icon: <ShoppingCart size={22} /> },
                     ]),
                 { to: '/inventory', label: inventoryLabelForServices(estServices), icon: <Package size={22} /> },
-                { to: '/daily-report', label: 'Journal', icon: <ClipboardCheck size={22} /> },
+                { to: '/orders', label: 'Commandes', icon: <Receipt size={22} /> },
               ]
             : false
             ? [
@@ -836,7 +837,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 { to: '/pos', label: 'Caisse', icon: <ShoppingCart size={22} /> },
                 { to: '/inventory', label: 'Stock', icon: <Package size={22} /> },
                 { to: '/customers', label: 'Clients', icon: <Users size={22} /> },
-                { to: '/daily-report', label: 'Journal', icon: <ClipboardCheck size={22} /> },
+                { to: '/orders', label: 'Commandes', icon: <Receipt size={22} /> },
               ]
             : bizType === 'maquis'
             ? [
@@ -844,13 +845,13 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 { to: '/live-sales', label: 'Ventes journée', icon: <ShoppingCart size={20} /> },
                 { to: '/pos', label: 'Caisse', icon: <ShoppingCart size={22} /> },
                 { to: '/inventory', label: 'Boissons', icon: <Package size={22} /> },
-                { to: '/daily-report', label: 'Journal', icon: <ClipboardCheck size={22} /> },
+                { to: '/orders', label: 'Commandes', icon: <Receipt size={22} /> },
               ]
             : [
                 { to: '/dashboard', label: 'Accueil', icon: <LayoutDashboard size={22} /> },
                 { to: '/pos', label: 'Caisse', icon: <ShoppingCart size={22} /> },
                 { to: '/inventory', label: 'Stock', icon: <Package size={22} /> },
-                { to: '/daily-report', label: 'Journal', icon: <ClipboardCheck size={22} /> },
+                { to: '/orders', label: 'Commandes', icon: <Receipt size={22} /> },
                 { to: '/settings', label: 'Réglages', icon: <Settings size={22} /> },
               ]
           ).map((item) => (

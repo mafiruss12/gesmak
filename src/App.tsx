@@ -192,7 +192,7 @@ function ProtectedRoutes() {
         <Route path="/btp/clients" element={<BtpClients />} />
         <Route path="/btp/materials" element={<BtpMaterials />} />
         <Route path="/documents" element={<RedirectToReportTab tab="docs" />} />
-        <Route path="/pos" element={<RedirectToReportTab tab="caisse" />} />
+        <Route path="/pos" element={<Caisse />} />
         <Route path="/caisse" element={<Navigate to="/pos" replace />} />
         <Route path="/orders" element={<Orders />} />
         <Route path="/menu-carte" element={<MenuCarte />} />
