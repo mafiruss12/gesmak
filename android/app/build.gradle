@@ -16,13 +16,6 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
-    flavorDimensions "target"
-    productFlavors {
-        primary {
-            dimension "target"
-            applicationId "com.gesmak.app"
-            resValue "string", "app_name", "GESMAK"
-        }
         plus {
             dimension "target"
             applicationId "com.gesmak.plus"

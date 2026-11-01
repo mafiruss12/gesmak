@@ -32,31 +32,37 @@ jobs:
         run: |
           export ANDROID_HOME=/usr/local/lib/android/sdk
           echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
-          echo "$ANDROID_HOME/platform-tools" >> $GITHUB_PATH
           SM=$(find $ANDROID_HOME/cmdline-tools -name sdkmanager 2>/dev/null | head -1)
           yes | "$SM" --licenses || true
           "$SM" "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
-      - name: Capacitor sync
+      - name: Capacitor sync + branding
         run: |
           npx cap sync android
           bash scripts/inject-android-permissions.sh || true
           bash scripts/ensure-android-flavors.sh
-          grep -n productFlavors android/app/build.gradle || true
 
-      - name: Gradle APKs
+      - name: Build GESMAK.apk
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew :app:assemblePrimaryDebug :app:assemblePlusDebug --no-daemon --stacktrace
+          ./gradlew :app:assembleDebug --no-daemon --stacktrace
+          mkdir -p ../out-apk
+          cp app/build/outputs/apk/debug/*.apk ../out-apk/GESMAK.apk
 
-      - name: Collect APKs
+      - name: Build GESMAK-plus.apk
+        working-directory: android
         run: |
-          mkdir -p out-apk
-          find android/app/build/outputs/apk -name '*.apk' -print
-          cp android/app/build/outputs/apk/primary/debug/*.apk out-apk/GESMAK.apk
-          cp android/app/build/outputs/apk/plus/debug/*.apk out-apk/GESMAK-plus.apk
-          ls -lh out-apk
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('app/build.gradle')
+          t = p.read_text(encoding='utf-8')
+          t = t.replace('applicationId "com.gesmak.app"', 'applicationId "com.gesmak.plus"')
+          p.write_text(t, encoding='utf-8')
+          PY
+          ./gradlew :app:assembleDebug --no-daemon --stacktrace
+          cp app/build/outputs/apk/debug/*.apk ../out-apk/GESMAK-plus.apk
+          ls -lh ../out-apk
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
