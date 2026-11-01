@@ -1,4 +1,4 @@
-package com.maquismanager.app;
+package com.gesmak.app;
 
 import com.getcapacitor.BridgeActivity;
 
