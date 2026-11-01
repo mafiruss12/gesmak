@@ -22,13 +22,11 @@ android {
             dimension "target"
             applicationId "com.gesmak.app"
             resValue "string", "app_name", "GESMAK"
-            manifestPlaceholders = [appLabel: "GESMAK"]
         }
         plus {
             dimension "target"
             applicationId "com.gesmak.plus"
             resValue "string", "app_name", "GESMAK"
-            manifestPlaceholders = [appLabel: "GESMAK"]
         }
     }
     buildTypes {

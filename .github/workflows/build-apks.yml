@@ -41,12 +41,14 @@ jobs:
         run: |
           npx cap sync android
           bash scripts/inject-android-permissions.sh || true
+          bash scripts/ensure-android-flavors.sh
+          grep -n productFlavors android/app/build.gradle || true
 
       - name: Gradle APKs
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew assemblePrimaryDebug assemblePlusDebug --no-daemon --stacktrace
+          ./gradlew :app:assemblePrimaryDebug :app:assemblePlusDebug --no-daemon --stacktrace
 
       - name: Collect APKs
         run: |
