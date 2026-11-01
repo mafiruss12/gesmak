@@ -142,8 +142,10 @@ function ConfigError() {
 function DashboardSwitch() {
   const { activeEstablishment, member, effectiveRole } = useAuth();
   const role = String(effectiveRole || member?.role || '');
-  // Super admin : tout le cockpit plateforme sur le tableau de bord (plus de section Administration)
-  if (role === 'super_admin') return <SuperAdmin />;
+  // Plateforme : console Admin séparée (visuel + shell dédiés)
+  if (role === 'super_admin' || role === 'admin') {
+    return <Navigate to="/admin" replace />;
+  }
   if (isLocationEvent(activeEstablishment?.type)) return <RentDashboard />;
   if (isBtp(activeEstablishment?.type)) return <BtpDashboard />;
   if (isHotelComplex(activeEstablishment?.type)) return <HotelDashboard />;
