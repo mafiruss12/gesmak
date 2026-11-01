@@ -26,9 +26,9 @@ android {
         }
         admin {
             dimension "target"
-            applicationId "com.gesmak.admin"
-            resValue "string", "app_name", "GESMAK Admin"
-            manifestPlaceholders = [appLabel: "GESMAK Admin"]
+            applicationId "com.gesmak.plus"
+            resValue "string", "app_name", "GESMAK"
+            manifestPlaceholders = [appLabel: "GESMAK"]
         }
     }
     buildTypes {

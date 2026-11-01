@@ -38,24 +38,15 @@ https://github.com/mafiruss12/gesmak/archive/refs/heads/main.zip
 
 Les deux partagent la **même** base Supabase ; seuls l’interface et les droits changent.
 
-## APK Android (2 applications)
+## APK Android
 
-| APK | applicationId | Contenu |
-|-----|---------------|---------|
-| **GESMAK** (terrain) | `com.gesmak.app` | App utilisateurs (caisse, stock…) |
-| **GESMAK Admin** | `com.gesmak.admin` | Console admin (indigo) |
+Les builds mobiles s’appellent uniquement **GESMAK** (aucun libellé admin / terrain sur le téléphone).
 
-Les deux pointent vers **https://gesmak.vercel.app** (màj web sans rebuild).  
-Le rôle du compte décide terrain vs `/admin`.
+| Fichier release | applicationId (technique) |
+|-----------------|---------------------------|
+| **GESMAK.apk** | `com.gesmak.app` |
+| **GESMAK-plus.apk** | `com.gesmak.plus` |
 
-### Télécharger les APK
+Les deux ouvrent https://gesmak.vercel.app — le compte connecté détermine l’espace affiché.
 
-1. GitHub → onglet **Actions** → workflow **Build GESMAK APKs** → **Run workflow**
-2. Ou tag : `git tag apk-1.0 && git push origin apk-1.0`
-3. Artifacts / Release : fichiers `GESMAK-terrain-debug.apk` et `GESMAK-admin-debug.apk`
-
-### Build local (PC avec Android SDK)
-
-```bash
-bash scripts/build-apk-both.sh
-```
+Release : https://github.com/mafiruss12/gesmak/releases/tag/apk-latest
