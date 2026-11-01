@@ -37,3 +37,25 @@ https://github.com/mafiruss12/gesmak/archive/refs/heads/main.zip
 - **Admin** : uniquement un membre dont le `role` en base est `admin` ou `super_admin`
 
 Les deux partagent la **même** base Supabase ; seuls l’interface et les droits changent.
+
+## APK Android (2 applications)
+
+| APK | applicationId | Contenu |
+|-----|---------------|---------|
+| **GESMAK** (terrain) | `com.gesmak.app` | App utilisateurs (caisse, stock…) |
+| **GESMAK Admin** | `com.gesmak.admin` | Console admin (indigo) |
+
+Les deux pointent vers **https://gesmak.vercel.app** (màj web sans rebuild).  
+Le rôle du compte décide terrain vs `/admin`.
+
+### Télécharger les APK
+
+1. GitHub → onglet **Actions** → workflow **Build GESMAK APKs** → **Run workflow**
+2. Ou tag : `git tag apk-1.0 && git push origin apk-1.0`
+3. Artifacts / Release : fichiers `GESMAK-terrain-debug.apk` et `GESMAK-admin-debug.apk`
+
+### Build local (PC avec Android SDK)
+
+```bash
+bash scripts/build-apk-both.sh
+```

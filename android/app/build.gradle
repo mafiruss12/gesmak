@@ -1,10 +1,10 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace "com.maquismanager.app"
+    namespace "com.gesmak.app"
     compileSdk rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.maquismanager.app"
+        applicationId "com.gesmak.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
@@ -16,6 +16,21 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    flavorDimensions "target"
+    productFlavors {
+        terrain {
+            dimension "target"
+            applicationId "com.gesmak.app"
+            resValue "string", "app_name", "GESMAK"
+            manifestPlaceholders = [appLabel: "GESMAK"]
+        }
+        admin {
+            dimension "target"
+            applicationId "com.gesmak.admin"
+            resValue "string", "app_name", "GESMAK Admin"
+            manifestPlaceholders = [appLabel: "GESMAK Admin"]
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
@@ -23,6 +38,7 @@ android {
         }
     }
 }
+
 
 repositories {
     flatDir{

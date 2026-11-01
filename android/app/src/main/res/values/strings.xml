@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Stock Manager AI</string>
-    <string name="title_activity_main">Stock Manager AI</string>
-    <string name="package_name">com.maquismanager.app</string>
-    <string name="custom_url_scheme">com.maquismanager.app</string>
+    <string name="app_name">GESMAK</string>
+    <string name="title_activity_main">GESMAK</string>
+    <string name="package_name">com.gesmak.app</string>
+    <string name="custom_url_scheme">com.gesmak.app</string>
 </resources>
