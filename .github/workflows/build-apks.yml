@@ -5,13 +5,6 @@ on:
   push:
     tags:
       - 'apk-*'
-    branches:
-      - main
-    paths:
-      - '.github/workflows/build-apks.yml'
-      - 'android/**'
-      - 'capacitor.config.ts'
-      - 'scripts/build-apk-both.sh'
 
 jobs:
   build:
@@ -29,14 +22,37 @@ jobs:
           npm install --legacy-peer-deps
           npm run build:mobile
 
-      - name: Set up JDK 21
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: '17'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      # SDK déjà présent sur les runners ; on installe packages modernes (sans "tools" obsolète)
+      - name: Install Android SDK packages
+        env:
+          ANDROID_HOME: ${{ env.ANDROID_HOME }}
+        run: |
+          echo "ANDROID_HOME=${ANDROID_HOME:-$HOME/Android/Sdk}"
+          export ANDROID_HOME="${ANDROID_HOME:-$HOME/Android/Sdk}"
+          if [ ! -d "$ANDROID_HOME" ]; then
+            mkdir -p $HOME/Android/Sdk
+            export ANDROID_HOME=$HOME/Android/Sdk
+          fi
+          # cmdline-tools from default path on GHA
+          if [ -z "$(ls -d /usr/local/lib/android/sdk 2>/dev/null)" ]; then
+            echo "Using $ANDROID_HOME"
+          else
+            export ANDROID_HOME=/usr/local/lib/android/sdk
+          fi
+          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "$ANDROID_HOME/platform-tools" >> $GITHUB_PATH
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+          # path may be versioned
+          SM=$(find $ANDROID_HOME/cmdline-tools -name sdkmanager 2>/dev/null | head -1)
+          echo "sdkmanager=$SM"
+          yes | "$SM" --licenses || true
+          "$SM" "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
       - name: Capacitor sync
         run: |
@@ -47,11 +63,12 @@ jobs:
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew assembleTerrainDebug assembleAdminDebug --no-daemon
+          ./gradlew assembleTerrainDebug assembleAdminDebug --no-daemon --stacktrace
 
       - name: Collect APKs
         run: |
           mkdir -p out-apk
+          find android/app/build/outputs/apk -name '*.apk' -print
           cp android/app/build/outputs/apk/terrain/debug/*.apk out-apk/GESMAK-terrain-debug.apk
           cp android/app/build/outputs/apk/admin/debug/*.apk out-apk/GESMAK-admin-debug.apk
           ls -lh out-apk
@@ -72,7 +89,6 @@ jobs:
             ## APK à installer
             - **GESMAK-terrain-debug.apk** — app utilisateurs (`com.gesmak.app`)
             - **GESMAK-admin-debug.apk** — console admin (`com.gesmak.admin`)
-
             Pointent vers https://gesmak.vercel.app
           files: |
             out-apk/GESMAK-terrain-debug.apk
