@@ -6,7 +6,7 @@ import {
 import { useAuth } from '@/lib/auth';
 
 /**
- * Coque visuelle GESMAK Admin — distincte du terrain (ambre/orange).
+ * Coque visuelle console plateforme GESMAK (indigo/cyan).
  * Palette : ardoise + indigo / cyan.
  */
 export default function AdminLayout({ children }: { children: ReactNode }) {
@@ -65,11 +65,11 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             </div>
             <div className="min-w-0">
               <p className="font-black tracking-tight text-white leading-tight">GESMAK</p>
-              <p className="text-[10px] uppercase font-bold tracking-widest text-cyan-300/90">Console Admin</p>
+              <p className="text-[10px] uppercase font-bold tracking-widest text-cyan-300/90">Console</p>
             </div>
           </div>
           <div className="hidden sm:block text-right text-xs text-slate-400 truncate max-w-[180px]">
-            {member?.full_name || user?.email || 'Admin'}
+            {member?.full_name || user?.email || 'GESMAK'}
           </div>
           <button
             type="button"
@@ -110,7 +110,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           <div className="mt-6 admin-card p-3 text-[11px] text-slate-400 space-y-1">
             <p className="font-bold text-indigo-300 flex items-center gap-1"><Building2 size={12} /> Plateforme</p>
             <p>Comptes · Établissements · Abonnements</p>
-            <p className="text-slate-500">Espace réservé à l’administration GESMAK — distinct de l’app terrain.</p>
+            <p className="text-slate-500">Espace plateforme GESMAK.</p>
           </div>
         </aside>
 

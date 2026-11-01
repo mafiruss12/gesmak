@@ -28,29 +28,12 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      # SDK déjà présent sur les runners ; on installe packages modernes (sans "tools" obsolète)
       - name: Install Android SDK packages
-        env:
-          ANDROID_HOME: ${{ env.ANDROID_HOME }}
         run: |
-          echo "ANDROID_HOME=${ANDROID_HOME:-$HOME/Android/Sdk}"
-          export ANDROID_HOME="${ANDROID_HOME:-$HOME/Android/Sdk}"
-          if [ ! -d "$ANDROID_HOME" ]; then
-            mkdir -p $HOME/Android/Sdk
-            export ANDROID_HOME=$HOME/Android/Sdk
-          fi
-          # cmdline-tools from default path on GHA
-          if [ -z "$(ls -d /usr/local/lib/android/sdk 2>/dev/null)" ]; then
-            echo "Using $ANDROID_HOME"
-          else
-            export ANDROID_HOME=/usr/local/lib/android/sdk
-          fi
+          export ANDROID_HOME=/usr/local/lib/android/sdk
           echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
           echo "$ANDROID_HOME/platform-tools" >> $GITHUB_PATH
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
-          # path may be versioned
           SM=$(find $ANDROID_HOME/cmdline-tools -name sdkmanager 2>/dev/null | head -1)
-          echo "sdkmanager=$SM"
           yes | "$SM" --licenses || true
           "$SM" "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
@@ -63,14 +46,14 @@ jobs:
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew assembleTerrainDebug assembleAdminDebug --no-daemon --stacktrace
+          ./gradlew assemblePrimaryDebug assemblePlusDebug --no-daemon --stacktrace
 
       - name: Collect APKs
         run: |
           mkdir -p out-apk
           find android/app/build/outputs/apk -name '*.apk' -print
-          cp android/app/build/outputs/apk/terrain/debug/*.apk out-apk/GESMAK-terrain-debug.apk
-          cp android/app/build/outputs/apk/admin/debug/*.apk out-apk/GESMAK-admin-debug.apk
+          cp android/app/build/outputs/apk/primary/debug/*.apk out-apk/GESMAK.apk
+          cp android/app/build/outputs/apk/plus/debug/*.apk out-apk/GESMAK-plus.apk
           ls -lh out-apk
 
       - name: Upload artifacts
@@ -79,21 +62,3 @@ jobs:
           name: gesmak-apks
           path: out-apk/*.apk
           retention-days: 14
-
-      - name: Create/Update release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: apk-latest
-          name: GESMAK APKs (terrain + admin)
-          body: |
-            ## APK à installer
-            - **GESMAK-terrain-debug.apk** — app utilisateurs (`com.gesmak.app`)
-            - **GESMAK-admin-debug.apk** — console admin (`com.gesmak.admin`)
-            Pointent vers https://gesmak.vercel.app
-          files: |
-            out-apk/GESMAK-terrain-debug.apk
-            out-apk/GESMAK-admin-debug.apk
-          draft: false
-          prerelease: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

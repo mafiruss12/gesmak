@@ -144,7 +144,7 @@ function DashboardSwitch() {
   const role = String(effectiveRole || member?.role || '');
   // Plateforme : console Admin séparée (visuel + shell dédiés)
   if (role === 'super_admin' || role === 'admin') {
-    return <Navigate to="/admin" replace />;
+    return <Navigate to="/console" replace />;
   }
   if (isLocationEvent(activeEstablishment?.type)) return <RentDashboard />;
   if (isBtp(activeEstablishment?.type)) return <BtpDashboard />;
@@ -254,8 +254,9 @@ function ProtectedRoutes() {
 
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/team" element={<Navigate to="/mes-employes" replace />} />
-        <Route path="/admin" element={<SuperAdmin />} />
-        {/* /admin conservé en alias ; menu Administration retiré */}
+        <Route path="/console" element={<SuperAdmin />} />
+        <Route path="/admin" element={<Navigate to="/console" replace />} />
+        {/* alias legacy /admin → /console */}
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
       </Suspense>

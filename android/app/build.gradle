@@ -18,13 +18,13 @@ android {
     }
     flavorDimensions "target"
     productFlavors {
-        terrain {
+        primary {
             dimension "target"
             applicationId "com.gesmak.app"
             resValue "string", "app_name", "GESMAK"
             manifestPlaceholders = [appLabel: "GESMAK"]
         }
-        admin {
+        plus {
             dimension "target"
             applicationId "com.gesmak.plus"
             resValue "string", "app_name", "GESMAK"

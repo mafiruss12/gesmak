@@ -10,9 +10,9 @@ npx cap sync android
 bash scripts/inject-android-permissions.sh || true
 cd android
 chmod +x gradlew
-./gradlew assembleTerrainDebug assembleAdminDebug --no-daemon
+./gradlew assemblePrimaryDebug assemblePlusDebug --no-daemon
 
-echo "APK Terrain:"
-ls -lh app/build/outputs/apk/terrain/debug/*.apk || ls -lh app/build/outputs/apk/**/*.apk
-echo "APK Admin:"
-ls -lh app/build/outputs/apk/admin/debug/*.apk || true
+mkdir -p ../out-apk
+cp app/build/outputs/apk/primary/debug/*.apk ../out-apk/GESMAK.apk
+cp app/build/outputs/apk/plus/debug/*.apk ../out-apk/GESMAK-plus.apk
+ls -lh ../out-apk

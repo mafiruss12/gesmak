@@ -159,8 +159,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   // Console Admin = app séparée (pas le chrome terrain ambre/maquis)
   if (platformAdmin) {
-    if (!location.pathname.startsWith('/admin')) {
-      return <Navigate to="/admin" replace />;
+    if (!(location.pathname.startsWith('/console') || location.pathname.startsWith('/admin'))) {
+      return <Navigate to="/console" replace />;
     }
     return <>{children}</>;
   }
