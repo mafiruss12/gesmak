@@ -81,6 +81,8 @@ function writeCachedMember(m: Member | null) {
   }
 }
 
+const FORCE_LOGOUT_KEY = 'mm_force_logout';
+
 /** Purge totale de la session locale (déconnexion explicite). */
 function clearLocalAuthStorage() {
   try {
@@ -112,12 +114,19 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   // Session lue synchrone depuis localStorage → pas d'écran bloquant au F5
-  const _bootLocal = typeof window !== 'undefined' ? readLocalSupabaseSession() : null;
+  // mm_force_logout : après Déconnexion, ignorer toute session résiduelle jusqu'au prochain login
+  const _forceLogout =
+    typeof window !== 'undefined' &&
+    (sessionStorage.getItem('mm_force_logout') === '1' || localStorage.getItem('mm_force_logout') === '1');
+  const _bootLocal =
+    typeof window !== 'undefined' && !_forceLogout ? readLocalSupabaseSession() : null;
   const [session, setSession] = useState<Session | null>(_bootLocal?.session ?? null);
   const [user, setUser] = useState<User | null>(_bootLocal?.user ?? null);
-  const [member, setMember] = useState<Member | null>(() => readCachedMember(_bootLocal?.user?.id));
+  const [member, setMember] = useState<Member | null>(() =>
+    _forceLogout ? null : readCachedMember(_bootLocal?.user?.id),
+  );
   const [accessRequest, setAccessRequest] = useState<AccessRequest | null>(null);
-  const [loading, setLoading] = useState(!_bootLocal?.user);
+  const [loading, setLoading] = useState(!_forceLogout && !_bootLocal?.user);
   const [needsAccess, setNeedsAccess] = useState(false);
   const [viewAsRole, setViewAsRoleState] = useState<Member['role'] | null>(null);
 
@@ -765,6 +774,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (mounted) setLoading(false);
       }, 8000);
       try {
+        let forced = false;
+        try {
+          forced =
+            sessionStorage.getItem('mm_force_logout') === '1' ||
+            localStorage.getItem('mm_force_logout') === '1';
+        } catch { /* */ }
+        if (forced) {
+          setSession(null);
+          setUser(null);
+          setMember(null);
+          setLoading(false);
+          return;
+        }
         let session = null as Awaited<ReturnType<typeof supabase.auth.getSession>>['data']['session'];
         try {
           const { data, error } = await supabase.auth.getSession();
@@ -808,9 +830,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!mounted) return;
 
       if (event === 'SIGNED_OUT') {
+        // Déconnexion explicite (mm_force_logout) : ne jamais restaurer la session
+        let forced = false;
+        try {
+          forced =
+            sessionStorage.getItem('mm_force_logout') === '1' ||
+            localStorage.getItem('mm_force_logout') === '1';
+        } catch { /* */ }
+        if (forced || explicitSignOutRef.current) {
+          setSession(null);
+          setUser(null);
+          setMember(null);
+          setAccessRequest(null);
+          setNeedsAccess(false);
+          setMyEstablishments([]);
+          setActiveEstablishment(null);
+          setLoading(false);
+          return;
+        }
         // Faux positif fréquent : refresh token en course / double onglet.
-        // Si le token est encore en localStorage, ne pas déconnecter l'UI.
-        const still = explicitSignOutRef.current ? null : readLocalSupabaseSession();
+        const still = readLocalSupabaseSession();
         if (still?.user) {
           setSession(still.session);
           setUser(still.user);
@@ -846,6 +885,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(newSession.user);
         // INITIAL_SESSION / SIGNED_IN / USER_UPDATED → charger le profil (await via void, loading géré)
         if (event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'INITIAL_SESSION') {
+        try {
+          sessionStorage.removeItem('mm_force_logout');
+          localStorage.removeItem('mm_force_logout');
+        } catch { /* */ }
+
           // INITIAL_SESSION = restauration localStorage au refresh : garder user/session
           if (event === 'INITIAL_SESSION') {
             if (newSession?.user) {
@@ -1109,35 +1153,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function signOut() {
     explicitSignOutRef.current = true;
-    inflightRef.current = null;
-    clearEstablishmentCache();
-    clearLocalAuthStorage();
-    setSession(null);
+    try {
+      sessionStorage.setItem('mm_force_logout', '1');
+      localStorage.setItem('mm_force_logout', '1');
+    } catch { /* */ }
     setUser(null);
+    setSession(null);
     setMember(null);
     setAccessRequest(null);
     setNeedsAccess(false);
     setMyEstablishments([]);
     setActiveEstablishment(null);
-    setViewAsRoleState(null);
-    setLoading(false);
+    clearLocalAuthStorage();
     try {
       await Promise.race([
         supabase.auth.signOut({ scope: 'local' }),
-        new Promise((r) => setTimeout(r, 1200)),
+        new Promise((r) => setTimeout(r, 2500)),
       ]);
-      // Double purge : jeton parfois réécrit par un refresh concurrent
-      clearLocalAuthStorage();
-      try {
-        await Promise.race([
-          supabase.auth.signOut({ scope: 'global' }),
-          new Promise((r) => setTimeout(r, 800)),
-        ]);
-      } catch { /* offline */ }
-      clearLocalAuthStorage();
-    } catch { /* réseau : état déjà vidé */ }
-    // Si le signOut réseau a expiré, le jeton resterait en localStorage et la session reviendrait au F5
+    } catch { /* */ }
+    try {
+      await Promise.race([
+        supabase.auth.signOut({ scope: 'global' }),
+        new Promise((r) => setTimeout(r, 2500)),
+      ]);
+    } catch { /* */ }
     clearLocalAuthStorage();
+    try {
+      sessionStorage.setItem('mm_force_logout', '1');
+      localStorage.setItem('mm_force_logout', '1');
+    } catch { /* */ }
+    // Navigation dure : évite le rebond SPA vers le dashboard
+    if (typeof window !== 'undefined') {
+      window.location.replace('/login');
+    }
   }
 
   /* Déconnexion auto désactivée : session jusqu'au bouton Déconnexion */

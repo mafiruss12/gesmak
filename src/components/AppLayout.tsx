@@ -315,7 +315,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     try {
       await signOut();
     } catch { /* */ }
-    window.location.assign('/');
+    window.location.replace('/login');
   }
 
   // Services cochés (type Établissement) → menu adapté, pas générique maquis
@@ -532,8 +532,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             onClick={async () => {
               try {
                 await signOut();
-              } catch { /* */ }
-              window.location.assign('/');
+              } catch {
+                window.location.replace('/login');
+              }
             }}
           >
             Se déconnecter
