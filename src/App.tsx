@@ -142,8 +142,10 @@ function ConfigError() {
 function DashboardSwitch() {
   const { activeEstablishment, member, effectiveRole } = useAuth();
   const role = String(effectiveRole || member?.role || '');
-  // Super admin : tout le cockpit plateforme sur le tableau de bord (plus de section Administration)
-  if (role === 'super_admin') return <SuperAdmin />;
+  // Plateforme : console Admin séparée (visuel + shell dédiés)
+  if (role === 'super_admin' || role === 'admin') {
+    return <Navigate to="/console" replace />;
+  }
   if (isLocationEvent(activeEstablishment?.type)) return <RentDashboard />;
   if (isBtp(activeEstablishment?.type)) return <BtpDashboard />;
   if (isHotelComplex(activeEstablishment?.type)) return <HotelDashboard />;
@@ -252,8 +254,9 @@ function ProtectedRoutes() {
 
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/team" element={<Navigate to="/mes-employes" replace />} />
-        <Route path="/admin" element={<SuperAdmin />} />
-        {/* /admin conservé en alias ; menu Administration retiré */}
+        <Route path="/console" element={<SuperAdmin />} />
+        <Route path="/admin" element={<Navigate to="/console" replace />} />
+        {/* alias legacy /admin → /console */}
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
       </Suspense>

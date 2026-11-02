@@ -1,5 +1,5 @@
 import { type ReactNode, useState, useEffect , useRef} from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { LayoutDashboard, ShoppingCart, Package, Camera, ClipboardCheck, QrCode, Users, Building2, Beer, LogOut, Menu, X, UserCog, ClipboardList, Calculator, BarChart3, Truck, UserCircle, Calendar, CalendarDays, UtensilsCrossed, Bell, Settings, Sparkles, Receipt, Wallet, MessageCircle, FileText, Crown, Brain, Sun, Moon, Wrench } from 'lucide-react';
 import DailyReportGate from '@/components/DailyReportGate';
 import OrderRealtimeAlert from '@/components/OrderRealtimeAlert';
@@ -150,6 +150,20 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const allow = planAccess.allow.bind(planAccess);
   const planLimits = planAccess.plan;
   const { member, user, loading, signOut, myEstablishments, activeEstablishment, switchEstablishment, refresh, effectiveRole, viewAsRole, setViewAsRole } = useAuth();
+  const location = useLocation();
+  const platformAdmin =
+    member?.role === 'super_admin' ||
+    member?.role === 'admin' ||
+    effectiveRole === 'super_admin' ||
+    effectiveRole === 'admin';
+
+  // Console Admin = app séparée (pas le chrome terrain ambre/maquis)
+  if (platformAdmin) {
+    if (!(location.pathname.startsWith('/console') || location.pathname.startsWith('/admin'))) {
+      return <Navigate to="/console" replace />;
+    }
+    return <>{children}</>;
+  }
 
   // Pas de déconnexion automatique par inactivité (règle métier)
   useEffect(() => {

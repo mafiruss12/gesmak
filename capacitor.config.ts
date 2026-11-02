@@ -1,25 +1,23 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 /**
- * P3 mobile :
- * - server.url = site live (mises à jour sans rebuild APK)
- * - dist embarqué sert de secours au splash ; données métier via IndexedDB (offline.ts)
- * - Pour build 100 % embarqué hors-ligne total : retirer `server.url` et builder avec VITE_BASE=./
+ * GESMAK mobile (Capacitor)
+ * - server.url = site live
+ * - Deux APK : com.gesmak.app et com.gesmak.plus (même libellé GESMAK)
  */
 const config: CapacitorConfig = {
-  appId: 'com.maquismanager.app',
-  appName: 'Stock Manager AI',
+  appId: 'com.gesmak.app',
+  appName: 'GESMAK',
   webDir: 'dist',
   server: {
-    url: 'https://stock-manager-ktp.vercel.app',
+    url: 'https://gesmak.vercel.app',
     cleartext: false,
     androidScheme: 'https',
     iosScheme: 'https',
     allowNavigation: [
-      'stock-manager-ktp.vercel.app',
+      'gesmak.vercel.app',
       '*.vercel.app',
       '*.supabase.co',
-      'stock-manager-ai.pages.dev',
     ],
   },
   android: {

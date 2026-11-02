@@ -20,6 +20,7 @@ import {
   verifyEnrollment,
 } from '@/lib/supabaseMfa';
 import AdminEstablishmentsMap from '@/components/AdminEstablishmentsMap';
+import AdminLayout from '@/components/AdminLayout';
 import { seedDefaultStockForEstablishment } from '@/lib/seedDefaultStock';
 import {
   BUSINESS_TYPES_SELECTABLE,
@@ -725,7 +726,7 @@ function SuperAdminInner() {
           {/* CARTES KPI */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {[
-              { label: 'Établissements', value: adminStats.estTotal, sub: `${adminStats.trial} essai · ${adminStats.activeSub} payés · ${adminStats.expired} expirés`, color: 'text-amber-300', go: 'establishments' as Tab },
+              { label: 'Établissements', value: adminStats.estTotal, sub: `${adminStats.trial} essai · ${adminStats.activeSub} payés · ${adminStats.expired} expirés`, color: 'text-cyan-300', go: 'establishments' as Tab },
               { label: 'Membres actifs', value: adminStats.activeMembers, sub: `${adminStats.owners} propriétaires · ${adminStats.staff} équipe`, color: 'text-emerald-300', go: 'members' as Tab },
               { label: 'Demandes en attente', value: adminStats.pending, sub: 'À approuver', color: 'text-sky-300', go: 'requests' as Tab },
               { label: 'Points du jour', value: adminStats.reportsToday, sub: "Rapports envoyés aujourd'hui", color: 'text-violet-300', go: 'activity' as Tab },
@@ -734,7 +735,7 @@ function SuperAdminInner() {
                 key={k.label}
                 type="button"
                 onClick={() => setTab(k.go)}
-                className="text-left rounded-2xl border border-stone-700 bg-stone-900/70 p-4 hover:border-amber-500/40 transition"
+                className="text-left rounded-2xl border border-stone-700 bg-stone-900/70 p-4 hover:border-indigo-500/40 transition"
               >
                 <p className="text-[11px] uppercase tracking-wide text-stone-500">{k.label}</p>
                 <p className={`text-3xl font-bold mt-1 ${k.color}`}>{k.value}</p>
@@ -763,12 +764,12 @@ function SuperAdminInner() {
           </div>
 
           {/* TABLEAU alertes abonnements */}
-          <div className="rounded-2xl border border-amber-500/30 bg-stone-900/60 overflow-hidden">
+          <div className="rounded-2xl border border-indigo-500/30 bg-stone-900/60 overflow-hidden">
             <div className="px-4 py-3 border-b border-stone-800 flex items-center justify-between gap-2">
               <p className="font-semibold text-stone-100 flex items-center gap-2">
-                <AlertTriangle size={16} className="text-amber-400" /> À relancer (≤ 7 jours)
+                <AlertTriangle size={16} className="text-indigo-300" /> À relancer (≤ 7 jours)
               </p>
-              <button type="button" className="text-xs text-amber-300" onClick={() => setTab('subscriptions')}>
+              <button type="button" className="text-xs text-cyan-300" onClick={() => setTab('subscriptions')}>
                 Voir abonnements →
               </button>
             </div>
@@ -812,7 +813,7 @@ function SuperAdminInner() {
               <p className="font-semibold text-stone-100 flex items-center gap-2">
                 <Users size={16} /> Derniers membres
               </p>
-              <button type="button" className="text-xs text-amber-300" onClick={() => setTab('members')}>
+              <button type="button" className="text-xs text-cyan-300" onClick={() => setTab('members')}>
                 Tous les membres →
               </button>
             </div>
@@ -866,8 +867,8 @@ function SuperAdminInner() {
             <div className="space-y-2">
               {requests.map((req) => (
                 <div key={req.id} className="card flex items-center gap-4">
-                  <div className="p-2.5 rounded-xl bg-amber-500/15">
-                    <Mail size={20} className="text-amber-400" />
+                  <div className="p-2.5 rounded-xl bg-indigo-500/15">
+                    <Mail size={20} className="text-indigo-300" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-stone-100 truncate">{req.full_name || req.email}</p>
@@ -1070,7 +1071,7 @@ function SuperAdminInner() {
             </div>
             <div className="card">
               <p className="text-xs text-stone-500">Actifs 24 h</p>
-              <p className="text-2xl font-bold text-amber-300">{active24h.length}</p>
+              <p className="text-2xl font-bold text-cyan-300">{active24h.length}</p>
             </div>
             <div className="card">
               <p className="text-xs text-stone-500">Établissements</p>
@@ -1112,9 +1113,9 @@ function SuperAdminInner() {
       
       {tab === 'pubs' && (
         <div className="space-y-4">
-          <div className="card space-y-3 border border-amber-500/30">
+          <div className="card space-y-3 border border-indigo-500/30">
             <h2 className="text-lg font-semibold text-stone-100 flex items-center gap-2">
-              <Megaphone size={18} className="text-amber-400" /> Publicités &amp; annonces
+              <Megaphone size={18} className="text-indigo-300" /> Publicités &amp; annonces
             </h2>
             <p className="text-xs text-stone-500">
               Ces messages défilent sur la <strong className="text-stone-300">page de connexion</strong> et le <strong className="text-stone-300">tableau de bord</strong> de tous les utilisateurs.
@@ -1241,7 +1242,7 @@ function SuperAdminInner() {
                     </p>
                     <p className="text-sm text-stone-400 line-clamp-2">{a.body}</p>
                     {a.link_url && (
-                      <p className="text-xs text-amber-400 truncate">{a.link_url}</p>
+                      <p className="text-xs text-indigo-300 truncate">{a.link_url}</p>
                     )}
                   </div>
                   <div className="flex gap-2 shrink-0">
@@ -1276,7 +1277,7 @@ function SuperAdminInner() {
 
       {tab === 'subscriptions' && (
         <div className="space-y-4">
-          <div className="card space-y-3 border border-amber-500/30">
+          <div className="card space-y-3 border border-indigo-500/30">
             <h2 className="text-lg font-semibold text-stone-100">Sécurité admin — 2FA</h2>
             <p className="text-xs text-stone-500">
               Double authentification native Supabase (Google Authenticator, Authy…).
@@ -1355,7 +1356,7 @@ function SuperAdminInner() {
               <ul className="space-y-2">
                 {payReqs.map((pr) => (
                   <li key={pr.id} className="rounded-xl border border-stone-700 p-3 text-sm text-stone-200 space-y-1">
-                    <p className="font-mono text-amber-300">{pr.reference_code}</p>
+                    <p className="font-mono text-cyan-300">{pr.reference_code}</p>
                     <p>{pr.plan_tier} · {pr.months} mois · {pr.amount_fcfa.toLocaleString('fr-FR')} F · {pr.payment_method}</p>
                     <p className="text-xs text-stone-500">Est: {pr.establishment_id.slice(0, 8)}… · {new Date(pr.created_at).toLocaleString('fr-FR')}</p>
                     <div className="flex gap-2 pt-1">
@@ -1400,7 +1401,7 @@ function SuperAdminInner() {
               Offre : essai {PLAN.trialDays} j puis {PLAN.monthlyFcfa.toLocaleString('fr-FR')} F/mois. Prolongation = à partir de la date de fin actuelle si encore active.
             </p>
             {establishments.length === 0 ? (
-              <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100 space-y-2">
+              <div className="rounded-xl border border-indigo-500/30 bg-indigo-500/10 p-4 text-sm text-amber-100 space-y-2">
                 <p className="font-medium">Aucun établissement affiché</p>
                 <p className="text-amber-100/80 text-xs">
                   Soit aucun établissement n&apos;existe encore, soit le compte connecté n&apos;a pas le rôle
@@ -1445,7 +1446,7 @@ function SuperAdminInner() {
                           </select>
                         </td>
                         <td className="py-2">
-                          <span className={st.blocked ? 'text-red-400' : st.status === 'active' ? 'text-emerald-400' : 'text-amber-300'}>
+                          <span className={st.blocked ? 'text-red-400' : st.status === 'active' ? 'text-emerald-400' : 'text-cyan-300'}>
                             {st.label}
                           </span>
                         </td>
@@ -1625,7 +1626,7 @@ function SuperAdminInner() {
               </select>
             </div>
             {/* Mot de passe oublié — admin définit un mot de passe temporaire */}
-            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 space-y-2">
+            <div className="rounded-xl border border-indigo-500/30 bg-indigo-500/10 p-3 space-y-2">
               <label className="label flex items-center gap-1.5 text-amber-200">
                 <KeyRound size={14} /> Mot de passe temporaire (oublié)
               </label>
@@ -1674,7 +1675,7 @@ function SuperAdminInner() {
                 type="button"
                 disabled={pwdResetLoading || !editMember.user_id}
                 onClick={() => void adminSetTemporaryPassword()}
-                className="w-full flex items-center justify-center gap-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-stone-950 font-semibold text-sm py-2.5 disabled:opacity-50"
+                className="w-full flex items-center justify-center gap-2 rounded-xl bg-amber-600 hover:bg-indigo-500 text-stone-950 font-semibold text-sm py-2.5 disabled:opacity-50"
               >
                 {pwdResetLoading ? <Loader2 className="animate-spin" size={16} /> : <KeyRound size={16} />}
                 Appliquer ce mot de passe
@@ -1779,7 +1780,7 @@ function SuperAdminInner() {
                       <div className="flex gap-1">
                         <button
                           type="button"
-                          className="text-xs text-amber-400 hover:underline px-1"
+                          className="text-xs text-indigo-300 hover:underline px-1"
                           onClick={() => {
                             setEditEst(null);
                             openEditMember(m);
@@ -2055,7 +2056,7 @@ function DirectAccessForm({ establishments, onDone }: { establishments: Establis
           </div>
           <div>
             <p className="text-xs text-stone-500 uppercase tracking-wide">Mot de passe</p>
-            <p className="text-lg font-mono font-bold text-amber-300">{created.password}</p>
+            <p className="text-lg font-mono font-bold text-cyan-300">{created.password}</p>
           </div>
         </div>
         <button onClick={copyCredentials} className="btn-secondary w-full flex items-center justify-center gap-2">
@@ -2177,7 +2178,7 @@ function DirectAccessForm({ establishments, onDone }: { establishments: Establis
       </div>
 
       {creatingNewEst && (
-        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 space-y-3">
+        <div className="rounded-xl border border-indigo-500/30 bg-indigo-500/5 p-3 space-y-3">
           <p className="text-xs text-amber-200/90 font-medium">Nouvel établissement</p>
           <div>
             <label className="label">Nom de l&apos;établissement</label>
@@ -2242,5 +2243,9 @@ export default function SuperAdmin() {
   if (gate === 'deny') {
     return <Navigate to="/dashboard" replace />;
   }
-  return <SuperAdminInner />;
+  return (
+    <AdminLayout>
+      <SuperAdminInner />
+    </AdminLayout>
+  );
 }
