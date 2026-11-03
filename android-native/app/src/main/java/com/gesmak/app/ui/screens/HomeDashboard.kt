@@ -1,5 +1,4 @@
 package com.gesmak.app.ui.screens
-import androidx.compose.ui.Modifier
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -18,6 +17,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -51,9 +51,17 @@ fun HomeDashboard(
             fontSize = 13.sp,
         )
         Spacer(Modifier.height(20.dp))
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            StatCard(modifier = Modifier.weight(1f), title = "Produits", value = "$productCount")
-            StatCard(modifier = Modifier.weight(1f), title = "Commandes", value = "$openOrders", alert = openOrders > 0)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            StatCard(mod = Modifier.weight(1f), title = "Produits", value = "$productCount")
+            StatCard(
+                mod = Modifier.weight(1f),
+                title = "Commandes",
+                value = "$openOrders",
+                alert = openOrders > 0,
+            )
         }
         Spacer(Modifier.height(16.dp))
         if (loading) Text("Actualisation…", color = Color(0xFFA8A29E))
@@ -75,7 +83,12 @@ fun HomeDashboard(
 }
 
 @Composable
-private fun StatCard(mod: Modifier, title: String, value: String, alert: Boolean = false) {
+private fun StatCard(
+    mod: Modifier,
+    title: String,
+    value: String,
+    alert: Boolean = false,
+) {
     Card(
         modifier = mod,
         colors = CardDefaults.cardColors(
