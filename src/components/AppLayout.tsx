@@ -1,6 +1,6 @@
 import { type ReactNode, useState, useEffect , useRef} from 'react';
 import { NavLink, useNavigate, useLocation, Navigate } from 'react-router-dom';
-import { LayoutDashboard, ShoppingCart, Package, Camera, ClipboardCheck, QrCode, Users, Building2, Beer, LogOut, Menu, X, UserCog, ClipboardList, Calculator, BarChart3, Truck, UserCircle, Calendar, CalendarDays, UtensilsCrossed, Bell, Settings, Sparkles, Receipt, Wallet, MessageCircle, FileText, Crown, Brain, Sun, Moon, Wrench } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Package, Camera, ClipboardCheck, QrCode, Users, Building2, Beer, LogOut, RefreshCw, Menu, X, UserCog, ClipboardList, Calculator, BarChart3, Truck, UserCircle, Calendar, CalendarDays, UtensilsCrossed, Bell, Settings, Sparkles, Receipt, Wallet, MessageCircle, FileText, Crown, Brain, Sun, Moon, Wrench } from 'lucide-react';
 import DailyReportGate from '@/components/DailyReportGate';
 import OrderRealtimeAlert from '@/components/OrderRealtimeAlert';
 import { registerPushToken } from '@/lib/push';
@@ -901,6 +901,17 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           <X size={24} />
         </button>
       )}
+
+      <button
+        type="button"
+        className="fixed bottom-20 right-3 z-[70] inline-flex items-center gap-2 rounded-full border border-amber-500/50 bg-stone-900/95 px-4 py-2.5 text-sm font-bold text-amber-300 shadow-lg backdrop-blur hover:bg-stone-800 sm:bottom-6"
+        title="Actualiser la page"
+        aria-label="Actualiser la page"
+        onClick={() => window.location.reload()}
+      >
+        <RefreshCw size={18} />
+        Actualiser
+      </button>
     </div>
     </BiometricGate>
   );

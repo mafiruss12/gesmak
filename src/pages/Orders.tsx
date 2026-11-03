@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
-  Receipt, Plus, Trash2, ShoppingBag, CheckCircle2, Clock, UtensilsCrossed, X, UserCog,
+  Receipt, Plus, Trash2, ShoppingBag, CheckCircle2, Clock, UtensilsCrossed, X, UserCog, RefreshCw, Wine, ChefHat,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
@@ -423,6 +423,14 @@ export default function Orders() {
               </span>
             )}
           </h1>
+          <button
+            type="button"
+            onClick={() => void load()}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-stone-600 bg-stone-800 px-3 py-2 text-xs font-semibold text-stone-100 hover:bg-stone-700"
+          >
+            <RefreshCw size={14} />
+            Actualiser
+          </button>
           <p className="text-sm text-stone-400">
             {orders.length} affichée(s) · {pendingCount} nouvelle(s)
           </p>

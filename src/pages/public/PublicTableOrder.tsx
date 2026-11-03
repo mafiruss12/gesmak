@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { Loader2, Minus, Plus, Send, CheckCircle2, Beer, UtensilsCrossed, Sparkles } from 'lucide-react';
+import { Loader2, Minus, Plus, Send, CheckCircle2, Beer, UtensilsCrossed, Sparkles, RefreshCw } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { formatFCFA } from '@/lib/format';
 import ProductThumb from '@/components/ProductThumb';
@@ -354,6 +354,15 @@ export default function PublicTableOrder() {
   if (!tableNum && !loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white text-stone-800 p-6 text-center">
+      <button
+        type="button"
+        onClick={() => window.location.reload()}
+        className="fixed top-3 right-3 z-50 inline-flex items-center gap-1.5 rounded-full bg-white/95 border border-orange-200 px-3 py-2 text-xs font-bold text-orange-700 shadow-md"
+      >
+        <RefreshCw size={14} />
+        Actualiser
+      </button>
+
         <div>
           <Beer className="mx-auto text-amber-400 mb-3" size={36} />
           <p className="font-bold text-lg">Scannez le QR de votre table</p>
