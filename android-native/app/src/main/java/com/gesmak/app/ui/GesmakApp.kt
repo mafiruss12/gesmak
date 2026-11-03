@@ -141,7 +141,7 @@ fun GesmakApp() {
         val mod = Modifier.padding(padding)
         when (tab) {
             0 -> HomeDashboard(
-                modifier = mod,
+                mod = mod,
                 memberName = member?.fullName ?: session?.email.orEmpty(),
                 role = member?.role ?: "—",
                 estName = establishment?.name,
@@ -153,19 +153,19 @@ fun GesmakApp() {
                 onLogout = { scope.launch { store.clear() } },
             )
             1 -> InventoryScreen(
-                modifier = mod,
+                mod = mod,
                 products = products,
                 loading = loadingData,
                 onRefresh = { refreshData() },
             )
             2 -> OrdersScreen(
-                modifier = mod,
+                mod = mod,
                 orders = orders,
                 loading = loadingData,
                 onRefresh = { refreshData() },
             )
             else -> SalesScreen(
-                modifier = mod,
+                mod = mod,
                 products = products,
                 onRefresh = { refreshData() },
             )

@@ -31,7 +31,7 @@ import java.util.Locale
 
 @Composable
 fun SalesScreen(
-    modifier: Modifier = Modifier,
+    mod: Modifier = Modifier,
     products: List<SupabaseApi.Product>,
     onRefresh: () -> Unit,
 ) {
@@ -42,7 +42,7 @@ fun SalesScreen(
     val total = products.sumOf { (cart[it.id] ?: 0) * it.price }
 
     Column(
-        modifier = modifier.fillMaxSize().background(Color(0xFF0C0A09)).padding(16.dp),
+        modifier = mod.fillMaxSize().background(Color(0xFF0C0A09)).padding(16.dp),
     ) {
         Text("Caisse", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = amber)
         Text("Sélectionnez les articles puis validez (ticket local).", color = Color(0xFFA8A29E), fontSize = 12.sp)

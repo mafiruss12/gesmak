@@ -26,7 +26,7 @@ import java.util.Locale
 
 @Composable
 fun OrdersScreen(
-    modifier: Modifier = Modifier,
+    mod: Modifier = Modifier,
     orders: List<SupabaseApi.OrderRow>,
     loading: Boolean,
     onRefresh: () -> Unit,
@@ -34,9 +34,9 @@ fun OrdersScreen(
     val amber = Color(0xFFF59E0B)
     val fcfa = NumberFormat.getNumberInstance(Locale.FRANCE)
     Column(
-        modifier = modifier.fillMaxSize().background(Color(0xFF0C0A09)).padding(16.dp),
+        modifier = mod.fillMaxSize().background(Color(0xFF0C0A09)).padding(16.dp),
     ) {
-        Row(Modifier = Modifier.fillMaxWidth()) {
+        Row(modifier = Modifier.fillMaxWidth()) {
             Text("Commandes", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = amber, modifier = Modifier.weight(1f))
             Button(
                 onClick = onRefresh,

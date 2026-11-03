@@ -26,7 +26,7 @@ import java.util.Locale
 
 @Composable
 fun InventoryScreen(
-    modifier: Modifier = Modifier,
+    mod: Modifier = Modifier,
     products: List<SupabaseApi.Product>,
     loading: Boolean,
     onRefresh: () -> Unit,
@@ -34,9 +34,9 @@ fun InventoryScreen(
     val amber = Color(0xFFF59E0B)
     val fcfa = NumberFormat.getNumberInstance(Locale.FRANCE)
     Column(
-        modifier = modifier.fillMaxSize().background(Color(0xFF0C0A09)).padding(16.dp),
+        modifier = mod.fillMaxSize().background(Color(0xFF0C0A09)).padding(16.dp),
     ) {
-        Row(Modifier = Modifier.fillMaxWidth()) {
+        Row(modifier = Modifier.fillMaxWidth()) {
             Text("Stock", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = amber, modifier = Modifier.weight(1f))
             Button(
                 onClick = onRefresh,
@@ -56,7 +56,7 @@ fun InventoryScreen(
                         .background(Color(0xFF1C1917), RoundedCornerShape(12.dp))
                         .padding(12.dp),
                 ) {
-                    Column(Modifier = Modifier.weight(1f)) {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(p.name, color = Color.White, fontWeight = FontWeight.SemiBold)
                         Text(p.category ?: "—", color = Color(0xFF78716C), fontSize = 12.sp)
                     }

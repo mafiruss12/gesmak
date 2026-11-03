@@ -25,7 +25,7 @@ import androidx.compose.ui.unit.sp
 
 @Composable
 fun HomeDashboard(
-    modifier: Modifier = Modifier,
+    mod: Modifier = Modifier,
     memberName: String,
     role: String,
     estName: String?,
@@ -38,7 +38,7 @@ fun HomeDashboard(
 ) {
     val amber = Color(0xFFF59E0B)
     Column(
-        modifier = modifier
+        modifier = mod
             .fillMaxSize()
             .background(Color(0xFF0C0A09))
             .padding(20.dp),
@@ -51,9 +51,9 @@ fun HomeDashboard(
             fontSize = 13.sp,
         )
         Spacer(Modifier.height(20.dp))
-        Row(Modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            StatCard(Modifier = Modifier.weight(1f), title = "Produits", value = "$productCount")
-            StatCard(Modifier = Modifier.weight(1f), title = "Commandes", value = "$openOrders", alert = openOrders > 0)
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            StatCard(modifier = Modifier.weight(1f), title = "Produits", value = "$productCount")
+            StatCard(modifier = Modifier.weight(1f), title = "Commandes", value = "$openOrders", alert = openOrders > 0)
         }
         Spacer(Modifier.height(16.dp))
         if (loading) Text("Actualisation…", color = Color(0xFFA8A29E))
@@ -75,15 +75,15 @@ fun HomeDashboard(
 }
 
 @Composable
-private fun StatCard(modifier: Modifier, title: String, value: String, alert: Boolean = false) {
+private fun StatCard(mod: Modifier, title: String, value: String, alert: Boolean = false) {
     Card(
-        modifier = modifier,
+        modifier = mod,
         colors = CardDefaults.cardColors(
             containerColor = if (alert) Color(0xFF450A0A) else Color(0xFF1C1917),
         ),
         shape = RoundedCornerShape(16.dp),
     ) {
-        Column(Modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
             Text(title, color = Color(0xFFA8A29E), fontSize = 12.sp)
             Text(
                 value,
