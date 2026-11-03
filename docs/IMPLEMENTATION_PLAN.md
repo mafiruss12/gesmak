@@ -24,3 +24,8 @@ Promesse : *Le gérant fait ventes/stock sur le téléphone ; le propriétaire v
 
 ## Hors scope (gel)
 QR avancé, portail captif, Kotlin, multi-IA, 2e APK marketing, offline total parfait.
+
+## Kotlin native (android-native/)
+- Statut : FONDATIONS démarrées (login + session + CI)
+- APK attendu : GESMAK-native.apk (workflow build-kotlin-apk.yml)
+- Parité complète web : NON — phases suivantes
