@@ -1,26 +1,16 @@
-# GESMAK — espaces applicatifs
+# GESMAK
 
-## Application principale
-- **URL** : https://gesmak.vercel.app/login
-- Comptes établissement (propriétaire, gérant, caisse, équipe)
+**Site :** https://gesmak.vercel.app  
+**Login :** https://gesmak.vercel.app/login  
+**Console plateforme :** https://gesmak.vercel.app/console  
 
-## Console plateforme
-- **URL** : https://gesmak.vercel.app/console  
-  (ancien chemin `/admin` redirige automatiquement)
-- Comptes plateforme uniquement
+## APK (version officielle)
+Un seul APK à distribuer aux clients :
+- https://github.com/mafiruss12/gesmak/releases/download/apk-latest/GESMAK.apk  
 
-## APK Android
-Libellé unique sur le téléphone : **GESMAK**.
+(`GESMAK-plus.apk` est technique / interne — ne pas communiquer aux clients.)
 
-| Fichier | Lien |
-|---------|------|
-| GESMAK.apk | https://github.com/mafiruss12/gesmak/releases/download/apk-latest/GESMAK.apk |
-| GESMAK-plus.apk | https://github.com/mafiruss12/gesmak/releases/download/apk-latest/GESMAK-plus.apk |
-
-Release : https://github.com/mafiruss12/gesmak/releases/tag/apk-latest
-
-## Code source
-```bash
-git clone https://github.com/mafiruss12/gesmak.git
-cd gesmak && npm install && npm run dev
-```
+## Règle test mobile
+1. Désinstaller toute ancienne GESMAK  
+2. Installer GESMAK.apk  
+3. Tester les 7 points (voir `docs/IMPLEMENTATION_PLAN.md`)

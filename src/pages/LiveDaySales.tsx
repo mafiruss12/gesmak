@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Beer, Minus, Plus, ShoppingCart, Trash2, CheckCircle2, Loader2,
-  Wallet, Smartphone, AlertTriangle, Send, Lock,
+  Wallet, Smartphone, AlertTriangle, Send, Lock, History, Shield,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
@@ -18,6 +18,7 @@ import {
   saveLiveDay,
   addTicket,
   voidTicket,
+  removeTicketHard,
   aggregateDay,
   markClosed,
   verifyDayHeuristics,
@@ -33,8 +34,10 @@ function todayISO() {
 type Phase = 'sell' | 'close' | 'done';
 
 export default function LiveDaySales() {
-  const { member, activeEstablishment } = useAuth();
+  const { member, activeEstablishment, effectiveRole } = useAuth();
   const estId = useEstId();
+  const role = String(effectiveRole || member?.role || '');
+  const canManageSales = ['super_admin', 'admin', 'owner'].includes(role);
   const [date] = useState(todayISO);
   const [products, setProducts] = useState<Product[]>([]);
   const [day, setDay] = useState<LiveDayState | null>(null);
@@ -130,7 +133,7 @@ export default function LiveDaySales() {
       setMsg('Cochez au moins une boisson.');
       return;
     }
-    const next = addTicket(estId, date, cartLines, pay);
+    const next = addTicket(estId, date, cartLines, pay, undefined, member?.full_name || member?.role || 'equipe');
     setDay({ ...next });
     setCart({});
     setMsg(`Vente enregistrée · ${formatFCFA(cartTotal)} (stock inchangé jusqu’à clôture)`);
@@ -138,9 +141,16 @@ export default function LiveDaySales() {
   }
 
   function removeTicket(id: string) {
-    if (!estId || day?.closed_at) return;
-    if (!confirm('Annuler cette vente ?')) return;
-    setDay({ ...voidTicket(estId, date, id) });
+    if (!estId || !canManageSales) return;
+    if (!window.confirm('Annuler cette vente ? (action propriétaire)')) return;
+    const next = removeTicketHard(
+      estId,
+      date,
+      id,
+      member?.full_name || member?.role || 'propriétaire',
+      true,
+    );
+    setDay({ ...next });
   }
 
   function startClose() {
@@ -412,35 +422,95 @@ export default function LiveDaySales() {
           )}
 
           <section className="space-y-2">
-            <h2 className="text-sm font-semibold text-stone-300">Ventes enregistrées (stock pas encore touché)</h2>
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold text-stone-300">Ventes enregistrées</h2>
+              {!canManageSales && (
+                <span className="text-[10px] text-stone-500 flex items-center gap-1">
+                  <Lock size={12} /> Verrouillées
+                </span>
+              )}
+              {canManageSales && (
+                <span className="text-[10px] text-amber-400/90 flex items-center gap-1">
+                  <Shield size={12} /> Vous pouvez annuler
+                </span>
+              )}
+            </div>
+            <p className="text-[11px] text-stone-500">
+              Une fois validée, une vente n’est plus modifiable par l’équipe. Seul le propriétaire peut l’annuler.
+            </p>
             {!day?.tickets.length ? (
               <p className="text-sm text-stone-500">Aucune vente pour l’instant.</p>
             ) : (
               <ul className="space-y-2">
-                {day.tickets.slice(0, 30).map((t) => (
-                  <li
-                    key={t.id}
-                    className="rounded-xl border border-stone-800 bg-stone-900/60 px-3 py-2 flex justify-between gap-2"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-xs text-stone-500">
-                        {new Date(t.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} ·{' '}
-                        {t.pay === 'cash' ? 'Espèces' : t.pay === 'mobile' ? 'Mobile' : 'Mixte'}
-                      </p>
-                      <p className="text-sm text-stone-200 truncate">
-                        {t.lines.map((l) => `${l.name}×${l.qty}`).join(', ')}
-                      </p>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <p className="font-mono text-amber-300 text-sm">{formatFCFA(t.total)}</p>
-                      <button
-                        type="button"
-                        className="text-[10px] text-red-400 mt-1"
-                        onClick={() => removeTicket(t.id)}
-                      >
-                        <Trash2 size={12} className="inline" /> Annuler
-                      </button>
-                    </div>
+                {day.tickets.slice(0, 40).map((ticket) => {
+                  const locked = ticket.locked !== false || Boolean(ticket.at);
+                  const voided = Boolean(ticket.voided);
+                  return (
+                    <li
+                      key={ticket.id}
+                      className={`rounded-xl border px-3 py-2 flex justify-between gap-2 ${
+                        voided
+                          ? 'border-stone-800 bg-stone-950/80 opacity-50'
+                          : locked && !canManageSales
+                            ? 'border-stone-800 bg-stone-900/40 opacity-75'
+                            : 'border-stone-700 bg-stone-900/60'
+                      }`}
+                    >
+                      <div className="min-w-0">
+                        <p className="text-xs text-stone-500">
+                          {new Date(ticket.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} ·{' '}
+                          {ticket.pay === 'cash' ? 'Espèces' : ticket.pay === 'mobile' ? 'Mobile' : 'Mixte'}
+                          {voided ? ' · Annulée' : locked ? ' · Enregistrée' : ''}
+                        </p>
+                        <p className={`text-sm truncate ${voided ? 'line-through text-stone-500' : 'text-stone-200'}`}>
+                          {ticket.lines.map((l) => `${l.name}×${l.qty}`).join(', ')}
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className={`font-mono text-sm ${voided ? 'text-stone-500 line-through' : 'text-amber-300'}`}>
+                          {formatFCFA(ticket.total)}
+                        </p>
+                        {canManageSales && !voided && (
+                          <button
+                            type="button"
+                            className="text-[10px] text-red-400 mt-1"
+                            onClick={() => removeTicket(ticket.id)}
+                          >
+                            <Trash2 size={12} className="inline" /> Annuler
+                          </button>
+                        )}
+                        {!canManageSales && (
+                          <p className="text-[10px] text-stone-600 mt-1">Lecture seule</p>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+
+          <section className="space-y-2 rounded-2xl border border-stone-800 bg-stone-900/40 p-3">
+            <h2 className="text-sm font-semibold text-stone-300 flex items-center gap-2">
+              <History size={16} className="text-amber-400" />
+              Historique d’activité
+            </h2>
+            {!(day?.activity && day.activity.length) ? (
+              <p className="text-xs text-stone-500">Les validations et annulations apparaîtront ici.</p>
+            ) : (
+              <ul className="space-y-1.5 max-h-48 overflow-y-auto">
+                {(day.activity || []).slice(0, 50).map((a) => (
+                  <li key={a.id} className="text-xs text-stone-400 border-b border-stone-800/80 pb-1.5">
+                    <span className="text-stone-500">
+                      {new Date(a.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                    {' · '}
+                    <span className={
+                      a.type === 'void' ? 'text-red-300' : a.type === 'sale' ? 'text-emerald-300' : 'text-stone-300'
+                    }>
+                      {a.message}
+                    </span>
+                    {a.by ? <span className="text-stone-600"> — {a.by}</span> : null}
                   </li>
                 ))}
               </ul>
