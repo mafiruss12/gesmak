@@ -1,4 +1,5 @@
 package com.gesmak.app
+import androidx.compose.ui.modifier.Modifier
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity

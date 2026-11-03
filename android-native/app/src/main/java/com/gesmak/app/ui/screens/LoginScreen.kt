@@ -1,4 +1,6 @@
 package com.gesmak.app.ui.screens
+import androidx.compose.ui.modifier.Modifier
+import androidx.compose.ui.Modifier.modifier
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
