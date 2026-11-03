@@ -1,5 +1,5 @@
 package com.gesmak.app.ui.screens
-import androidx.compose.ui.modifier.Modifier
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.Modifier.modifier
 
 import androidx.compose.foundation.background
@@ -22,7 +22,6 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
