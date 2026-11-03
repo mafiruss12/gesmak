@@ -1,5 +1,6 @@
 /**
  * Ventes « au fil de l’eau » — pas de décrément stock avant clôture du soir.
+ * Les tickets enregistrés sont verrouillés pour l’équipe ; seul le propriétaire peut annuler/modifier.
  */
 export type LivePayMethod = 'cash' | 'mobile' | 'mixed';
 
@@ -18,12 +19,27 @@ export type LiveSaleTicket = {
   total: number;
   pay: LivePayMethod;
   note?: string;
+  /** Verrouillé dès l’enregistrement — non modifiable sauf propriétaire */
+  locked?: boolean;
+  voided?: boolean;
+  voided_at?: string;
+  voided_by?: string;
+};
+
+export type LiveActivity = {
+  id: string;
+  at: string;
+  type: 'sale' | 'void' | 'edit' | 'close' | 'open';
+  message: string;
+  by?: string;
+  ticket_id?: string;
 };
 
 export type LiveDayState = {
   establishment_id: string;
   date: string; // YYYY-MM-DD
   tickets: LiveSaleTicket[];
+  activity?: LiveActivity[];
   closed_at?: string | null;
   stock_deducted?: boolean;
 };
@@ -32,17 +48,45 @@ function key(estId: string, date: string) {
   return `mm_live_sales:${estId}:${date}`;
 }
 
+function pushActivity(
+  state: LiveDayState,
+  type: LiveActivity['type'],
+  message: string,
+  by?: string,
+  ticket_id?: string,
+) {
+  const entry: LiveActivity = {
+    id: `a-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    at: new Date().toISOString(),
+    type,
+    message,
+    by,
+    ticket_id,
+  };
+  state.activity = [entry, ...(state.activity || [])].slice(0, 200);
+}
+
 export function loadLiveDay(estId: string, date: string): LiveDayState {
   try {
     const raw = localStorage.getItem(key(estId, date));
     if (raw) {
       const p = JSON.parse(raw) as LiveDayState;
-      if (p && Array.isArray(p.tickets)) return p;
+      if (p && Array.isArray(p.tickets)) {
+        if (!Array.isArray(p.activity)) p.activity = [];
+        return p;
+      }
     }
   } catch {
     /* */
   }
-  return { establishment_id: estId, date, tickets: [], closed_at: null, stock_deducted: false };
+  return {
+    establishment_id: estId,
+    date,
+    tickets: [],
+    activity: [],
+    closed_at: null,
+    stock_deducted: false,
+  };
 }
 
 export function saveLiveDay(state: LiveDayState) {
@@ -59,6 +103,7 @@ export function addTicket(
   lines: LiveSaleLine[],
   pay: LivePayMethod,
   note?: string,
+  by?: string,
 ): LiveDayState {
   const state = loadLiveDay(estId, date);
   if (state.closed_at) return state;
@@ -72,16 +117,68 @@ export function addTicket(
     total,
     pay,
     note,
+    locked: true,
   };
   state.tickets = [ticket, ...state.tickets];
+  pushActivity(
+    state,
+    'sale',
+    `Vente ${total} F — ${clean.map((l) => `${l.name}×${l.qty}`).join(', ')}`,
+    by,
+    ticket.id,
+  );
   saveLiveDay(state);
   return state;
 }
 
-export function voidTicket(estId: string, date: string, ticketId: string): LiveDayState {
+/** Annulation réservée au propriétaire / admin plateforme */
+export function voidTicket(
+  estId: string,
+  date: string,
+  ticketId: string,
+  by?: string,
+  allow = false,
+): LiveDayState {
   const state = loadLiveDay(estId, date);
-  if (state.closed_at) return state;
-  state.tickets = state.tickets.filter((t) => t.id !== ticketId);
+  if (state.closed_at && !allow) return state;
+  const t = state.tickets.find((x) => x.id === ticketId);
+  if (!t || t.voided) return state;
+  if (!allow) return state;
+  t.voided = true;
+  t.voided_at = new Date().toISOString();
+  t.voided_by = by;
+  pushActivity(
+    state,
+    'void',
+    `Annulation vente ${t.total} F — ${t.lines.map((l) => `${l.name}×${l.qty}`).join(', ')}`,
+    by,
+    ticketId,
+  );
+  saveLiveDay(state);
+  return state;
+}
+
+/** Alias historique : suppression réelle uniquement si allow (propriétaire) */
+export function removeTicketHard(
+  estId: string,
+  date: string,
+  ticketId: string,
+  by?: string,
+  allow = false,
+): LiveDayState {
+  const state = loadLiveDay(estId, date);
+  if (!allow) return state;
+  const t = state.tickets.find((x) => x.id === ticketId);
+  state.tickets = state.tickets.filter((x) => x.id !== ticketId);
+  if (t) {
+    pushActivity(
+      state,
+      'void',
+      `Suppression vente ${t.total} F (propriétaire)`,
+      by,
+      ticketId,
+    );
+  }
   saveLiveDay(state);
   return state;
 }
@@ -98,6 +195,7 @@ export function aggregateDay(state: LiveDayState): {
   let cash = 0;
   let mobile = 0;
   for (const t of state.tickets) {
+    if (t.voided) continue;
     total += t.total;
     if (t.pay === 'cash') cash += t.total;
     else if (t.pay === 'mobile') mobile += t.total;
@@ -106,57 +204,35 @@ export function aggregateDay(state: LiveDayState): {
       mobile += t.total / 2;
     }
     for (const l of t.lines) {
-      const cur = byProduct[l.product_id];
-      if (!cur) {
-        byProduct[l.product_id] = { ...l };
+      const prev = byProduct[l.product_id];
+      if (prev) {
+        prev.qty += l.qty;
       } else {
-        cur.qty += l.qty;
+        byProduct[l.product_id] = { ...l };
       }
     }
   }
   return {
     byProduct,
     total,
-    cash: Math.round(cash),
-    mobile: Math.round(mobile),
-    ticketCount: state.tickets.length,
+    cash,
+    mobile,
+    ticketCount: state.tickets.filter((t) => !t.voided).length,
   };
 }
 
-export function markClosed(estId: string, date: string, stockDeducted: boolean): LiveDayState {
+export function markClosed(estId: string, date: string, by?: string): LiveDayState {
   const state = loadLiveDay(estId, date);
   state.closed_at = new Date().toISOString();
-  state.stock_deducted = stockDeducted;
+  pushActivity(state, 'close', 'Journée clôturée', by);
   saveLiveDay(state);
   return state;
 }
 
-/** Contrôles simples type « IA métier » sans API */
-export function verifyDayHeuristics(
-  state: LiveDayState,
-  products: { id: string; name: string; stock?: number }[],
-): string[] {
-  const tips: string[] = [];
+export function verifyDayHeuristics(state: LiveDayState): string[] {
+  const warnings: string[] = [];
   const agg = aggregateDay(state);
-  if (agg.ticketCount === 0) {
-    tips.push('Aucune vente enregistrée aujourd’hui.');
-    return tips;
-  }
-  if (agg.total <= 0) tips.push('Total journée à 0 — vérifiez les prix.');
-  for (const line of Object.values(agg.byProduct)) {
-    const p = products.find((x) => x.id === line.product_id);
-    const stock = Math.floor(Number(p?.stock) || 0);
-    if (stock > 0 && line.qty > stock) {
-      tips.push(
-        `Attention : ${line.name} vendu ×${line.qty} mais stock affiché ${stock}. Vérifiez avant clôture.`,
-      );
-    }
-    if (line.qty >= 50) {
-      tips.push(`${line.name} : volume élevé (×${line.qty}) — confirmez le comptage.`);
-    }
-  }
-  const avg = agg.total / Math.max(1, agg.ticketCount);
-  if (avg < 200) tips.push('Panier moyen très bas — des ventes ont-elles été oubliées ?');
-  if (tips.length === 0) tips.push('Contrôle OK : volumes cohérents avec le stock affiché.');
-  return tips;
+  if (agg.ticketCount === 0) warnings.push('Aucune vente enregistrée.');
+  if (agg.total <= 0 && agg.ticketCount > 0) warnings.push('Total à zéro malgré des tickets.');
+  return warnings;
 }
