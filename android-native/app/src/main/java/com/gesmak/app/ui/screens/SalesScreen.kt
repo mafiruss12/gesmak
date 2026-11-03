@@ -36,6 +36,9 @@ fun SalesScreen(
     products: List<SupabaseApi.Product>,
     estId: String?,
     salesStore: LocalSalesStore,
+    busy: Boolean,
+    offlinePending: Int,
+    onValidate: (lines: List<Pair<SupabaseApi.Product, Int>>, total: Double) -> Unit,
     onRefresh: () -> Unit,
 ) {
     val amber = Color(0xFFF59E0B)
@@ -48,15 +51,16 @@ fun SalesScreen(
     val total = products.sumOf { (cart[it.id] ?: 0) * it.price }
     val dayTotal = estId?.let { salesStore.dayTotal(it) } ?: 0.0
 
-    Column(
-        modifier = mod.fillMaxSize().background(Color(0xFF0C0A09)).padding(16.dp),
-    ) {
+    Column(modifier = mod.fillMaxSize().background(Color(0xFF0C0A09)).padding(16.dp)) {
         Text("Caisse", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = amber)
         Text(
-            "CA jour (local) : ${fcfa.format(dayTotal.toLong())} F · ventes verrouillées après validation",
+            "CA local jour : ${fcfa.format(dayTotal.toLong())} F · sync serveur + stock",
             color = Color(0xFFA8A29E),
             fontSize = 12.sp,
         )
+        if (offlinePending > 0) {
+            Text("File hors-ligne : $offlinePending opération(s)", color = Color(0xFFFBBF24), fontSize = 12.sp)
+        }
         Spacer(Modifier.height(8.dp))
         LazyColumn(modifier = Modifier.weight(1f)) {
             items(products, key = { it.id }) { p ->
@@ -71,7 +75,7 @@ fun SalesScreen(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(p.name, color = Color.White, fontWeight = FontWeight.Medium)
                         Text(
-                            "${fcfa.format(p.price.toLong())} F",
+                            "${fcfa.format(p.price.toLong())} F · stock ${p.stock.toLong()}",
                             color = Color(0xFFA8A29E),
                             fontSize = 12.sp,
                         )
@@ -80,17 +84,10 @@ fun SalesScreen(
                         onClick = { if (q > 0) cart[p.id] = q - 1 },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF292524)),
                     ) { Text("-") }
-                    Text(
-                        "$q",
-                        color = Color.White,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 12.dp),
-                    )
+                    Text("$q", color = Color.White, modifier = Modifier.padding(horizontal = 10.dp, vertical = 12.dp))
                     Button(
                         onClick = { cart[p.id] = q + 1 },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = amber,
-                            contentColor = Color(0xFF0C0A09),
-                        ),
+                        colors = ButtonDefaults.buttonColors(containerColor = amber, contentColor = Color(0xFF0C0A09)),
                     ) { Text("+") }
                 }
             }
@@ -120,38 +117,34 @@ fun SalesScreen(
                 }
             }
         }
-        Text(
-            "Total panier : ${fcfa.format(total.toLong())} F",
-            color = amber,
-            fontWeight = FontWeight.Bold,
-            fontSize = 18.sp,
-        )
+        Text("Total panier : ${fcfa.format(total.toLong())} F", color = amber, fontWeight = FontWeight.Bold, fontSize = 18.sp)
         msg?.let { Text(it, color = Color(0xFF4ADE80), fontSize = 12.sp) }
         Spacer(Modifier.height(8.dp))
         Button(
             onClick = {
                 if (total <= 0 || estId == null) {
                     msg = if (estId == null) "Aucun établissement" else "Ajoutez des articles"
-                } else {
-                    val lines = products
-                        .filter { (cart[it.id] ?: 0) > 0 }
-                        .joinToString(", ") { "${it.name}×${cart[it.id]}" }
-                    salesStore.add(estId, total, lines)
-                    tickets = salesStore.list(estId)
-                    msg = "Vente enregistrée · ${fcfa.format(total.toLong())} F (verrouillée)"
-                    cart.clear()
+                    return@Button
                 }
+                val lines = products.filter { (cart[it.id] ?: 0) > 0 }.map { it to (cart[it.id] ?: 0) }
+                val lineTxt = lines.joinToString(", ") { "${it.first.name}×${it.second}" }
+                salesStore.add(estId, total, lineTxt)
+                tickets = salesStore.list(estId)
+                onValidate(lines, total)
+                cart.clear()
+                msg = "Vente en cours d'envoi…"
             },
+            enabled = !busy,
             modifier = Modifier.fillMaxWidth().height(52.dp),
             shape = RoundedCornerShape(14.dp),
             colors = ButtonDefaults.buttonColors(containerColor = amber, contentColor = Color(0xFF0C0A09)),
         ) {
-            Text("Valider la vente", fontWeight = FontWeight.Bold)
+            Text(if (busy) "Envoi…" else "Valider la vente", fontWeight = FontWeight.Bold)
         }
         Button(
             onClick = onRefresh,
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF292524), contentColor = Color.White),
-        ) { Text("Actualiser le stock") }
+        ) { Text("Actualiser") }
     }
 }

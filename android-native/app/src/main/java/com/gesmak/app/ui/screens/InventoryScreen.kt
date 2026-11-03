@@ -29,6 +29,7 @@ fun InventoryScreen(
     mod: Modifier = Modifier,
     products: List<SupabaseApi.Product>,
     loading: Boolean,
+    canEdit: Boolean = false,
     onRefresh: () -> Unit,
 ) {
     val amber = Color(0xFFF59E0B)
@@ -37,7 +38,10 @@ fun InventoryScreen(
         modifier = mod.fillMaxSize().background(Color(0xFF0C0A09)).padding(16.dp),
     ) {
         Row(modifier = Modifier.fillMaxWidth()) {
-            Text("Stock", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = amber, modifier = Modifier.weight(1f))
+            Column(modifier = Modifier.weight(1f)) {
+            Text("Stock", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = amber)
+            Text(if (canEdit) "Modification via Arrivages" else "Lecture seule", color = Color(0xFFA8A29E), fontSize = 11.sp)
+        }
             Button(
                 onClick = onRefresh,
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF292524), contentColor = amber),

@@ -26,8 +26,8 @@ class SupabaseApi(
         val email: String?,
     )
 
-    data class Establishment(val id: String, val name: String, val type: String?)
-    data class Product(val id: String, val name: String, val price: Double, val stock: Double, val category: String?)
+    data class Establishment(val id: String, val name: String, val type: String?, val slug: String?)
+    data class Product(val id: String, val name: String, val price: Double, val stock: Double, val category: String?, val cost: Double)
     data class OrderRow(
         val id: String,
         val status: String,
@@ -44,6 +44,16 @@ class SupabaseApi(
             .addHeader("Authorization", "Bearer $accessToken")
             .addHeader("Accept", "application/json")
             .get()
+            .build()
+
+    private fun post(pathAndQuery: String, accessToken: String, jsonBody: String): Request =
+        Request.Builder()
+            .url("$baseUrl$pathAndQuery")
+            .addHeader("apikey", anonKey)
+            .addHeader("Authorization", "Bearer $accessToken")
+            .addHeader("Content-Type", "application/json")
+            .addHeader("Prefer", "return=minimal")
+            .post(jsonBody.toRequestBody("application/json".toMediaType()))
             .build()
 
     private fun patch(pathAndQuery: String, accessToken: String, jsonBody: String): Request =
@@ -74,7 +84,6 @@ class SupabaseApi(
         }
     }
 
-    /** Premier établissement lié via member_establishments si members.establishment_id vide */
     fun fetchLinkedEstablishmentId(accessToken: String, userId: String): String? {
         val url =
             "/rest/v1/member_establishments?user_id=eq.$userId&select=establishment_id,role&limit=5"
@@ -87,7 +96,7 @@ class SupabaseApi(
     }
 
     fun fetchEstablishment(accessToken: String, id: String): Establishment? {
-        val url = "/rest/v1/establishments?id=eq.$id&select=id,name,type,business_type&limit=1"
+        val url = "/rest/v1/establishments?id=eq.$id&select=id,name,type,business_type,slug&limit=1"
         client.newCall(get(url, accessToken)).execute().use { resp ->
             if (!resp.isSuccessful) return null
             val arr = JSONArray(resp.body?.string().orEmpty())
@@ -97,13 +106,14 @@ class SupabaseApi(
                 id = o.getString("id"),
                 name = o.optString("name"),
                 type = o.optString("type").ifBlank { o.optString("business_type") }.ifBlank { null },
+                slug = o.optString("slug").ifBlank { null },
             )
         }
     }
 
     fun fetchProducts(accessToken: String, estId: String): List<Product> {
         val url =
-            "/rest/v1/products?establishment_id=eq.$estId&select=id,name,price,stock,category&order=name.asc&limit=300"
+            "/rest/v1/products?establishment_id=eq.$estId&select=id,name,price,stock,category,cost&order=name.asc&limit=300"
         client.newCall(get(url, accessToken)).execute().use { resp ->
             if (!resp.isSuccessful) return emptyList()
             val arr = JSONArray(resp.body?.string().orEmpty())
@@ -117,6 +127,7 @@ class SupabaseApi(
                             price = o.optDouble("price", 0.0),
                             stock = o.optDouble("stock", 0.0),
                             category = o.optString("category").ifBlank { null },
+                            cost = o.optDouble("cost", 0.0),
                         ),
                     )
                 }
@@ -150,9 +161,91 @@ class SupabaseApi(
 
     fun updateOrderStatus(accessToken: String, orderId: String, status: String): Boolean {
         val body = JSONObject().put("status", status).toString()
-        val url = "/rest/v1/orders?id=eq.$orderId"
-        client.newCall(patch(url, accessToken, body)).execute().use { resp ->
-            return resp.isSuccessful
+        client.newCall(patch("/rest/v1/orders?id=eq.$orderId", accessToken, body)).execute().use {
+            return it.isSuccessful
         }
+    }
+
+    /**
+     * Vente caisse serveur : sales + stock products + stock_movements.
+     * @return null si OK, message d'erreur sinon
+     */
+    fun postSaleLine(
+        accessToken: String,
+        estId: String,
+        userId: String,
+        product: Product,
+        qty: Int,
+        paymentMethod: String = "cash",
+    ): String? {
+        if (qty <= 0) return "Quantité invalide"
+        val sale = JSONObject()
+            .put("establishment_id", estId)
+            .put("product_id", product.id)
+            .put("qty", qty)
+            .put("unit_price", product.price)
+            .put("total", product.price * qty)
+            .put("payment_method", paymentMethod)
+            .put("created_by", userId)
+            .toString()
+        client.newCall(post("/rest/v1/sales", accessToken, sale)).execute().use { resp ->
+            if (!resp.isSuccessful) {
+                return "Vente refusée (${resp.code})"
+            }
+        }
+        val newStock = maxOf(0.0, product.stock - qty)
+        val upd = JSONObject().put("stock", newStock).toString()
+        client.newCall(patch("/rest/v1/products?id=eq.${product.id}", accessToken, upd)).execute().use { resp ->
+            if (!resp.isSuccessful) return "Stock non mis à jour (${resp.code})"
+        }
+        val mov = JSONObject()
+            .put("establishment_id", estId)
+            .put("product_id", product.id)
+            .put("product_name", product.name)
+            .put("qty", -qty)
+            .put("movement_type", "pos_sale")
+            .put("unit_cost", product.cost)
+            .put("unit_price", product.price)
+            .put("reason", "caisse")
+            .put("note", "Vente GESMAK native")
+            .put("created_by", userId)
+            .toString()
+        try {
+            client.newCall(post("/rest/v1/stock_movements", accessToken, mov)).execute().use { /* optional */ }
+        } catch (_: Exception) { }
+        return null
+    }
+
+    /** Arrivage : + stock (casiers × bouteilles ou qty directe) */
+    fun postArrival(
+        accessToken: String,
+        estId: String,
+        userId: String,
+        product: Product,
+        bottlesToAdd: Int,
+        note: String,
+    ): String? {
+        if (bottlesToAdd <= 0) return "Quantité invalide"
+        val newStock = product.stock + bottlesToAdd
+        val upd = JSONObject().put("stock", newStock).toString()
+        client.newCall(patch("/rest/v1/products?id=eq.${product.id}", accessToken, upd)).execute().use { resp ->
+            if (!resp.isSuccessful) return "Arrivage refusé (${resp.code})"
+        }
+        val mov = JSONObject()
+            .put("establishment_id", estId)
+            .put("product_id", product.id)
+            .put("product_name", product.name)
+            .put("qty", bottlesToAdd)
+            .put("movement_type", "arrival")
+            .put("unit_cost", product.cost)
+            .put("unit_price", product.price)
+            .put("reason", "arrivage")
+            .put("note", note)
+            .put("created_by", userId)
+            .toString()
+        try {
+            client.newCall(post("/rest/v1/stock_movements", accessToken, mov)).execute().use { }
+        } catch (_: Exception) { }
+        return null
     }
 }
