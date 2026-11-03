@@ -11,8 +11,8 @@ android {
         applicationId = "com.gesmak.app"
         minSdk = 24
         targetSdk = 34
-        versionCode = 100
-        versionName = "2.0.0-native"
+        versionCode = 101
+        versionName = "2.0.1-native"
         buildConfigField("String", "SUPABASE_URL", "\"${project.findProperty("SUPABASE_URL") ?: ""}\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"${project.findProperty("SUPABASE_ANON_KEY") ?: ""}\"")
         buildConfigField("String", "WEB_FALLBACK", "\"https://gesmak.vercel.app\"")
