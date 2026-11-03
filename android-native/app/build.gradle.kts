@@ -11,8 +11,8 @@ android {
         applicationId = "com.gesmak.app"
         minSdk = 24
         targetSdk = 34
-        versionCode = 103
-        versionName = "2.0.3-native"
+        versionCode = 104
+        versionName = "2.0.4-native"
                 buildConfigField("String", "SUPABASE_URL", "\"https://ycoaxbgxstxondxxnhhf.supabase.co\"")
                 buildConfigField("String", "SUPABASE_ANON_KEY", "\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inljb2F4Ymd4c3R4b25keHhuaGhmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU2MTg5MTgsImV4cCI6MjEwMTE5NDkxOH0.iSPqcC8X1BXlgVYfhtFBY4QFq9UwiMycSisfhkNxV80\"")
         buildConfigField("String", "WEB_FALLBACK", "\"https://gesmak.vercel.app\"")

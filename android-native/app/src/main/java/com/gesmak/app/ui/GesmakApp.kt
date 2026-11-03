@@ -6,6 +6,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.LocalShipping
@@ -38,11 +39,13 @@ import com.gesmak.app.data.SessionStore
 import com.gesmak.app.data.SupabaseApi
 import com.gesmak.app.data.SupabaseAuth
 import com.gesmak.app.ui.screens.ArrivalScreen
+import com.gesmak.app.ui.screens.EstChoice
 import com.gesmak.app.ui.screens.HomeDashboard
 import com.gesmak.app.ui.screens.InventoryScreen
 import com.gesmak.app.ui.screens.LoginScreen
 import com.gesmak.app.ui.screens.OrdersScreen
 import com.gesmak.app.ui.screens.QrOrderScreen
+import com.gesmak.app.ui.screens.ReportsScreen
 import com.gesmak.app.ui.screens.SalesScreen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -50,6 +53,10 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
+import java.util.TimeZone
 
 @Composable
 fun GesmakApp() {
@@ -74,6 +81,11 @@ fun GesmakApp() {
     var knownOrderIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var estIdResolved by remember { mutableStateOf<String?>(null) }
     var offlineCount by remember { mutableIntStateOf(offlineQ.size()) }
+    var estChoices by remember { mutableStateOf<List<EstChoice>>(emptyList()) }
+    var caDay by remember { mutableStateOf(0.0) }
+    var caWeek by remember { mutableStateOf(0.0) }
+    var caMonth by remember { mutableStateOf(0.0) }
+    var recentSales by remember { mutableStateOf<List<Triple<String, Double, String>>>(emptyList()) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -82,6 +94,24 @@ fun GesmakApp() {
     val canEditStock = remember(member?.role) {
         val r = member?.role?.lowercase().orEmpty()
         r in setOf("owner", "propriétaire", "proprietaire", "admin", "super_admin", "manager", "gérant", "gerant")
+    }
+
+    fun isoDaysAgo(days: Int): String {
+        val cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
+        cal.add(Calendar.DAY_OF_YEAR, -days)
+        val fmt = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US)
+        fmt.timeZone = TimeZone.getTimeZone("UTC")
+        return fmt.format(cal.time)
+    }
+
+    fun isoStartOfToday(): String {
+        val cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
+        cal.set(Calendar.HOUR_OF_DAY, 0)
+        cal.set(Calendar.MINUTE, 0)
+        cal.set(Calendar.SECOND, 0)
+        val fmt = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US)
+        fmt.timeZone = TimeZone.getTimeZone("UTC")
+        return fmt.format(cal.time)
     }
 
     LaunchedEffect(Unit) {
@@ -129,9 +159,19 @@ fun GesmakApp() {
                     drainOffline(s.accessToken, s.userId)
                     val m = api.fetchMember(s.accessToken, s.userId)
                     member = m
-                    var eid = m?.establishmentId
-                    if (eid.isNullOrBlank()) {
-                        eid = api.fetchLinkedEstablishmentId(s.accessToken, s.userId)
+                    val links = api.fetchAllEstablishmentLinks(s.accessToken, s.userId)
+                    val ids = links.map { it.establishmentId }.toMutableList()
+                    m?.establishmentId?.let { if (it !in ids) ids.add(0, it) }
+                    val choices = mutableListOf<EstChoice>()
+                    for (id in ids.distinct()) {
+                        val est = api.fetchEstablishment(s.accessToken, id)
+                        if (est != null) choices.add(EstChoice(est.id, est.name))
+                    }
+                    estChoices = choices
+                    var eid = estIdResolved
+                    if (eid.isNullOrBlank() || choices.none { it.id == eid }) {
+                        eid = choices.firstOrNull()?.id ?: m?.establishmentId
+                            ?: api.fetchLinkedEstablishmentId(s.accessToken, s.userId)
                     }
                     estIdResolved = eid
                     if (!eid.isNullOrBlank()) {
@@ -153,10 +193,18 @@ fun GesmakApp() {
                         }
                         knownOrderIds = knownOrderIds + newOrders.map { it.id }
                         orders = newOrders
+                        caDay = api.fetchSalesTotal(s.accessToken, eid, isoStartOfToday())
+                        caWeek = api.fetchSalesTotal(s.accessToken, eid, isoDaysAgo(7))
+                        caMonth = api.fetchSalesTotal(s.accessToken, eid, isoDaysAgo(30))
+                        recentSales = api.fetchRecentSales(s.accessToken, eid, 40)
                     } else {
                         establishment = null
                         products = emptyList()
                         orders = emptyList()
+                        caDay = 0.0
+                        caWeek = 0.0
+                        caMonth = 0.0
+                        recentSales = emptyList()
                     }
                 }
             } catch (e: Exception) {
@@ -171,6 +219,7 @@ fun GesmakApp() {
     LaunchedEffect(session?.accessToken, session?.userId) {
         if (session != null) {
             knownOrderIds = emptySet()
+            estIdResolved = null
             refreshData()
         } else {
             member = null
@@ -178,10 +227,11 @@ fun GesmakApp() {
             products = emptyList()
             orders = emptyList()
             estIdResolved = null
+            estChoices = emptyList()
         }
     }
 
-    LaunchedEffect(session?.accessToken) {
+    LaunchedEffect(session?.accessToken, estIdResolved) {
         if (session == null) return@LaunchedEffect
         while (isActive) {
             delay(25_000)
@@ -220,9 +270,10 @@ fun GesmakApp() {
                     Triple(0, "Accueil", Icons.Default.Home),
                     Triple(1, "Stock", Icons.Default.Inventory2),
                     Triple(2, "Arrivage", Icons.Default.LocalShipping),
-                    Triple(3, "Commandes", Icons.Default.ReceiptLong),
+                    Triple(3, "Cmd", Icons.Default.ReceiptLong),
                     Triple(4, "Caisse", Icons.Default.ShoppingCart),
-                    Triple(5, "QR", Icons.Default.QrCode2),
+                    Triple(5, "CA", Icons.Default.Assessment),
+                    Triple(6, "QR", Icons.Default.QrCode2),
                 )
                 items.forEach { (i, label, icon) ->
                     NavigationBarItem(
@@ -251,8 +302,17 @@ fun GesmakApp() {
                 estName = establishment?.name,
                 productCount = products.size,
                 openOrders = orders.size,
+                caDay = caDay,
+                offlinePending = offlineCount,
+                establishments = estChoices,
+                currentEstId = estIdResolved,
                 loading = loadingData,
                 error = dataError,
+                onSelectEst = { id ->
+                    estIdResolved = id
+                    knownOrderIds = emptySet()
+                    refreshData()
+                },
                 onRefresh = { refreshData() },
                 onLogout = { scope.launch { store.clear() } },
             )
@@ -275,9 +335,19 @@ fun GesmakApp() {
                     val note = "arrivage ${casiers}x$perCasier +$unitExtra"
                     scope.launch {
                         busySale = true
-                        val err = withContext(Dispatchers.IO) {
+                        withContext(Dispatchers.IO) {
                             try {
-                                api.postArrival(s.accessToken, eid, s.userId, product, bottles, note)
+                                val err = api.postArrival(s.accessToken, eid, s.userId, product, bottles, note)
+                                if (err != null) {
+                                    offlineQ.enqueue(
+                                        "arrival",
+                                        JSONObject()
+                                            .put("est_id", eid)
+                                            .put("product_id", product.id)
+                                            .put("qty", bottles)
+                                            .put("note", note),
+                                    )
+                                }
                             } catch (e: Exception) {
                                 offlineQ.enqueue(
                                     "arrival",
@@ -287,12 +357,10 @@ fun GesmakApp() {
                                         .put("qty", bottles)
                                         .put("note", note),
                                 )
-                                offlineCount = offlineQ.size()
-                                e.message ?: "Hors ligne — file d'attente"
                             }
+                            offlineCount = offlineQ.size()
                         }
                         busySale = false
-                        if (err != null && !err.contains("file")) dataError = err
                         refreshData()
                     }
                 },
@@ -356,6 +424,15 @@ fun GesmakApp() {
                         refreshData()
                     }
                 },
+                onRefresh = { refreshData() },
+            )
+            5 -> ReportsScreen(
+                mod = pageMod,
+                caDay = caDay,
+                caWeek = caWeek,
+                caMonth = caMonth,
+                recent = recentSales,
+                loading = loadingData,
                 onRefresh = { refreshData() },
             )
             else -> QrOrderScreen(mod = pageMod, orderUrl = orderUrl)

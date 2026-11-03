@@ -248,4 +248,58 @@ class SupabaseApi(
         } catch (_: Exception) { }
         return null
     }
+    data class EstLink(val establishmentId: String, val role: String)
+
+    fun fetchAllEstablishmentLinks(accessToken: String, userId: String): List<EstLink> {
+        val url =
+            "/rest/v1/member_establishments?user_id=eq.$userId&select=establishment_id,role&limit=50"
+        client.newCall(get(url, accessToken)).execute().use { resp ->
+            if (!resp.isSuccessful) return emptyList()
+            val arr = JSONArray(resp.body?.string().orEmpty())
+            return buildList {
+                for (i in 0 until arr.length()) {
+                    val o = arr.getJSONObject(i)
+                    val id = o.optString("establishment_id")
+                    if (id.isNotBlank()) add(EstLink(id, o.optString("role", "employee")))
+                }
+            }
+        }
+    }
+
+    /** Somme des ventes depuis ISO date (gte created_at) */
+    fun fetchSalesTotal(accessToken: String, estId: String, sinceIso: String): Double {
+        val url =
+            "/rest/v1/sales?establishment_id=eq.$estId&created_at=gte.$sinceIso&select=total"
+        client.newCall(get(url, accessToken)).execute().use { resp ->
+            if (!resp.isSuccessful) return 0.0
+            val arr = JSONArray(resp.body?.string().orEmpty())
+            var sum = 0.0
+            for (i in 0 until arr.length()) {
+                sum += arr.getJSONObject(i).optDouble("total", 0.0)
+            }
+            return sum
+        }
+    }
+
+    fun fetchRecentSales(accessToken: String, estId: String, limit: Int = 30): List<Triple<String, Double, String>> {
+        val url =
+            "/rest/v1/sales?establishment_id=eq.$estId&select=total,created_at,qty&order=created_at.desc&limit=$limit"
+        client.newCall(get(url, accessToken)).execute().use { resp ->
+            if (!resp.isSuccessful) return emptyList()
+            val arr = JSONArray(resp.body?.string().orEmpty())
+            return buildList {
+                for (i in 0 until arr.length()) {
+                    val o = arr.getJSONObject(i)
+                    add(
+                        Triple(
+                            o.optString("created_at"),
+                            o.optDouble("total", 0.0),
+                            o.optString("qty"),
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
 }
