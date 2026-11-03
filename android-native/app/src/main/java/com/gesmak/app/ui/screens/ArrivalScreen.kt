@@ -81,7 +81,7 @@ fun ArrivalScreen(
             }
         }
         if (canEdit && selectedId != null) {
-            Row(Modifier = Modifier.fillMaxWidth()) {
+            Row(modifier = Modifier.fillMaxWidth()) {
                 OutlinedTextField(
                     value = casiers,
                     onValueChange = { casiers = it.filter { c -> c.isDigit() } },
