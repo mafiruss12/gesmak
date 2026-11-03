@@ -26,7 +26,7 @@ import java.util.Locale
 
 @Composable
 fun OrdersScreen(
-    mod: Modifier = Modifier,
+    mod: modifier = Modifier,
     orders: List<SupabaseApi.OrderRow>,
     loading: Boolean,
     busyId: String?,
@@ -38,7 +38,7 @@ fun OrdersScreen(
     Column(
         modifier = mod.fillMaxSize().background(Color(0xFF0C0A09)).padding(16.dp),
     ) {
-        Row(Modifier = Modifier.fillMaxWidth()) {
+        Row(modifier = Modifier.fillMaxWidth()) {
             Text(
                 "Commandes",
                 fontSize = 22.sp,

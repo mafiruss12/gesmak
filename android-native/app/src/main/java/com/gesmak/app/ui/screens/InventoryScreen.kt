@@ -26,7 +26,7 @@ import java.util.Locale
 
 @Composable
 fun InventoryScreen(
-    mod: Modifier = Modifier,
+    mod: modifier = Modifier,
     products: List<SupabaseApi.Product>,
     loading: Boolean,
     onRefresh: () -> Unit,
