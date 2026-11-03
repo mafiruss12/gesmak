@@ -1,8 +1,10 @@
 package com.gesmak.app.data
 
 import com.gesmak.app.BuildConfig
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
@@ -35,7 +37,7 @@ class SupabaseApi(
         val tableNumber: String?,
     )
 
-    private fun authRequest(pathAndQuery: String, accessToken: String): Request =
+    private fun get(pathAndQuery: String, accessToken: String): Request =
         Request.Builder()
             .url("$baseUrl$pathAndQuery")
             .addHeader("apikey", anonKey)
@@ -44,10 +46,20 @@ class SupabaseApi(
             .get()
             .build()
 
+    private fun patch(pathAndQuery: String, accessToken: String, jsonBody: String): Request =
+        Request.Builder()
+            .url("$baseUrl$pathAndQuery")
+            .addHeader("apikey", anonKey)
+            .addHeader("Authorization", "Bearer $accessToken")
+            .addHeader("Content-Type", "application/json")
+            .addHeader("Prefer", "return=minimal")
+            .patch(jsonBody.toRequestBody("application/json".toMediaType()))
+            .build()
+
     fun fetchMember(accessToken: String, userId: String): Member? {
         val url =
             "/rest/v1/members?user_id=eq.$userId&select=user_id,full_name,role,establishment_id,email&limit=1"
-        client.newCall(authRequest(url, accessToken)).execute().use { resp ->
+        client.newCall(get(url, accessToken)).execute().use { resp ->
             if (!resp.isSuccessful) return null
             val arr = JSONArray(resp.body?.string().orEmpty())
             if (arr.length() == 0) return null
@@ -62,9 +74,21 @@ class SupabaseApi(
         }
     }
 
+    /** Premier établissement lié via member_establishments si members.establishment_id vide */
+    fun fetchLinkedEstablishmentId(accessToken: String, userId: String): String? {
+        val url =
+            "/rest/v1/member_establishments?user_id=eq.$userId&select=establishment_id,role&limit=5"
+        client.newCall(get(url, accessToken)).execute().use { resp ->
+            if (!resp.isSuccessful) return null
+            val arr = JSONArray(resp.body?.string().orEmpty())
+            if (arr.length() == 0) return null
+            return arr.getJSONObject(0).optString("establishment_id").ifBlank { null }
+        }
+    }
+
     fun fetchEstablishment(accessToken: String, id: String): Establishment? {
         val url = "/rest/v1/establishments?id=eq.$id&select=id,name,type,business_type&limit=1"
-        client.newCall(authRequest(url, accessToken)).execute().use { resp ->
+        client.newCall(get(url, accessToken)).execute().use { resp ->
             if (!resp.isSuccessful) return null
             val arr = JSONArray(resp.body?.string().orEmpty())
             if (arr.length() == 0) return null
@@ -79,8 +103,8 @@ class SupabaseApi(
 
     fun fetchProducts(accessToken: String, estId: String): List<Product> {
         val url =
-            "/rest/v1/products?establishment_id=eq.$estId&select=id,name,price,stock,category&order=name.asc&limit=200"
-        client.newCall(authRequest(url, accessToken)).execute().use { resp ->
+            "/rest/v1/products?establishment_id=eq.$estId&select=id,name,price,stock,category&order=name.asc&limit=300"
+        client.newCall(get(url, accessToken)).execute().use { resp ->
             if (!resp.isSuccessful) return emptyList()
             val arr = JSONArray(resp.body?.string().orEmpty())
             return buildList {
@@ -102,8 +126,8 @@ class SupabaseApi(
 
     fun fetchOpenOrders(accessToken: String, estId: String): List<OrderRow> {
         val url =
-            "/rest/v1/orders?establishment_id=eq.$estId&status=in.(pending,preparing,ready)&select=id,status,total,created_at,customer_name,table_number&order=created_at.desc&limit=50"
-        client.newCall(authRequest(url, accessToken)).execute().use { resp ->
+            "/rest/v1/orders?establishment_id=eq.$estId&status=in.(pending,preparing,ready)&select=id,status,total,created_at,customer_name,table_number&order=created_at.desc&limit=80"
+        client.newCall(get(url, accessToken)).execute().use { resp ->
             if (!resp.isSuccessful) return emptyList()
             val arr = JSONArray(resp.body?.string().orEmpty())
             return buildList {
@@ -121,6 +145,14 @@ class SupabaseApi(
                     )
                 }
             }
+        }
+    }
+
+    fun updateOrderStatus(accessToken: String, orderId: String, status: String): Boolean {
+        val body = JSONObject().put("status", status).toString()
+        val url = "/rest/v1/orders?id=eq.$orderId"
+        client.newCall(patch(url, accessToken, body)).execute().use { resp ->
+            return resp.isSuccessful
         }
     }
 }

@@ -1,6 +1,9 @@
 package com.gesmak.app.ui
-import androidx.compose.ui.Modifier
 
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
@@ -22,8 +25,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import com.gesmak.app.data.LocalSalesStore
+import com.gesmak.app.data.NotifyHelper
 import com.gesmak.app.data.SessionStore
 import com.gesmak.app.data.SupabaseApi
 import com.gesmak.app.data.SupabaseAuth
@@ -33,6 +39,8 @@ import com.gesmak.app.ui.screens.LoginScreen
 import com.gesmak.app.ui.screens.OrdersScreen
 import com.gesmak.app.ui.screens.SalesScreen
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -40,6 +48,7 @@ import kotlinx.coroutines.withContext
 fun GesmakApp() {
     val context = LocalContext.current
     val store = remember { SessionStore(context.applicationContext) }
+    val salesStore = remember { LocalSalesStore(context.applicationContext) }
     val auth = remember { SupabaseAuth() }
     val api = remember { SupabaseApi() }
     val session by store.session.collectAsState(initial = null)
@@ -52,6 +61,20 @@ fun GesmakApp() {
     var loadingData by remember { mutableStateOf(false) }
     var dataError by remember { mutableStateOf<String?>(null) }
     var tab by remember { mutableIntStateOf(0) }
+    var busyOrderId by remember { mutableStateOf<String?>(null) }
+    var knownOrderIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var estIdResolved by remember { mutableStateOf<String?>(null) }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { /* granted or not */ }
+
+    LaunchedEffect(Unit) {
+        NotifyHelper.ensureChannel(context)
+        if (Build.VERSION.SDK_INT >= 33) {
+            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
 
     fun refreshData() {
         val s = session ?: return
@@ -62,11 +85,31 @@ fun GesmakApp() {
                 withContext(Dispatchers.IO) {
                     val m = api.fetchMember(s.accessToken, s.userId)
                     member = m
-                    val eid = m?.establishmentId
+                    var eid = m?.establishmentId
+                    if (eid.isNullOrBlank()) {
+                        eid = api.fetchLinkedEstablishmentId(s.accessToken, s.userId)
+                    }
+                    estIdResolved = eid
                     if (!eid.isNullOrBlank()) {
                         establishment = api.fetchEstablishment(s.accessToken, eid)
                         products = api.fetchProducts(s.accessToken, eid)
-                        orders = api.fetchOpenOrders(s.accessToken, eid)
+                        val newOrders = api.fetchOpenOrders(s.accessToken, eid)
+                        // Notify on new pending orders
+                        val pendingIds = newOrders.filter { it.status == "pending" }.map { it.id }.toSet()
+                        val brandNew = pendingIds - knownOrderIds
+                        if (knownOrderIds.isNotEmpty() && brandNew.isNotEmpty()) {
+                            val first = newOrders.firstOrNull { it.id in brandNew }
+                            withContext(Dispatchers.Main) {
+                                NotifyHelper.showOrder(
+                                    context,
+                                    "Nouvelle commande",
+                                    "${first?.customerName ?: "Client"} · ${first?.total?.toLong() ?: 0} F",
+                                    id = brandNew.first().hashCode(),
+                                )
+                            }
+                        }
+                        knownOrderIds = knownOrderIds + newOrders.map { it.id }
+                        orders = newOrders
                     } else {
                         establishment = null
                         products = emptyList()
@@ -82,12 +125,24 @@ fun GesmakApp() {
     }
 
     LaunchedEffect(session?.accessToken, session?.userId) {
-        if (session != null) refreshData()
-        else {
+        if (session != null) {
+            knownOrderIds = emptySet()
+            refreshData()
+        } else {
             member = null
             establishment = null
             products = emptyList()
             orders = emptyList()
+            estIdResolved = null
+        }
+    }
+
+    // Poll commandes toutes les 25s quand connecté
+    LaunchedEffect(session?.accessToken) {
+        if (session == null) return@LaunchedEffect
+        while (isActive) {
+            delay(25_000)
+            if (session != null) refreshData()
         }
     }
 
@@ -138,10 +193,10 @@ fun GesmakApp() {
             }
         },
     ) { padding ->
-        val mod = Modifier.padding(padding)
+        val pageMod = Modifier.padding(padding)
         when (tab) {
             0 -> HomeDashboard(
-                mod = mod,
+                mod = pageMod,
                 memberName = member?.fullName ?: session?.email.orEmpty(),
                 role = member?.role ?: "—",
                 estName = establishment?.name,
@@ -153,20 +208,35 @@ fun GesmakApp() {
                 onLogout = { scope.launch { store.clear() } },
             )
             1 -> InventoryScreen(
-                mod = mod,
+                mod = pageMod,
                 products = products,
                 loading = loadingData,
                 onRefresh = { refreshData() },
             )
             2 -> OrdersScreen(
-                mod = mod,
+                mod = pageMod,
                 orders = orders,
                 loading = loadingData,
+                busyId = busyOrderId,
                 onRefresh = { refreshData() },
+                onAdvance = { orderId, next ->
+                    val s = session ?: return@OrdersScreen
+                    scope.launch {
+                        busyOrderId = orderId
+                        val ok = withContext(Dispatchers.IO) {
+                            api.updateOrderStatus(s.accessToken, orderId, next)
+                        }
+                        busyOrderId = null
+                        if (ok) refreshData()
+                        else dataError = "Impossible de mettre à jour la commande"
+                    }
+                },
             )
             else -> SalesScreen(
-                mod = mod,
+                mod = pageMod,
                 products = products,
+                estId = estIdResolved,
+                salesStore = salesStore,
                 onRefresh = { refreshData() },
             )
         }
