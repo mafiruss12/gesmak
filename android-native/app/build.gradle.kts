@@ -13,8 +13,8 @@ android {
         targetSdk = 34
         versionCode = 101
         versionName = "2.0.1-native"
-        buildConfigField("String", "SUPABASE_URL", "\"${project.findProperty("SUPABASE_URL") ?: ""}\"")
-        buildConfigField("String", "SUPABASE_ANON_KEY", "\"${project.findProperty("SUPABASE_ANON_KEY") ?: ""}\"")
+                buildConfigField("String", "SUPABASE_URL", "\"https://ycoaxbgxstxondxxnhhf.supabase.co\"")
+                buildConfigField("String", "SUPABASE_ANON_KEY", "\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inljb2F4Ymd4c3R4b25keHhuaGhmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU2MTg5MTgsImV4cCI6MjEwMTE5NDkxOH0.iSPqcC8X1BXlgVYfhtFBY4QFq9UwiMycSisfhkNxV80\"")
         buildConfigField("String", "WEB_FALLBACK", "\"https://gesmak.vercel.app\"")
     }
 
@@ -27,8 +27,8 @@ android {
             )
         }
         debug {
-            applicationIdSuffix = ".native"
-            versionNameSuffix = "-native"
+            // applicationIdSuffix = ".native"
+            // versionNameSuffix = "-native"
         }
     }
     compileOptions {
