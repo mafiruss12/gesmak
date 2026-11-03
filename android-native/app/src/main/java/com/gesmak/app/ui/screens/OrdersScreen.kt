@@ -26,7 +26,7 @@ import java.util.Locale
 
 @Composable
 fun OrdersScreen(
-    mod: modifier = Modifier,
+    mod: Modifier = Modifier,
     orders: List<SupabaseApi.OrderRow>,
     loading: Boolean,
     busyId: String?,

@@ -32,7 +32,7 @@ import java.util.Locale
 
 @Composable
 fun SalesScreen(
-    mod: modifier = Modifier,
+    mod: Modifier = Modifier,
     products: List<SupabaseApi.Product>,
     estId: String?,
     salesStore: LocalSalesStore,

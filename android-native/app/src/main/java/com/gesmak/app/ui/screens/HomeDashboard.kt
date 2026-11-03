@@ -25,7 +25,7 @@ import androidx.compose.ui.unit.sp
 
 @Composable
 fun HomeDashboard(
-    mod: modifier = Modifier,
+    mod: Modifier = Modifier,
     memberName: String,
     role: String,
     estName: String?,
