@@ -1,6 +1,5 @@
 package com.gesmak.app.ui
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.Modifier.modifier
 
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
