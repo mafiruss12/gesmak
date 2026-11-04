@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  QrCode, Printer, Download, Loader2, ArrowLeft, Sparkles, LayoutGrid,
+  QrCode, Printer, Loader2, ArrowLeft, LayoutGrid, Download, Image as ImageIcon,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
@@ -15,67 +15,416 @@ import { EmptyState } from '@/components/ui';
 
 type TableRow = { id: string; number: string; seats?: number; location?: string };
 
-type TemplateId = 'affiche' | 'maquis' | 'elegant' | 'minimal' | 'festif';
-type Density = '1' | '4';
+type ThemeId = 'marine_or' | 'marine_sombre' | 'orange_blanc' | 'noir_blanc' | 'minimal';
 
-const TEMPLATES: {
-  id: TemplateId;
+type Theme = {
+  id: ThemeId;
   label: string;
   desc: string;
-  frame: string;
-  accent: string;
-  bg: string;
-  text: string;
-}[] = [
+  navy: string;
+  gold: string;
+  cream: string;
+  ink: string;
+  dark: boolean;
+};
+
+const THEMES: Theme[] = [
   {
-    id: 'affiche',
-    label: 'Affiche pro',
-    desc: 'Orange GESMAK · A4',
-    frame: 'from-orange-600 via-amber-500 to-orange-700',
-    accent: '#FF7900',
-    bg: '#fff7ed',
-    text: '#7c2d12',
+    id: 'marine_or',
+    label: 'Noir & or (pro)',
+    desc: 'Présentoir maquis · fond riche',
+    navy: '#0a0a0a',
+    gold: '#f5c518',
+    cream: '#0a0a0a',
+    ink: '#ffffff',
+    dark: true,
   },
   {
-    id: 'maquis',
-    label: 'Maquis ambre',
-    desc: 'Orange / crème',
-    frame: 'from-amber-600 via-orange-500 to-amber-700',
-    accent: '#f59e0b',
-    bg: '#fffbeb',
-    text: '#1c1917',
+    id: 'marine_sombre',
+    label: 'Marine & or',
+    desc: 'Bleu nuit profond · or',
+    navy: '#061428',
+    gold: '#f5c518',
+    cream: '#061428',
+    ink: '#ffffff',
+    dark: true,
   },
   {
-    id: 'elegant',
-    label: 'Resto élégant',
-    desc: 'Sombre & doré',
-    frame: 'from-stone-900 via-stone-800 to-amber-900',
-    accent: '#eab308',
-    bg: '#1c1917',
-    text: '#fafaf9',
+    id: 'orange_blanc',
+    label: 'Orange & noir',
+    desc: 'Orange GESMAK · fond noir',
+    navy: '#1a0a00',
+    gold: '#FF7900',
+    cream: '#120800',
+    ink: '#ffffff',
+    dark: true,
+  },
+  {
+    id: 'noir_blanc',
+    label: 'Noir & blanc',
+    desc: 'Élégant · accent orange',
+    navy: '#050505',
+    gold: '#FF7900',
+    cream: '#0c0c0c',
+    ink: '#fafafa',
+    dark: true,
   },
   {
     id: 'minimal',
-    label: 'Minimal',
-    desc: 'Blanc, simple',
-    frame: 'from-stone-200 via-white to-stone-100',
-    accent: '#292524',
-    bg: '#ffffff',
-    text: '#1c1917',
-  },
-  {
-    id: 'festif',
-    label: 'Festif',
-    desc: 'Couleurs vives',
-    frame: 'from-fuchsia-600 via-orange-500 to-yellow-400',
-    accent: '#db2777',
-    bg: '#fdf4ff',
-    text: '#1c1917',
+    label: 'Clair premium',
+    desc: 'Blanc cassé · or',
+    navy: '#1c1917',
+    gold: '#b45309',
+    cream: '#fffbeb',
+    ink: '#1c1917',
+    dark: false,
   },
 ];
 
-const SM_ORANGE = '#FF7900';
-const SM_ORANGE_DARK = '#c2410c';
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('Image'));
+    img.src = src;
+  });
+}
+
+function roundRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+) {
+  const rr = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + rr, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rr);
+  ctx.arcTo(x + w, y + h, x, y + h, rr);
+  ctx.arcTo(x, y + h, x, y, rr);
+  ctx.arcTo(x, y, x + w, y, rr);
+  ctx.closePath();
+}
+
+/** PNG HD — design présentoir (fond riche, nom large, badge table). */
+async function exportPlacematPng(opts: {
+  estName: string;
+  logoUrl: string | null;
+  tableNumber: string;
+  phrase: string;
+  qrSrc: string;
+  theme: Theme;
+  fileName: string;
+}) {
+  const W = 3508;
+  const H = 2480;
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas indisponible');
+  const th = opts.theme;
+
+  // Fond dégradé riche
+  const bg = ctx.createRadialGradient(W * 0.5, H * 0.45, 80, W * 0.5, H * 0.5, W * 0.7);
+  bg.addColorStop(0, th.dark ? '#1a1a1a' : '#fff7ed');
+  bg.addColorStop(0.45, th.cream);
+  bg.addColorStop(1, th.navy);
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  // Motifs décoratifs (cercles / lueur or)
+  ctx.globalAlpha = 0.12;
+  ctx.fillStyle = th.gold;
+  ctx.beginPath();
+  ctx.arc(W * 0.15, H * 0.5, W * 0.18, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(W * 0.88, H * 0.35, W * 0.14, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  // Cadre or double
+  ctx.strokeStyle = th.gold;
+  ctx.lineWidth = 14;
+  roundRect(ctx, 48, 48, W - 96, H - 96, 48);
+  ctx.stroke();
+  ctx.lineWidth = 4;
+  ctx.globalAlpha = 0.5;
+  roundRect(ctx, 72, 72, W - 144, H - 144, 36);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+
+  // Feuilles / accents coins (formes)
+  ctx.fillStyle = th.dark ? 'rgba(34,197,94,0.15)' : 'rgba(180,83,9,0.12)';
+  for (const [fx, fy] of [
+    [0, 0],
+    [W, 0],
+    [0, H],
+    [W, H],
+  ] as [number, number][]) {
+    ctx.beginPath();
+    ctx.ellipse(fx, fy, W * 0.2, H * 0.18, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  const qrImg = await loadImage(opts.qrSrc);
+  const cornerSize = Math.min(W, H) * 0.2;
+  const corners: [number, number][] = [
+    [90, 90],
+    [W - 90 - cornerSize, 90],
+    [90, H - 90 - cornerSize],
+    [W - 90 - cornerSize, H - 90 - cornerSize],
+  ];
+  for (const [x, y] of corners) {
+    ctx.fillStyle = '#ffffff';
+    roundRect(ctx, x, y, cornerSize, cornerSize * 1.12, 28);
+    ctx.fill();
+    ctx.strokeStyle = th.gold;
+    ctx.lineWidth = 8;
+    ctx.stroke();
+    const m = cornerSize * 0.1;
+    ctx.drawImage(qrImg, x + m, y + m, cornerSize - m * 2, cornerSize - m * 2);
+    ctx.fillStyle = th.navy;
+    ctx.fillRect(x, y + cornerSize * 0.92, cornerSize, cornerSize * 0.2);
+    ctx.fillStyle = th.gold;
+    ctx.font = `bold ${Math.round(cornerSize * 0.09)}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillText('Scannez ici', x + cornerSize / 2, y + cornerSize * 1.06);
+  }
+
+  // Centre — logo grand
+  ctx.textAlign = 'center';
+  if (opts.logoUrl) {
+    try {
+      const logo = await loadImage(opts.logoUrl);
+      const ls = Math.round(H * 0.16);
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(W / 2, H * 0.28, ls / 2 + 12, 0, Math.PI * 2);
+      ctx.fillStyle = th.gold;
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(W / 2, H * 0.28, ls / 2, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(logo, W / 2 - ls / 2, H * 0.28 - ls / 2, ls, ls);
+      ctx.restore();
+    } catch {
+      /* */
+    }
+  }
+
+  // Nom établissement — TRÈS grand
+  ctx.fillStyle = th.gold;
+  ctx.font = `bold ${Math.round(W * 0.07)}px Impact, Haettenschweiler, sans-serif`;
+  const name = (opts.estName || 'ÉTABLISSEMENT').toUpperCase().slice(0, 28);
+  // ombre
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+  ctx.fillText(name, W / 2 + 6, H * 0.44 + 6);
+  ctx.fillStyle = th.gold;
+  ctx.fillText(name, W / 2, H * 0.44);
+
+  // Ruban slogan
+  ctx.fillStyle = th.gold;
+  ctx.globalAlpha = 0.9;
+  roundRect(ctx, W * 0.28, H * 0.47, W * 0.44, 8, 4);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = th.ink;
+  ctx.font = `italic ${Math.round(W * 0.028)}px Georgia, serif`;
+  ctx.fillText((opts.phrase || 'Bon repas, bonne ambiance !').slice(0, 48), W / 2, H * 0.52);
+
+  // Badge TABLE
+  const bw = W * 0.28;
+  const bh = H * 0.18;
+  const bx = W / 2 - bw / 2;
+  const by = H * 0.56;
+  // forme bouclier simplifiée
+  ctx.fillStyle = th.gold;
+  roundRect(ctx, bx, by, bw, bh, 28);
+  ctx.fill();
+  ctx.fillStyle = th.navy;
+  ctx.font = `bold ${Math.round(W * 0.028)}px sans-serif`;
+  ctx.fillText('TABLE', W / 2, by + bh * 0.32);
+  ctx.font = `bold ${Math.round(W * 0.09)}px Impact, sans-serif`;
+  const tn = String(opts.tableNumber).padStart(2, '0');
+  ctx.fillText(tn, W / 2, by + bh * 0.78);
+
+  // Textes latéraux
+  ctx.fillStyle = th.gold;
+  ctx.font = `bold ${Math.round(W * 0.02)}px sans-serif`;
+  ctx.textAlign = 'left';
+  ctx.fillText('★ Savourez', W * 0.68, H * 0.58);
+  ctx.fillText('★ Commandez', W * 0.68, H * 0.63);
+  ctx.fillText('★ Profitez !', W * 0.68, H * 0.68);
+
+  ctx.textAlign = 'center';
+  ctx.font = `italic ${Math.round(W * 0.022)}px Georgia, serif`;
+  ctx.fillStyle = th.ink;
+  ctx.globalAlpha = 0.85;
+  ctx.fillText('Votre satisfaction, notre priorité !', W / 2, H * 0.88);
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = th.gold;
+  ctx.font = `bold ${Math.round(W * 0.018)}px sans-serif`;
+  ctx.fillText('GESMAK', W / 2, H * 0.93);
+
+  const a = document.createElement('a');
+  a.download = opts.fileName;
+  a.href = canvas.toDataURL('image/png', 1.0);
+  a.click();
+}
+
+function PlacematCard({
+  estName,
+  logoUrl,
+  tableNumber,
+  qrSrc,
+  phrase,
+  theme,
+}: {
+  estName: string;
+  logoUrl: string | null;
+  tableNumber: string;
+  qrSrc: string;
+  phrase: string;
+  theme: Theme;
+}) {
+  const { navy, gold, cream, ink, dark } = theme;
+
+  const Corner = ({ pos }: { pos: 'tl' | 'tr' | 'bl' | 'br' }) => {
+    const posCls =
+      pos === 'tl'
+        ? 'top-2 left-2'
+        : pos === 'tr'
+          ? 'top-2 right-2'
+          : pos === 'bl'
+            ? 'bottom-2 left-2'
+            : 'bottom-2 right-2';
+    return (
+      <div className={`absolute ${posCls} z-20 w-[22%] max-w-[110px]`}>
+        <div
+          className="rounded-xl overflow-hidden bg-white shadow-lg"
+          style={{ boxShadow: `0 0 0 2px ${gold}` }}
+        >
+          <img src={qrSrc} alt="" className="w-full aspect-square object-contain p-1" />
+          <p
+            className="text-center text-[7px] sm:text-[8px] font-bold py-0.5 leading-tight"
+            style={{ background: navy, color: gold }}
+          >
+            Scannez ici
+          </p>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <article
+      className="qr-print-card qr-nappe relative overflow-hidden print:break-inside-avoid"
+      style={{
+        background: dark
+          ? `radial-gradient(ellipse at 50% 40%, #1f1f1f 0%, ${cream} 55%, ${navy} 100%)`
+          : `radial-gradient(ellipse at 50% 40%, #fff 0%, ${cream} 70%, #fde68a 100%)`,
+        color: ink,
+        aspectRatio: '1.35 / 1',
+        minHeight: 300,
+        borderRadius: 20,
+        border: `3px solid ${gold}`,
+        WebkitPrintColorAdjust: 'exact',
+        printColorAdjust: 'exact',
+        boxShadow: dark ? '0 12px 40px rgba(0,0,0,0.5)' : '0 8px 24px rgba(0,0,0,0.12)',
+      }}
+    >
+      {/* lueurs décoratives */}
+      <div
+        className="absolute -left-8 top-1/3 w-32 h-32 rounded-full opacity-20 pointer-events-none"
+        style={{ background: gold }}
+      />
+      <div
+        className="absolute -right-6 bottom-1/4 w-28 h-28 rounded-full opacity-15 pointer-events-none"
+        style={{ background: gold }}
+      />
+      <div
+        className="absolute inset-2 rounded-[16px] pointer-events-none opacity-40"
+        style={{ border: `1px solid ${gold}` }}
+      />
+
+      <Corner pos="tl" />
+      <Corner pos="tr" />
+      <Corner pos="bl" />
+      <Corner pos="br" />
+
+      {/* Centre pro */}
+      <div className="absolute inset-0 flex flex-col items-center justify-center z-10 px-16 sm:px-20 text-center">
+        {logoUrl ? (
+          <div
+            className="rounded-full p-1 mb-1 shadow-lg"
+            style={{ background: gold }}
+          >
+            <img
+              src={logoUrl}
+              alt=""
+              className="w-16 h-16 sm:w-20 sm:h-20 object-cover rounded-full"
+              crossOrigin="anonymous"
+            />
+          </div>
+        ) : (
+          <div
+            className="w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center mb-1 border-2"
+            style={{ borderColor: gold, color: gold, background: 'rgba(0,0,0,0.3)' }}
+          >
+            <QrCode size={28} />
+          </div>
+        )}
+
+        <h2
+          className="text-2xl sm:text-3xl md:text-4xl font-black leading-none tracking-tight uppercase max-w-[78%]"
+          style={{
+            color: gold,
+            textShadow: dark ? '0 3px 0 rgba(0,0,0,0.6), 0 0 24px rgba(245,197,24,0.25)' : 'none',
+            fontFamily: 'Impact, Haettenschweiler, Arial Black, sans-serif',
+          }}
+        >
+          {estName || 'Mon établissement'}
+        </h2>
+
+        <div className="w-24 h-1 rounded-full my-1.5" style={{ background: gold }} />
+
+        <p
+          className="text-xs sm:text-sm italic max-w-[70%] opacity-95"
+          style={{ fontFamily: 'Georgia, serif' }}
+        >
+          {phrase || 'Bon repas, bonne ambiance !'}
+        </p>
+
+        {/* Badge table type bouclier */}
+        <div
+          className="mt-2 px-6 py-2 rounded-2xl min-w-[7rem] shadow-lg"
+          style={{
+            background: `linear-gradient(180deg, ${gold} 0%, #d4a017 100%)`,
+            color: navy,
+          }}
+        >
+          <p className="text-[10px] font-black tracking-widest opacity-80">TABLE</p>
+          <p
+            className="text-3xl sm:text-4xl font-black leading-none"
+            style={{ fontFamily: 'Impact, sans-serif' }}
+          >
+            {String(tableNumber).padStart(2, '0')}
+          </p>
+        </div>
+
+        <div className="mt-2 flex flex-col gap-0.5 text-[10px] font-semibold" style={{ color: gold }}>
+          <span>★ Savourez · Commandez · Profitez !</span>
+        </div>
+        <p className="text-[9px] mt-1 opacity-70 italic">Votre satisfaction, notre priorité !</p>
+      </div>
+    </article>
+  );
+}
 
 export default function PrintTableQR() {
   const { member, activeEstablishment } = useAuth();
@@ -86,17 +435,16 @@ export default function PrintTableQR() {
   const [estName, setEstName] = useState('');
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [qrCfg, setQrCfg] = useState<QrConfig>({});
-  const [template, setTemplate] = useState<TemplateId>('affiche');
-  const [density, setDensity] = useState<Density>('4');
+  const [themeId, setThemeId] = useState<ThemeId>('marine_or');
   const [selected, setSelected] = useState<string | 'all'>('all');
-  const [phrase, setPhrase] = useState('Scannez pour commander votre boisson');
-  const [busy, setBusy] = useState(false);
-  const printRef = useRef<HTMLDivElement>(null);
+  const [phrase, setPhrase] = useState('Bon repas, bonne ambiance !');
+  const [exporting, setExporting] = useState(false);
+  const [exportMsg, setExportMsg] = useState<string | null>(null);
 
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const estKey = slug || estId || '';
-  const tpl = TEMPLATES.find((x) => x.id === template) || TEMPLATES[0];
   const cfg = useMemo(() => parseQrConfig(qrCfg), [qrCfg]);
+  const theme = THEMES.find((t) => t.id === themeId) || THEMES[0];
 
   const load = useCallback(async () => {
     if (!estId) {
@@ -123,11 +471,8 @@ export default function PrintTableQR() {
       setSlug(String(e.slug || ''));
       setLogoUrl((e.logo_url as string) || (e.cover_url as string) || null);
       setQrCfg(parseQrConfig(e.qr_config));
-      // Ne pas écraser avec un titre technique type "A1"
-      const title = String((e.qr_config as { title?: string })?.title || '').trim();
-      if (title && title.length > 2 && !/^[A-Z]?\d+$/i.test(title)) {
-        setPhrase(title);
-      }
+      const welcome = String((e.qr_config as { welcome?: string })?.welcome || '').trim();
+      if (welcome && welcome.length > 2) setPhrase(welcome);
     }
     setLoading(false);
   }, [estId]);
@@ -150,64 +495,30 @@ export default function PrintTableQR() {
     });
   }
 
-  function handlePrint() {
-    window.print();
-  }
-
-  async function downloadPng(tableNumber: string) {
-    setBusy(true);
+  async function downloadPngAll() {
+    if (!visibleTables.length) return;
+    setExporting(true);
+    setExportMsg(null);
     try {
-      const url = cardUrl(tableNumber);
-      const qr = qrImageUrl(url, cfg, 400);
-      const canvas = document.createElement('canvas');
-      canvas.width = 600;
-      canvas.height = 800;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-      ctx.fillStyle = '#fff7ed';
-      ctx.fillRect(0, 0, 600, 800);
-      ctx.fillStyle = SM_ORANGE;
-      ctx.fillRect(0, 0, 600, 120);
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 26px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText((estName || 'GESMAK').slice(0, 28), 300, 50);
-      ctx.font = '14px sans-serif';
-      ctx.fillText('COMMANDE À TABLE', 300, 85);
-      ctx.fillStyle = '#7c2d12';
-      ctx.font = 'bold 56px sans-serif';
-      ctx.fillText(`Table ${tableNumber}`, 300, 200);
-      ctx.font = 'bold 22px sans-serif';
-      ctx.fillStyle = SM_ORANGE_DARK;
-      ctx.fillText(phrase.slice(0, 40), 300, 250);
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      await new Promise<void>((resolve, reject) => {
-        img.onload = () => resolve();
-        img.onerror = () => reject(new Error('QR'));
-        img.src = qr;
-      });
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(100, 280, 400, 400);
-      ctx.drawImage(img, 120, 300, 360, 360);
-      ctx.fillStyle = SM_ORANGE;
-      ctx.fillRect(100, 700, 400, 48);
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 18px sans-serif';
-      ctx.fillText('SCANNEZ CE QR CODE', 300, 730);
-      const a = document.createElement('a');
-      a.download = `qr-table-${tableNumber}.png`;
-      a.href = canvas.toDataURL('image/png');
-      a.click();
-    } catch {
-      /* ignore */
-    }
-    setBusy(false);
-  }
-
-  async function downloadAllPng() {
-    for (const tb of visibleTables) {
-      await downloadPng(tb.number);
+      for (const tb of visibleTables) {
+        const url = cardUrl(tb.number);
+        const qr = qrImageUrl(url, { ...cfg, color: '0a0a0a', bg: 'ffffff' }, 512);
+        await exportPlacematPng({
+          estName,
+          logoUrl,
+          tableNumber: tb.number,
+          phrase,
+          qrSrc: qr,
+          theme,
+          fileName: `GESMAK-nappe-${(estName || 'table').replace(/\s+/g, '-')}-T${tb.number}.png`,
+        });
+        await new Promise((r) => setTimeout(r, 400));
+      }
+      setExportMsg(`PNG HD téléchargé (${visibleTables.length})`);
+    } catch (e) {
+      setExportMsg(e instanceof Error ? e.message : 'Export échoué');
+    } finally {
+      setExporting(false);
     }
   }
 
@@ -229,40 +540,63 @@ export default function PrintTableQR() {
     );
   }
 
-  const isAffiche = template === 'affiche';
-  const qrSize = density === '4' ? 180 : 280;
-
   return (
-    <div className="max-w-4xl mx-auto space-y-4 pb-16">
-      <div className="flex items-start justify-between gap-3 print:hidden">
+    <div className="max-w-5xl mx-auto space-y-4 pb-16">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 print:hidden">
         <div>
           <Link to="/tables" className="text-xs text-amber-400 hover:underline flex items-center gap-1 mb-1">
             <ArrowLeft size={12} /> Tables
           </Link>
           <h1 className="text-2xl font-bold text-stone-100 flex items-center gap-2">
-            <Printer className="text-amber-400" /> Imprimer QR tables
+            <Printer className="text-amber-400" /> Nappes QR tables
           </h1>
           <p className="text-sm text-stone-400 mt-1">
-            Affiche pro orange · 1 ou 4 QR par page A4
+            Style présentoir pro · logo & nom grands · PNG HD / PDF
           </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={exporting || !visibleTables.length}
+            onClick={() => void downloadPngAll()}
+            className="btn-secondary flex items-center gap-2 text-sm"
+          >
+            {exporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+            PNG HD
+          </button>
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="btn-primary flex items-center gap-2 text-sm"
+          >
+            <Printer size={16} /> PDF / Imprimer
+          </button>
         </div>
       </div>
 
+      {exportMsg && (
+        <p className="text-sm text-emerald-400 print:hidden flex items-center gap-1">
+          <ImageIcon size={14} /> {exportMsg}
+        </p>
+      )}
+
       <div className="rounded-2xl border border-stone-800 bg-stone-900/60 p-4 space-y-3 print:hidden">
-        <p className="text-xs font-semibold text-stone-400 uppercase">Modèle</p>
+        <p className="text-xs font-semibold text-stone-400 uppercase">Couleurs / design</p>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-          {TEMPLATES.map((x) => (
+          {THEMES.map((x) => (
             <button
               key={x.id}
               type="button"
-              onClick={() => setTemplate(x.id)}
+              onClick={() => setThemeId(x.id)}
               className={`rounded-xl border p-3 text-left ${
-                template === x.id
-                  ? 'border-amber-500 bg-amber-500/15'
-                  : 'border-stone-800 bg-stone-950'
+                themeId === x.id ? 'border-amber-500 bg-amber-500/15' : 'border-stone-800 bg-stone-950'
               }`}
             >
-              <div className={`h-2 rounded-full bg-gradient-to-r ${x.frame} mb-2`} />
+              <div className="flex gap-1 mb-2 h-2 rounded-full overflow-hidden">
+                <span className="flex-1" style={{ background: x.navy }} />
+                <span className="flex-1" style={{ background: x.gold }} />
+                <span className="flex-1" style={{ background: x.cream, border: '1px solid #444' }} />
+              </div>
               <p className="text-sm font-semibold text-stone-100">{x.label}</p>
               <p className="text-[10px] text-stone-500">{x.desc}</p>
             </button>
@@ -270,239 +604,84 @@ export default function PrintTableQR() {
         </div>
 
         <div>
-          <p className="text-xs font-semibold text-stone-400 uppercase mb-2">Par page A4</p>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setDensity('1')}
-              className={`flex-1 rounded-xl border px-3 py-2 text-sm font-semibold ${
-                density === '1'
-                  ? 'border-amber-500 bg-amber-500/15 text-amber-200'
-                  : 'border-stone-700 text-stone-400'
-              }`}
-            >
-              1 QR (grande affiche)
-            </button>
-            <button
-              type="button"
-              onClick={() => setDensity('4')}
-              className={`flex-1 rounded-xl border px-3 py-2 text-sm font-semibold ${
-                density === '4'
-                  ? 'border-amber-500 bg-amber-500/15 text-amber-200'
-                  : 'border-stone-700 text-stone-400'
-              }`}
-            >
-              4 QR (grille A4)
-            </button>
-          </div>
-        </div>
-
-        <label className="block text-xs text-stone-400">
-          Phrase sous le QR (grand texte)
-          <input
-            className="input-field mt-1"
-            value={phrase}
-            onChange={(e) => setPhrase(e.target.value)}
-            maxLength={60}
-            placeholder="Scannez pour commander votre boisson"
-          />
-        </label>
-
-        <label className="block text-xs text-stone-400">
-          Tables à imprimer
+          <p className="text-xs font-semibold text-stone-400 uppercase mb-2">Tables</p>
           <select
-            className="input-field mt-1"
+            className="input w-full"
             value={selected}
             onChange={(e) => setSelected(e.target.value === 'all' ? 'all' : e.target.value)}
           >
-            <option value="all">Toutes les tables ({tables.length})</option>
-            {tables.map((tb) => (
-              <option key={tb.id} value={tb.id}>
-                Table {tb.number}
+            <option value="all">Toutes ({tables.length})</option>
+            {tables.map((t) => (
+              <option key={t.id} value={t.id}>
+                Table {t.number}
               </option>
             ))}
           </select>
-        </label>
-
-        <div className="flex flex-wrap gap-2">
-          <button type="button" className="btn-primary flex items-center gap-2" onClick={handlePrint}>
-            <Printer size={16} /> Imprimer / PDF
-          </button>
-          <button
-            type="button"
-            className="btn-secondary flex items-center gap-2"
-            disabled={busy || !visibleTables.length}
-            onClick={() => void downloadAllPng()}
-          >
-            {busy ? <Loader2 className="animate-spin" size={16} /> : <Download size={16} />}
-            PNG
-          </button>
-          <Link to="/menu-qr" className="btn-secondary text-sm flex items-center gap-1">
-            <Sparkles size={14} /> Réglages QR Code
-          </Link>
         </div>
-        <p className="text-[11px] text-stone-500">
-          Conseil : mode <strong>4 QR</strong> pour découper 4 tables sur une feuille A4.
-        </p>
+
+        <div>
+          <label className="text-xs text-stone-400">Slogan</label>
+          <input
+            className="input w-full mt-1"
+            value={phrase}
+            onChange={(e) => setPhrase(e.target.value)}
+            maxLength={80}
+          />
+        </div>
       </div>
 
       {tables.length === 0 ? (
         <EmptyState
           icon={<LayoutGrid size={48} />}
           title="Aucune table"
-          message="Créez des tables d’abord, puis revenez imprimer les QR."
+          message="Créez des tables puis imprimez les nappes."
         />
       ) : (
-        <div
-          ref={printRef}
-          id="qr-print-area"
-          data-density={density}
-          data-template={template}
-          className={
-            density === '4'
-              ? 'grid grid-cols-2 gap-3 print:gap-0'
-              : 'grid grid-cols-1 max-w-lg mx-auto gap-4'
-          }
-        >
+        <div id="qr-print-area" data-nappe="1" className="grid grid-cols-1 gap-4">
           {visibleTables.map((tb) => {
             const url = cardUrl(tb.number);
-            const qr = qrImageUrl(url, cfg, qrSize);
-            const compact = density === '4';
-
-            if (isAffiche) {
-              return (
-                <article
-                  key={tb.id}
-                  className="qr-print-card overflow-hidden border border-orange-300 print:border-orange-400 print:break-inside-avoid"
-                  style={{
-                    background: '#fff7ed',
-                    color: '#7c2d12',
-                  }}
-                >
-                  {/* Bandeau — couleurs en style inline pour l’impression */}
-                  <div
-                    style={{ background: SM_ORANGE, color: '#fff' }}
-                    className={`text-center ${compact ? 'px-2 py-2' : 'px-4 py-3'}`}
-                  >
-                    <p
-                      className={`font-bold uppercase tracking-widest opacity-90 ${
-                        compact ? 'text-[8px]' : 'text-[10px]'
-                      }`}
-                    >
-                      Commande à table
-                    </p>
-                    <p className={`font-black leading-tight ${compact ? 'text-sm' : 'text-lg'}`}>
-                      {(estName || 'GESMAK').slice(0, compact ? 22 : 32)}
-                    </p>
-                  </div>
-
-                  <div className={`flex flex-col items-center text-center ${compact ? 'p-2' : 'p-4'}`}>
-                    {logoUrl && !compact && (
-                      <img
-                        src={logoUrl}
-                        alt=""
-                        className="w-12 h-12 rounded-full object-cover border-2 border-orange-300 mb-1"
-                      />
-                    )}
-                    <p
-                      className={`font-black tracking-tight ${
-                        compact ? 'text-xl' : 'text-3xl'
-                      }`}
-                      style={{ color: SM_ORANGE_DARK }}
-                    >
-                      Table {tb.number}
-                    </p>
-                    <p
-                      className={`font-bold leading-snug mt-1 ${
-                        compact ? 'text-[11px] px-1' : 'text-base sm:text-lg max-w-[280px]'
-                      }`}
-                      style={{ color: '#9a3412' }}
-                    >
-                      {phrase || 'Scannez pour commander votre boisson'}
-                    </p>
-
-                    <div
-                      className={`mt-2 rounded-xl bg-white border border-orange-200 shadow-sm ${
-                        compact ? 'p-1.5' : 'p-3'
-                      }`}
-                    >
-                      <img
-                        src={qr}
-                        alt={`QR table ${tb.number}`}
-                        width={qrSize}
-                        height={qrSize}
-                        className={compact ? 'w-[38mm] h-[38mm] max-w-full' : 'w-56 h-56 print:w-[70mm] print:h-[70mm]'}
-                        style={{ imageRendering: 'pixelated' }}
-                      />
-                    </div>
-
-                    <div
-                      className={`mt-2 w-full font-bold text-white flex items-center justify-center gap-1 ${
-                        compact ? 'text-[9px] py-1.5 rounded-lg' : 'text-xs py-2.5 rounded-xl'
-                      }`}
-                      style={{ background: SM_ORANGE }}
-                    >
-                      <QrCode size={compact ? 10 : 14} />
-                      SCANNEZ CE QR CODE
-                    </div>
-                    <p className={`mt-1 opacity-70 ${compact ? 'text-[8px]' : 'text-[10px]'}`}>
-                      sans télécharger d&apos;application
-                    </p>
-
-                    <div
-                      className={`w-full grid grid-cols-3 gap-1 mt-2 ${compact ? 'text-[7px]' : 'text-[9px]'}`}
-                    >
-                      {['Menu', 'Commande', 'Service'].map((lab) => (
-                        <span
-                          key={lab}
-                          className="rounded-md border border-orange-200 bg-white py-0.5 font-semibold"
-                        >
-                          {lab}
-                        </span>
-                      ))}
-                    </div>
-
-                    <p
-                      className={`mt-2 font-semibold ${compact ? 'text-[8px]' : 'text-[11px]'}`}
-                      style={{ color: SM_ORANGE_DARK }}
-                    >
-                      On est ensemble chez {(estName || 'nous').slice(0, compact ? 18 : 28)} !
-                    </p>
-                  </div>
-
+            const qr = qrImageUrl(url, { ...cfg, color: '0a0a0a', bg: 'ffffff' }, 280);
+            return (
+              <div key={tb.id} className="space-y-2">
+                <PlacematCard
+                  estName={estName}
+                  logoUrl={logoUrl}
+                  tableNumber={tb.number}
+                  qrSrc={qr}
+                  phrase={phrase}
+                  theme={theme}
+                />
+                <div className="print:hidden flex justify-end">
                   <button
                     type="button"
-                    className="print:hidden text-xs py-1.5 w-full underline opacity-60"
-                    onClick={() => void downloadPng(tb.number)}
+                    disabled={exporting}
+                    className="text-xs text-amber-400 underline"
+                    onClick={() => {
+                      void (async () => {
+                        setExporting(true);
+                        try {
+                          await exportPlacematPng({
+                            estName,
+                            logoUrl,
+                            tableNumber: tb.number,
+                            phrase,
+                            qrSrc: qrImageUrl(url, { ...cfg, color: '0a0a0a', bg: 'ffffff' }, 512),
+                            theme,
+                            fileName: `GESMAK-nappe-T${tb.number}.png`,
+                          });
+                          setExportMsg(`PNG table ${tb.number} OK`);
+                        } catch (e) {
+                          setExportMsg(e instanceof Error ? e.message : 'Erreur');
+                        } finally {
+                          setExporting(false);
+                        }
+                      })();
+                    }}
                   >
-                    PNG
+                    PNG HD cette table
                   </button>
-                </article>
-              );
-            }
-
-            /* Autres modèles — carte simple */
-            return (
-              <article
-                key={tb.id}
-                className="qr-print-card rounded-2xl border border-stone-700 overflow-hidden print:break-inside-avoid"
-                style={{ background: tpl.bg, color: tpl.text }}
-              >
-                <div className={`h-2 bg-gradient-to-r ${tpl.frame}`} />
-                <div className={`flex flex-col items-center text-center ${compact ? 'p-3' : 'p-5'} gap-1`}>
-                  <p className="text-xs font-semibold opacity-70">{estName}</p>
-                  <p className="text-2xl font-black" style={{ color: tpl.accent }}>
-                    Table {tb.number}
-                  </p>
-                  <p className="text-sm font-bold max-w-[220px]">{phrase}</p>
-                  <div className="bg-white p-2 rounded-xl my-1">
-                    <img src={qr} alt="" className={compact ? 'w-32 h-32' : 'w-48 h-48'} />
-                  </div>
-                  <p className="text-[10px] opacity-50 flex items-center gap-1">
-                    <QrCode size={12} /> Scannez pour commander
-                  </p>
                 </div>
-              </article>
+              </div>
             );
           })}
         </div>
@@ -510,40 +689,28 @@ export default function PrintTableQR() {
 
       <style>{`
         @media print {
-          @page { size: A4; margin: 8mm; }
+          @page { size: A4 landscape; margin: 6mm; }
+          html, body {
+            background: #000 !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
           body * { visibility: hidden !important; }
           #qr-print-area, #qr-print-area * { visibility: visible !important; }
           #qr-print-area {
-            position: absolute;
-            left: 0; top: 0;
-            width: 100%;
-            padding: 0 !important;
+            position: absolute; left: 0; top: 0; width: 100%;
+            padding: 0 !important; display: block !important;
           }
-          #qr-print-area[data-density="4"] {
-            display: grid !important;
-            grid-template-columns: 1fr 1fr !important;
-            grid-auto-rows: auto;
-            gap: 4mm !important;
+          #qr-print-area .qr-nappe {
+            break-after: page; page-break-after: always;
+            width: 100% !important; height: 185mm !important;
+            max-height: 185mm !important; aspect-ratio: auto !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            box-shadow: none !important;
           }
-          #qr-print-area[data-density="4"] .qr-print-card {
-            break-inside: avoid;
-            page-break-inside: avoid;
-            height: 128mm;
-            max-height: 128mm;
-            overflow: hidden;
-          }
-          #qr-print-area[data-density="1"] {
-            display: grid !important;
-            grid-template-columns: 1fr !important;
-          }
-          #qr-print-area[data-density="1"] .qr-print-card {
-            break-after: page;
-            page-break-after: always;
-            min-height: 270mm;
-          }
-          #qr-print-area[data-density="1"] .qr-print-card:last-child {
-            break-after: auto;
-            page-break-after: auto;
+          #qr-print-area .qr-nappe:last-child {
+            break-after: auto; page-break-after: auto;
           }
           .print\\:hidden { display: none !important; }
         }

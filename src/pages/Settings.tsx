@@ -12,6 +12,7 @@ import {
   disableBiometric,
 } from '@/lib/biometric';
 import { supabase } from '@/lib/supabase';
+import { uploadVitrineImage } from '@/lib/publicMedia';
 import { orderSoundEnabled, setOrderSoundEnabled } from '@/lib/orderAlerts';
 import { registerPushToken, isPushConfigured } from '@/lib/push';
 import { seedDefaultStockForEstablishment } from '@/lib/seedDefaultStock';
@@ -65,6 +66,8 @@ export default function SettingsPage() {
   const [bioErr, setBioErr] = useState<string | null>(null);
   const [profileForm, setProfileForm] = useState({ full_name: '', avatar_url: '' });
   const [form, setForm] = useState({ name: '', type: 'maquis', address: '', phone: '', logo_url: '', owner_email: '', owner_phone: '' });
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [logoMsg, setLogoMsg] = useState<string | null>(null);
   const [gpsLoading, setGpsLoading] = useState(false);
   const [gpsMsg, setGpsMsg] = useState<string | null>(null);
   const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number; at?: string } | null>(null);
@@ -865,23 +868,90 @@ async function saveProfile() {
 
           {(est || canManageEst) && (
             <div className="space-y-3">
-              <div className="flex items-center gap-4 mb-2">
-                <div className="w-16 h-16 rounded-xl bg-stone-700 flex items-center justify-center overflow-hidden shrink-0">
-                  {form.logo_url ? (
-                    <img src={form.logo_url} alt="Logo" className="w-full h-full object-cover" />
-                  ) : (
-                    <Building2 size={28} className="text-stone-400" />
-                  )}
-                </div>
-                <div className="flex-1">
-                  <label className="label flex items-center gap-1"><Camera size={14} /> Logo / Photo (URL)</label>
-                  <input
-                    value={form.logo_url}
-                    onChange={(e) => setForm({ ...form, logo_url: e.target.value })}
-                    placeholder="https://..."
-                    className="input-field"
-                    disabled={!canManageEst}
-                  />
+              <div className="mb-2">
+                <p className="label flex items-center gap-1 mb-2"><Camera size={14} /> Logo / Photo de l&apos;établissement</p>
+                <div className="flex items-center gap-4">
+                  <label
+                    className={`relative w-20 h-20 rounded-xl bg-stone-700 flex items-center justify-center overflow-hidden shrink-0 border-2 border-dashed border-stone-500 ${
+                      canManageEst ? 'cursor-pointer hover:border-amber-500 active:scale-95 transition' : 'opacity-60'
+                    }`}
+                    title={canManageEst ? 'Appuyer pour choisir une photo' : undefined}
+                  >
+                    {logoUploading ? (
+                      <Loader2 className="animate-spin text-amber-400" size={28} />
+                    ) : form.logo_url ? (
+                      <img src={form.logo_url} alt="Logo" className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="flex flex-col items-center gap-0.5 text-stone-400">
+                        <Camera size={22} />
+                        <span className="text-[9px]">Ajouter</span>
+                      </div>
+                    )}
+                    {canManageEst && (
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        className="absolute inset-0 opacity-0 cursor-pointer"
+                        disabled={logoUploading}
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          e.target.value = '';
+                          if (!file || !canManageEst) return;
+                          setLogoUploading(true);
+                          setLogoMsg(null);
+                          setError(null);
+                          try {
+                            const estIdForUpload = est?.id || activeEstablishment?.id;
+                            if (estIdForUpload) {
+                              const { url, via } = await uploadVitrineImage(estIdForUpload, file, 'logo');
+                              setForm((f) => ({ ...f, logo_url: url }));
+                              setLogoMsg(via === 'storage' ? 'Logo enregistré' : 'Logo prêt (sera sauvé avec le formulaire)');
+                              // Persister tout de suite si établissement existant
+                              const { error: upErr } = await supabase
+                                .from('establishments')
+                                .update({ logo_url: url })
+                                .eq('id', estIdForUpload);
+                              if (upErr) setLogoMsg('Logo chargé — pensez à Enregistrer');
+                              else {
+                                setLogoMsg('Logo mis à jour');
+                                void refresh?.();
+                              }
+                            } else {
+                              // Création : aperçu local en data-URL compressée
+                              const { url } = await uploadVitrineImage('pending', file, 'logo');
+                              setForm((f) => ({ ...f, logo_url: url }));
+                              setLogoMsg('Logo prêt — créez l\'établissement pour finaliser');
+                            }
+                          } catch (err: unknown) {
+                            setError(err instanceof Error ? err.message : 'Échec du chargement du logo');
+                          } finally {
+                            setLogoUploading(false);
+                          }
+                        }}
+                      />
+                    )}
+                  </label>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-stone-300">
+                      {canManageEst
+                        ? 'Appuyez sur l\'image pour prendre ou choisir une photo (galerie / appareil photo).'
+                        : 'Seul le propriétaire peut modifier le logo.'}
+                    </p>
+                    {logoMsg && <p className="text-xs text-emerald-400 mt-1">{logoMsg}</p>}
+                    {form.logo_url && canManageEst && (
+                      <button
+                        type="button"
+                        className="text-xs text-stone-400 underline mt-1"
+                        onClick={() => {
+                          setForm((f) => ({ ...f, logo_url: '' }));
+                          setLogoMsg(null);
+                        }}
+                      >
+                        Retirer le logo
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
               <div>

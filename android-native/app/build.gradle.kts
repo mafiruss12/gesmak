@@ -11,24 +11,32 @@ android {
         applicationId = "com.gesmak.app"
         minSdk = 24
         targetSdk = 34
-        versionCode = 104
-        versionName = "2.0.4-native"
+        versionCode = 106
+        versionName = "2.0.6-native"
                 buildConfigField("String", "SUPABASE_URL", "\"https://ycoaxbgxstxondxxnhhf.supabase.co\"")
                 buildConfigField("String", "SUPABASE_ANON_KEY", "\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inljb2F4Ymd4c3R4b25keHhuaGhmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU2MTg5MTgsImV4cCI6MjEwMTE5NDkxOH0.iSPqcC8X1BXlgVYfhtFBY4QFq9UwiMycSisfhkNxV80\"")
         buildConfigField("String", "WEB_FALLBACK", "\"https://gesmak.vercel.app\"")
     }
 
+    signingConfigs {
+        create("gesmak") {
+            storeFile = file("../keystore/gesmak-update.jks")
+            storePassword = "gesmakupdate"
+            keyAlias = "gesmak"
+            keyPassword = "gesmakupdate"
+        }
+    }
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("gesmak")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
         }
         debug {
-            // applicationIdSuffix = ".native"
-            // versionNameSuffix = "-native"
+            signingConfig = signingConfigs.getByName("gesmak")
         }
     }
     compileOptions {
