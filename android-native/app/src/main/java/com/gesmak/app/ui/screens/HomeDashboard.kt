@@ -46,6 +46,9 @@ fun HomeDashboard(
     onSelectEst: (String) -> Unit,
     onRefresh: () -> Unit,
     onLogout: () -> Unit,
+    updateLabel: String? = null,
+    updateBusy: Boolean = false,
+    onUpdateClick: (() -> Unit)? = null,
 ) {
     val amber = Color(0xFFF59E0B)
     val fcfa = NumberFormat.getNumberInstance(Locale.FRANCE)
@@ -69,6 +72,23 @@ fun HomeDashboard(
                 color = Color(0xFFFBBF24),
                 fontSize = 12.sp,
             )
+        }
+        if (updateLabel != null && onUpdateClick != null) {
+            Button(
+                onClick = onUpdateClick,
+                enabled = !updateBusy,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF14532D),
+                    contentColor = Color(0xFFBBF7D0),
+                ),
+                shape = RoundedCornerShape(12.dp),
+            ) {
+                Text(
+                    if (updateBusy) "Téléchargement…" else updateLabel,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
         }
         Spacer(Modifier.height(16.dp))
         if (establishments.size > 1) {

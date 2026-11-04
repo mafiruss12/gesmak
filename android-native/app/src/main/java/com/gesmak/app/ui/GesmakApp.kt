@@ -38,6 +38,8 @@ import com.gesmak.app.data.OfflineQueue
 import com.gesmak.app.data.SessionStore
 import com.gesmak.app.data.SupabaseApi
 import com.gesmak.app.data.SupabaseAuth
+import com.gesmak.app.data.UpdateChecker
+import com.gesmak.app.data.RemoteVersion
 import com.gesmak.app.ui.screens.ArrivalScreen
 import com.gesmak.app.ui.screens.EstChoice
 import com.gesmak.app.ui.screens.HomeDashboard
@@ -64,6 +66,7 @@ fun GesmakApp() {
     val store = remember { SessionStore(context.applicationContext) }
     val salesStore = remember { LocalSalesStore(context.applicationContext) }
     val offlineQ = remember { OfflineQueue(context.applicationContext) }
+    val updateChecker = remember { UpdateChecker(context.applicationContext) }
     val auth = remember { SupabaseAuth() }
     val api = remember { SupabaseApi() }
     val session by store.session.collectAsState(initial = null)
@@ -86,6 +89,9 @@ fun GesmakApp() {
     var caWeek by remember { mutableStateOf(0.0) }
     var caMonth by remember { mutableStateOf(0.0) }
     var recentSales by remember { mutableStateOf<List<Triple<String, Double, String>>>(emptyList()) }
+    var remoteUpdate by remember { mutableStateOf<RemoteVersion?>(null) }
+    var updateBusy by remember { mutableStateOf(false) }
+    var updateMsg by remember { mutableStateOf<String?>(null) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -118,6 +124,14 @@ fun GesmakApp() {
         NotifyHelper.ensureChannel(context)
         if (Build.VERSION.SDK_INT >= 33) {
             permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+        withContext(Dispatchers.IO) {
+            try {
+                val remote = updateChecker.check()
+                if (remote != null && updateChecker.isUpdateAvailable(remote)) {
+                    remoteUpdate = remote
+                }
+            } catch (_: Exception) { }
         }
     }
 
@@ -315,6 +329,26 @@ fun GesmakApp() {
                 },
                 onRefresh = { refreshData() },
                 onLogout = { scope.launch { store.clear() } },
+                updateLabel = remoteUpdate?.let { "Mettre à jour · ${it.versionName}" },
+                updateBusy = updateBusy,
+                onUpdateClick = {
+                    val remote = remoteUpdate ?: return@HomeDashboard
+                    scope.launch {
+                        updateBusy = true
+                        updateMsg = null
+                        try {
+                            val file = withContext(Dispatchers.IO) {
+                                updateChecker.downloadApk(remote.apkUrl)
+                            }
+                            updateChecker.installApk(file)
+                        } catch (e: Exception) {
+                            updateMsg = e.message
+                            dataError = e.message
+                        } finally {
+                            updateBusy = false
+                        }
+                    }
+                },
             )
             1 -> InventoryScreen(
                 mod = pageMod,
