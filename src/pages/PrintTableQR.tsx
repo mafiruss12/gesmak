@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   QrCode, Printer, Loader2, ArrowLeft, LayoutGrid, Download, Image as ImageIcon,
+  UtensilsCrossed, Smile, ThumbsUp, GlassWater, ChefHat,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
@@ -15,7 +16,7 @@ import { EmptyState } from '@/components/ui';
 
 type TableRow = { id: string; number: string; seats?: number; location?: string };
 
-type ThemeId = 'marine_or' | 'marine_sombre' | 'orange_blanc' | 'noir_blanc' | 'minimal';
+type ThemeId = 'maquis_photo' | 'marine_or' | 'orange_noir' | 'noir_or' | 'clair';
 
 type Theme = {
   id: ThemeId;
@@ -26,58 +27,89 @@ type Theme = {
   cream: string;
   ink: string;
   dark: boolean;
+  /** Photos décor (gauche / droite) */
+  foodLeft: string;
+  foodRight: string;
+};
+
+/** Images librement utilisables (Unsplash) — plats & boissons maquis */
+const IMG = {
+  wings:
+    'https://images.unsplash.com/photo-1527477396000-e27163b481c2?auto=format&fit=crop&w=600&q=80',
+  skewers:
+    'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&w=600&q=80',
+  juice:
+    'https://images.unsplash.com/photo-1622597467836-f3285f2131b8?auto=format&fit=crop&w=400&q=80',
+  cocktail:
+    'https://images.unsplash.com/photo-1514362545857-3bc16549766b?auto=format&fit=crop&w=400&q=80',
+  beer:
+    'https://images.unsplash.com/photo-1608270586620-248524c67de9?auto=format&fit=crop&w=400&q=80',
+  grill:
+    'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=600&q=80',
+  palm:
+    'https://images.unsplash.com/photo-1615233500064-caa995e2f9dd?auto=format&fit=crop&w=400&q=60',
 };
 
 const THEMES: Theme[] = [
   {
-    id: 'marine_or',
-    label: 'Noir & or (pro)',
-    desc: 'Présentoir maquis · fond riche',
-    navy: '#0a0a0a',
+    id: 'maquis_photo',
+    label: 'Maquis photo (pro)',
+    desc: 'Fond noir · grillades · boissons',
+    navy: '#050505',
     gold: '#f5c518',
     cream: '#0a0a0a',
     ink: '#ffffff',
     dark: true,
+    foodLeft: IMG.wings,
+    foodRight: IMG.skewers,
   },
   {
-    id: 'marine_sombre',
+    id: 'marine_or',
     label: 'Marine & or',
-    desc: 'Bleu nuit profond · or',
+    desc: 'Bleu nuit · fruits de mer style',
     navy: '#061428',
     gold: '#f5c518',
     cream: '#061428',
     ink: '#ffffff',
     dark: true,
+    foodLeft: IMG.grill,
+    foodRight: IMG.cocktail,
   },
   {
-    id: 'orange_blanc',
+    id: 'orange_noir',
     label: 'Orange & noir',
-    desc: 'Orange GESMAK · fond noir',
-    navy: '#1a0a00',
+    desc: 'GESMAK · bière & grill',
+    navy: '#1a0800',
     gold: '#FF7900',
-    cream: '#120800',
+    cream: '#120500',
     ink: '#ffffff',
     dark: true,
+    foodLeft: IMG.beer,
+    foodRight: IMG.grill,
   },
   {
-    id: 'noir_blanc',
-    label: 'Noir & blanc',
-    desc: 'Élégant · accent orange',
-    navy: '#050505',
-    gold: '#FF7900',
+    id: 'noir_or',
+    label: 'Noir & or classic',
+    desc: 'Élégant · jus & brochettes',
+    navy: '#000000',
+    gold: '#eab308',
     cream: '#0c0c0c',
     ink: '#fafafa',
     dark: true,
+    foodLeft: IMG.juice,
+    foodRight: IMG.skewers,
   },
   {
-    id: 'minimal',
+    id: 'clair',
     label: 'Clair premium',
-    desc: 'Blanc cassé · or',
+    desc: 'Fond clair · accents or',
     navy: '#1c1917',
     gold: '#b45309',
     cream: '#fffbeb',
     ink: '#1c1917',
     dark: false,
+    foodLeft: IMG.wings,
+    foodRight: IMG.juice,
   },
 ];
 
@@ -109,7 +141,6 @@ function roundRect(
   ctx.closePath();
 }
 
-/** PNG HD — design présentoir (fond riche, nom large, badge table). */
 async function exportPlacematPng(opts: {
   estName: string;
   logoUrl: string | null;
@@ -128,148 +159,143 @@ async function exportPlacematPng(opts: {
   if (!ctx) throw new Error('Canvas indisponible');
   const th = opts.theme;
 
-  // Fond dégradé riche
-  const bg = ctx.createRadialGradient(W * 0.5, H * 0.45, 80, W * 0.5, H * 0.5, W * 0.7);
-  bg.addColorStop(0, th.dark ? '#1a1a1a' : '#fff7ed');
-  bg.addColorStop(0.45, th.cream);
-  bg.addColorStop(1, th.navy);
+  // Fond
+  const bg = ctx.createRadialGradient(W / 2, H / 2, 100, W / 2, H / 2, W * 0.65);
+  bg.addColorStop(0, th.dark ? '#1a1a1a' : '#fffbeb');
+  bg.addColorStop(1, th.cream);
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, W, H);
 
-  // Motifs décoratifs (cercles / lueur or)
-  ctx.globalAlpha = 0.12;
-  ctx.fillStyle = th.gold;
-  ctx.beginPath();
-  ctx.arc(W * 0.15, H * 0.5, W * 0.18, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(W * 0.88, H * 0.35, W * 0.14, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.globalAlpha = 1;
-
-  // Cadre or double
-  ctx.strokeStyle = th.gold;
-  ctx.lineWidth = 14;
-  roundRect(ctx, 48, 48, W - 96, H - 96, 48);
-  ctx.stroke();
-  ctx.lineWidth = 4;
-  ctx.globalAlpha = 0.5;
-  roundRect(ctx, 72, 72, W - 144, H - 144, 36);
-  ctx.stroke();
-  ctx.globalAlpha = 1;
-
-  // Feuilles / accents coins (formes)
-  ctx.fillStyle = th.dark ? 'rgba(34,197,94,0.15)' : 'rgba(180,83,9,0.12)';
-  for (const [fx, fy] of [
-    [0, 0],
-    [W, 0],
-    [0, H],
-    [W, H],
-  ] as [number, number][]) {
-    ctx.beginPath();
-    ctx.ellipse(fx, fy, W * 0.2, H * 0.18, 0, 0, Math.PI * 2);
-    ctx.fill();
+  // Photos plats gauche / droite
+  try {
+    const left = await loadImage(th.foodLeft);
+    const right = await loadImage(th.foodRight);
+    ctx.save();
+    ctx.globalAlpha = 0.95;
+    // gauche bas
+    roundRect(ctx, W * 0.04, H * 0.32, W * 0.28, H * 0.42, 40);
+    ctx.clip();
+    ctx.drawImage(left, W * 0.02, H * 0.28, W * 0.32, H * 0.5);
+    ctx.restore();
+    ctx.save();
+    roundRect(ctx, W * 0.68, H * 0.28, W * 0.28, H * 0.45, 40);
+    ctx.clip();
+    ctx.drawImage(right, W * 0.66, H * 0.24, W * 0.32, H * 0.52);
+    ctx.restore();
+    // vinylettes or
+    ctx.strokeStyle = th.gold;
+    ctx.lineWidth = 6;
+    ctx.globalAlpha = 0.7;
+    roundRect(ctx, W * 0.04, H * 0.32, W * 0.28, H * 0.42, 40);
+    ctx.stroke();
+    roundRect(ctx, W * 0.68, H * 0.28, W * 0.28, H * 0.45, 40);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  } catch {
+    /* photos optionnelles */
   }
+
+  // Lueurs feuilles (cercles verts)
+  ctx.fillStyle = 'rgba(34,197,94,0.12)';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, W * 0.25, H * 0.3, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(W, H, W * 0.28, H * 0.28, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Cadre or
+  ctx.strokeStyle = th.gold;
+  ctx.lineWidth = 16;
+  roundRect(ctx, 36, 36, W - 72, H - 72, 32);
+  ctx.stroke();
 
   const qrImg = await loadImage(opts.qrSrc);
-  const cornerSize = Math.min(W, H) * 0.2;
+  const cs = Math.min(W, H) * 0.18;
   const corners: [number, number][] = [
-    [90, 90],
-    [W - 90 - cornerSize, 90],
-    [90, H - 90 - cornerSize],
-    [W - 90 - cornerSize, H - 90 - cornerSize],
+    [70, 70],
+    [W - 70 - cs, 70],
+    [70, H - 70 - cs * 1.15],
+    [W - 70 - cs, H - 70 - cs * 1.15],
   ];
   for (const [x, y] of corners) {
-    ctx.fillStyle = '#ffffff';
-    roundRect(ctx, x, y, cornerSize, cornerSize * 1.12, 28);
+    ctx.fillStyle = th.navy;
+    roundRect(ctx, x - 8, y - 8, cs + 16, cs * 1.2, 24);
     ctx.fill();
     ctx.strokeStyle = th.gold;
-    ctx.lineWidth = 8;
+    ctx.lineWidth = 6;
     ctx.stroke();
-    const m = cornerSize * 0.1;
-    ctx.drawImage(qrImg, x + m, y + m, cornerSize - m * 2, cornerSize - m * 2);
-    ctx.fillStyle = th.navy;
-    ctx.fillRect(x, y + cornerSize * 0.92, cornerSize, cornerSize * 0.2);
+    ctx.fillStyle = '#fff';
+    roundRect(ctx, x, y, cs, cs, 12);
+    ctx.fill();
+    ctx.drawImage(qrImg, x + 10, y + 10, cs - 20, cs - 20);
     ctx.fillStyle = th.gold;
-    ctx.font = `bold ${Math.round(cornerSize * 0.09)}px sans-serif`;
+    ctx.font = `bold ${Math.round(cs * 0.1)}px sans-serif`;
     ctx.textAlign = 'center';
-    ctx.fillText('Scannez ici', x + cornerSize / 2, y + cornerSize * 1.06);
+    ctx.fillText('Scannez ici', x + cs / 2, y + cs + 28);
   }
 
-  // Centre — logo grand
   ctx.textAlign = 'center';
+
+  // Logo
   if (opts.logoUrl) {
     try {
       const logo = await loadImage(opts.logoUrl);
-      const ls = Math.round(H * 0.16);
-      ctx.save();
+      const ls = H * 0.14;
       ctx.beginPath();
-      ctx.arc(W / 2, H * 0.28, ls / 2 + 12, 0, Math.PI * 2);
+      ctx.arc(W / 2, H * 0.26, ls / 2 + 10, 0, Math.PI * 2);
       ctx.fillStyle = th.gold;
       ctx.fill();
+      ctx.save();
       ctx.beginPath();
-      ctx.arc(W / 2, H * 0.28, ls / 2, 0, Math.PI * 2);
+      ctx.arc(W / 2, H * 0.26, ls / 2, 0, Math.PI * 2);
       ctx.clip();
-      ctx.drawImage(logo, W / 2 - ls / 2, H * 0.28 - ls / 2, ls, ls);
+      ctx.drawImage(logo, W / 2 - ls / 2, H * 0.26 - ls / 2, ls, ls);
       ctx.restore();
     } catch {
       /* */
     }
   }
 
-  // Nom établissement — TRÈS grand
+  // Nom grand
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.font = `bold ${Math.round(W * 0.065)}px Impact, sans-serif`;
+  const name = (opts.estName || 'MAQUIS').toUpperCase().slice(0, 26);
+  ctx.fillText(name, W / 2 + 4, H * 0.42 + 4);
   ctx.fillStyle = th.gold;
-  ctx.font = `bold ${Math.round(W * 0.07)}px Impact, Haettenschweiler, sans-serif`;
-  const name = (opts.estName || 'ÉTABLISSEMENT').toUpperCase().slice(0, 28);
-  // ombre
-  ctx.fillStyle = 'rgba(0,0,0,0.45)';
-  ctx.fillText(name, W / 2 + 6, H * 0.44 + 6);
-  ctx.fillStyle = th.gold;
-  ctx.fillText(name, W / 2, H * 0.44);
+  ctx.fillText(name, W / 2, H * 0.42);
 
-  // Ruban slogan
-  ctx.fillStyle = th.gold;
-  ctx.globalAlpha = 0.9;
-  roundRect(ctx, W * 0.28, H * 0.47, W * 0.44, 8, 4);
-  ctx.fill();
-  ctx.globalAlpha = 1;
   ctx.fillStyle = th.ink;
-  ctx.font = `italic ${Math.round(W * 0.028)}px Georgia, serif`;
-  ctx.fillText((opts.phrase || 'Bon repas, bonne ambiance !').slice(0, 48), W / 2, H * 0.52);
+  ctx.font = `italic ${Math.round(W * 0.026)}px Georgia, serif`;
+  ctx.fillText((opts.phrase || 'Bon repas, bonne ambiance !').slice(0, 50), W / 2, H * 0.49);
 
-  // Badge TABLE
-  const bw = W * 0.28;
-  const bh = H * 0.18;
+  // Badge table
+  const bw = W * 0.24;
+  const bh = H * 0.14;
   const bx = W / 2 - bw / 2;
-  const by = H * 0.56;
-  // forme bouclier simplifiée
+  const by = H * 0.53;
   ctx.fillStyle = th.gold;
-  roundRect(ctx, bx, by, bw, bh, 28);
+  roundRect(ctx, bx, by, bw, bh, 24);
   ctx.fill();
   ctx.fillStyle = th.navy;
-  ctx.font = `bold ${Math.round(W * 0.028)}px sans-serif`;
-  ctx.fillText('TABLE', W / 2, by + bh * 0.32);
-  ctx.font = `bold ${Math.round(W * 0.09)}px Impact, sans-serif`;
-  const tn = String(opts.tableNumber).padStart(2, '0');
-  ctx.fillText(tn, W / 2, by + bh * 0.78);
+  ctx.font = `bold ${Math.round(W * 0.022)}px sans-serif`;
+  ctx.fillText('TABLE', W / 2, by + bh * 0.35);
+  ctx.font = `bold ${Math.round(W * 0.07)}px Impact, sans-serif`;
+  ctx.fillText(String(opts.tableNumber).padStart(2, '0'), W / 2, by + bh * 0.82);
 
-  // Textes latéraux
+  // Icônes texte
   ctx.fillStyle = th.gold;
   ctx.font = `bold ${Math.round(W * 0.02)}px sans-serif`;
-  ctx.textAlign = 'left';
-  ctx.fillText('★ Savourez', W * 0.68, H * 0.58);
-  ctx.fillText('★ Commandez', W * 0.68, H * 0.63);
-  ctx.fillText('★ Profitez !', W * 0.68, H * 0.68);
+  ctx.fillText('🍽  Savourez    ·    😊  Commandez    ·    👍  Profitez', W / 2, H * 0.74);
 
-  ctx.textAlign = 'center';
-  ctx.font = `italic ${Math.round(W * 0.022)}px Georgia, serif`;
+  ctx.font = `italic ${Math.round(W * 0.02)}px Georgia, serif`;
   ctx.fillStyle = th.ink;
-  ctx.globalAlpha = 0.85;
-  ctx.fillText('Votre satisfaction, notre priorité !', W / 2, H * 0.88);
+  ctx.globalAlpha = 0.9;
+  ctx.fillText('Votre satisfaction, notre priorité !', W / 2, H * 0.82);
   ctx.globalAlpha = 1;
   ctx.fillStyle = th.gold;
   ctx.font = `bold ${Math.round(W * 0.018)}px sans-serif`;
-  ctx.fillText('GESMAK', W / 2, H * 0.93);
+  ctx.fillText((opts.estName || 'GESMAK').slice(0, 30), W / 2, H * 0.88);
 
   const a = document.createElement('a');
   a.download = opts.fileName;
@@ -292,7 +318,7 @@ function PlacematCard({
   phrase: string;
   theme: Theme;
 }) {
-  const { navy, gold, cream, ink, dark } = theme;
+  const { navy, gold, cream, ink, dark, foodLeft, foodRight } = theme;
 
   const Corner = ({ pos }: { pos: 'tl' | 'tr' | 'bl' | 'br' }) => {
     const posCls =
@@ -304,16 +330,15 @@ function PlacematCard({
             ? 'bottom-2 left-2'
             : 'bottom-2 right-2';
     return (
-      <div className={`absolute ${posCls} z-20 w-[22%] max-w-[110px]`}>
+      <div className={`absolute ${posCls} z-30 w-[20%] max-w-[100px]`}>
         <div
-          className="rounded-xl overflow-hidden bg-white shadow-lg"
-          style={{ boxShadow: `0 0 0 2px ${gold}` }}
+          className="rounded-xl overflow-hidden shadow-xl"
+          style={{ background: navy, boxShadow: `0 0 0 2px ${gold}` }}
         >
-          <img src={qrSrc} alt="" className="w-full aspect-square object-contain p-1" />
-          <p
-            className="text-center text-[7px] sm:text-[8px] font-bold py-0.5 leading-tight"
-            style={{ background: navy, color: gold }}
-          >
+          <div className="bg-white m-1 rounded-lg overflow-hidden">
+            <img src={qrSrc} alt="" className="w-full aspect-square object-contain" />
+          </div>
+          <p className="text-center text-[7px] font-bold pb-1 leading-tight" style={{ color: gold }}>
             Scannez ici
           </p>
         </div>
@@ -326,30 +351,41 @@ function PlacematCard({
       className="qr-print-card qr-nappe relative overflow-hidden print:break-inside-avoid"
       style={{
         background: dark
-          ? `radial-gradient(ellipse at 50% 40%, #1f1f1f 0%, ${cream} 55%, ${navy} 100%)`
-          : `radial-gradient(ellipse at 50% 40%, #fff 0%, ${cream} 70%, #fde68a 100%)`,
+          ? `radial-gradient(ellipse at 50% 45%, #222 0%, ${cream} 55%, ${navy} 100%)`
+          : `radial-gradient(ellipse at 50% 40%, #fff 0%, ${cream} 80%)`,
         color: ink,
-        aspectRatio: '1.35 / 1',
-        minHeight: 300,
-        borderRadius: 20,
+        aspectRatio: '1.4 / 1',
+        minHeight: 320,
+        borderRadius: 18,
         border: `3px solid ${gold}`,
         WebkitPrintColorAdjust: 'exact',
         printColorAdjust: 'exact',
-        boxShadow: dark ? '0 12px 40px rgba(0,0,0,0.5)' : '0 8px 24px rgba(0,0,0,0.12)',
       }}
     >
-      {/* lueurs décoratives */}
+      {/* Photos plats */}
+      <img
+        src={foodLeft}
+        alt=""
+        className="absolute left-0 top-[28%] w-[30%] h-[45%] object-cover rounded-r-3xl opacity-90 z-[5] pointer-events-none"
+        style={{ boxShadow: `4px 0 20px rgba(0,0,0,0.4)` }}
+        crossOrigin="anonymous"
+      />
+      <img
+        src={foodRight}
+        alt=""
+        className="absolute right-0 top-[24%] w-[30%] h-[48%] object-cover rounded-l-3xl opacity-90 z-[5] pointer-events-none"
+        style={{ boxShadow: `-4px 0 20px rgba(0,0,0,0.4)` }}
+        crossOrigin="anonymous"
+      />
+
+      {/* Feuilles décor */}
       <div
-        className="absolute -left-8 top-1/3 w-32 h-32 rounded-full opacity-20 pointer-events-none"
-        style={{ background: gold }}
+        className="absolute -top-4 -left-4 w-24 h-24 rounded-full opacity-25 z-[1] pointer-events-none"
+        style={{ background: 'radial-gradient(circle, #22c55e 0%, transparent 70%)' }}
       />
       <div
-        className="absolute -right-6 bottom-1/4 w-28 h-28 rounded-full opacity-15 pointer-events-none"
-        style={{ background: gold }}
-      />
-      <div
-        className="absolute inset-2 rounded-[16px] pointer-events-none opacity-40"
-        style={{ border: `1px solid ${gold}` }}
+        className="absolute -bottom-6 -right-4 w-28 h-28 rounded-full opacity-20 z-[1] pointer-events-none"
+        style={{ background: 'radial-gradient(circle, #22c55e 0%, transparent 70%)' }}
       />
 
       <Corner pos="tl" />
@@ -357,70 +393,56 @@ function PlacematCard({
       <Corner pos="bl" />
       <Corner pos="br" />
 
-      {/* Centre pro */}
-      <div className="absolute inset-0 flex flex-col items-center justify-center z-10 px-16 sm:px-20 text-center">
+      <div className="absolute inset-0 flex flex-col items-center justify-center z-20 px-[32%] text-center">
+        <div className="mb-0.5" style={{ color: gold }}>
+          <ChefHat size={28} className="mx-auto drop-shadow" />
+        </div>
         {logoUrl ? (
-          <div
-            className="rounded-full p-1 mb-1 shadow-lg"
-            style={{ background: gold }}
-          >
+          <div className="rounded-full p-[3px] mb-1" style={{ background: gold }}>
             <img
               src={logoUrl}
               alt=""
-              className="w-16 h-16 sm:w-20 sm:h-20 object-cover rounded-full"
+              className="w-14 h-14 sm:w-16 sm:h-16 object-cover rounded-full"
               crossOrigin="anonymous"
             />
           </div>
-        ) : (
-          <div
-            className="w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center mb-1 border-2"
-            style={{ borderColor: gold, color: gold, background: 'rgba(0,0,0,0.3)' }}
-          >
-            <QrCode size={28} />
-          </div>
-        )}
+        ) : null}
 
         <h2
-          className="text-2xl sm:text-3xl md:text-4xl font-black leading-none tracking-tight uppercase max-w-[78%]"
+          className="text-xl sm:text-3xl font-black leading-none uppercase tracking-tight max-w-full"
           style={{
             color: gold,
-            textShadow: dark ? '0 3px 0 rgba(0,0,0,0.6), 0 0 24px rgba(245,197,24,0.25)' : 'none',
+            textShadow: dark ? '0 2px 8px rgba(0,0,0,0.8)' : 'none',
             fontFamily: 'Impact, Haettenschweiler, Arial Black, sans-serif',
           }}
         >
-          {estName || 'Mon établissement'}
+          {estName || 'Mon Maquis'}
         </h2>
 
-        <div className="w-24 h-1 rounded-full my-1.5" style={{ background: gold }} />
-
-        <p
-          className="text-xs sm:text-sm italic max-w-[70%] opacity-95"
-          style={{ fontFamily: 'Georgia, serif' }}
-        >
+        <p className="text-[11px] sm:text-xs italic mt-1 opacity-95" style={{ fontFamily: 'Georgia, serif' }}>
           {phrase || 'Bon repas, bonne ambiance !'}
         </p>
 
-        {/* Badge table type bouclier */}
         <div
-          className="mt-2 px-6 py-2 rounded-2xl min-w-[7rem] shadow-lg"
-          style={{
-            background: `linear-gradient(180deg, ${gold} 0%, #d4a017 100%)`,
-            color: navy,
-          }}
+          className="mt-2 px-5 py-1.5 rounded-2xl shadow-lg"
+          style={{ background: `linear-gradient(180deg, ${gold}, #c9a227)`, color: navy }}
         >
-          <p className="text-[10px] font-black tracking-widest opacity-80">TABLE</p>
-          <p
-            className="text-3xl sm:text-4xl font-black leading-none"
-            style={{ fontFamily: 'Impact, sans-serif' }}
-          >
+          <p className="text-[9px] font-black tracking-widest">TABLE</p>
+          <p className="text-2xl sm:text-3xl font-black leading-none" style={{ fontFamily: 'Impact, sans-serif' }}>
             {String(tableNumber).padStart(2, '0')}
           </p>
         </div>
 
-        <div className="mt-2 flex flex-col gap-0.5 text-[10px] font-semibold" style={{ color: gold }}>
-          <span>★ Savourez · Commandez · Profitez !</span>
+        <div className="mt-2 flex items-center justify-center gap-2 text-[9px] sm:text-[10px] font-semibold" style={{ color: gold }}>
+          <span className="flex items-center gap-0.5"><UtensilsCrossed size={12} /> Savourez</span>
+          <span className="opacity-40">|</span>
+          <span className="flex items-center gap-0.5"><Smile size={12} /> Commandez</span>
+          <span className="opacity-40">|</span>
+          <span className="flex items-center gap-0.5"><ThumbsUp size={12} /> Profitez</span>
         </div>
-        <p className="text-[9px] mt-1 opacity-70 italic">Votre satisfaction, notre priorité !</p>
+        <p className="text-[9px] mt-1 opacity-70 italic flex items-center gap-1 justify-center">
+          <GlassWater size={11} style={{ color: gold }} /> Votre satisfaction, notre priorité !
+        </p>
       </div>
     </article>
   );
@@ -435,7 +457,7 @@ export default function PrintTableQR() {
   const [estName, setEstName] = useState('');
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [qrCfg, setQrCfg] = useState<QrConfig>({});
-  const [themeId, setThemeId] = useState<ThemeId>('marine_or');
+  const [themeId, setThemeId] = useState<ThemeId>('maquis_photo');
   const [selected, setSelected] = useState<string | 'all'>('all');
   const [phrase, setPhrase] = useState('Bon repas, bonne ambiance !');
   const [exporting, setExporting] = useState(false);
@@ -512,7 +534,7 @@ export default function PrintTableQR() {
           theme,
           fileName: `GESMAK-nappe-${(estName || 'table').replace(/\s+/g, '-')}-T${tb.number}.png`,
         });
-        await new Promise((r) => setTimeout(r, 400));
+        await new Promise((r) => setTimeout(r, 500));
       }
       setExportMsg(`PNG HD téléchargé (${visibleTables.length})`);
     } catch (e) {
@@ -551,7 +573,7 @@ export default function PrintTableQR() {
             <Printer className="text-amber-400" /> Nappes QR tables
           </h1>
           <p className="text-sm text-stone-400 mt-1">
-            Style présentoir pro · logo & nom grands · PNG HD / PDF
+            Photos plats & boissons · icônes · style présentoir maquis
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -564,11 +586,7 @@ export default function PrintTableQR() {
             {exporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
             PNG HD
           </button>
-          <button
-            type="button"
-            onClick={() => window.print()}
-            className="btn-primary flex items-center gap-2 text-sm"
-          >
+          <button type="button" onClick={() => window.print()} className="btn-primary flex items-center gap-2 text-sm">
             <Printer size={16} /> PDF / Imprimer
           </button>
         </div>
@@ -581,21 +599,20 @@ export default function PrintTableQR() {
       )}
 
       <div className="rounded-2xl border border-stone-800 bg-stone-900/60 p-4 space-y-3 print:hidden">
-        <p className="text-xs font-semibold text-stone-400 uppercase">Couleurs / design</p>
+        <p className="text-xs font-semibold text-stone-400 uppercase">Thèmes arrière-plan</p>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
           {THEMES.map((x) => (
             <button
               key={x.id}
               type="button"
               onClick={() => setThemeId(x.id)}
-              className={`rounded-xl border p-3 text-left ${
+              className={`rounded-xl border p-2 text-left overflow-hidden ${
                 themeId === x.id ? 'border-amber-500 bg-amber-500/15' : 'border-stone-800 bg-stone-950'
               }`}
             >
-              <div className="flex gap-1 mb-2 h-2 rounded-full overflow-hidden">
-                <span className="flex-1" style={{ background: x.navy }} />
-                <span className="flex-1" style={{ background: x.gold }} />
-                <span className="flex-1" style={{ background: x.cream, border: '1px solid #444' }} />
+              <div className="flex gap-0.5 h-10 rounded-lg overflow-hidden mb-1.5">
+                <img src={x.foodLeft} alt="" className="w-1/2 object-cover" />
+                <img src={x.foodRight} alt="" className="w-1/2 object-cover" />
               </div>
               <p className="text-sm font-semibold text-stone-100">{x.label}</p>
               <p className="text-[10px] text-stone-500">{x.desc}</p>
@@ -689,9 +706,8 @@ export default function PrintTableQR() {
 
       <style>{`
         @media print {
-          @page { size: A4 landscape; margin: 6mm; }
+          @page { size: A4 landscape; margin: 5mm; }
           html, body {
-            background: #000 !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
@@ -703,11 +719,10 @@ export default function PrintTableQR() {
           }
           #qr-print-area .qr-nappe {
             break-after: page; page-break-after: always;
-            width: 100% !important; height: 185mm !important;
-            max-height: 185mm !important; aspect-ratio: auto !important;
+            width: 100% !important; height: 188mm !important;
+            max-height: 188mm !important; aspect-ratio: auto !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
-            box-shadow: none !important;
           }
           #qr-print-area .qr-nappe:last-child {
             break-after: auto; page-break-after: auto;
