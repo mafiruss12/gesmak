@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   QrCode, Printer, Loader2, ArrowLeft, LayoutGrid, Download, Image as ImageIcon,
@@ -31,51 +31,51 @@ type Theme = {
 const THEMES: Theme[] = [
   {
     id: 'marine_or',
-    label: 'Marine & or',
-    desc: 'Bleu · or · blanc (référence resto)',
-    navy: '#0b1f4a',
+    label: 'Noir & or (pro)',
+    desc: 'Présentoir maquis · fond riche',
+    navy: '#0a0a0a',
     gold: '#f5c518',
-    cream: '#ffffff',
-    ink: '#0b1f4a',
-    dark: false,
+    cream: '#0a0a0a',
+    ink: '#ffffff',
+    dark: true,
   },
   {
     id: 'marine_sombre',
-    label: 'Marine sombre',
-    desc: 'Fond bleu nuit · or',
-    navy: '#061228',
+    label: 'Marine & or',
+    desc: 'Bleu nuit profond · or',
+    navy: '#061428',
     gold: '#f5c518',
-    cream: '#0a1628',
-    ink: '#f8fafc',
+    cream: '#061428',
+    ink: '#ffffff',
     dark: true,
   },
   {
     id: 'orange_blanc',
-    label: 'Orange & blanc',
-    desc: 'Orange GESMAK · blanc · noir',
-    navy: '#c2410c',
+    label: 'Orange & noir',
+    desc: 'Orange GESMAK · fond noir',
+    navy: '#1a0a00',
     gold: '#FF7900',
-    cream: '#ffffff',
-    ink: '#1c1917',
-    dark: false,
+    cream: '#120800',
+    ink: '#ffffff',
+    dark: true,
   },
   {
     id: 'noir_blanc',
     label: 'Noir & blanc',
-    desc: 'Noir · blanc · accent orange',
-    navy: '#0c0a09',
+    desc: 'Élégant · accent orange',
+    navy: '#050505',
     gold: '#FF7900',
-    cream: '#fafaf9',
-    ink: '#0c0a09',
-    dark: false,
+    cream: '#0c0c0c',
+    ink: '#fafafa',
+    dark: true,
   },
   {
     id: 'minimal',
-    label: 'Minimal',
-    desc: 'Blanc simple · QR centré',
-    navy: '#44403c',
-    gold: '#292524',
-    cream: '#ffffff',
+    label: 'Clair premium',
+    desc: 'Blanc cassé · or',
+    navy: '#1c1917',
+    gold: '#b45309',
+    cream: '#fffbeb',
     ink: '#1c1917',
     dark: false,
   },
@@ -89,152 +89,6 @@ function loadImage(src: string): Promise<HTMLImageElement> {
     img.onerror = () => reject(new Error('Image'));
     img.src = src;
   });
-}
-
-/** Export PNG haute résolution (~A4 paysage 300 dpi zone utile). */
-async function exportPlacematPng(opts: {
-  estName: string;
-  logoUrl: string | null;
-  tableNumber: string;
-  phrase: string;
-  qrSrc: string;
-  theme: Theme;
-  fileName: string;
-}) {
-  const W = 3508;
-  const H = 2480;
-  const canvas = document.createElement('canvas');
-  canvas.width = W;
-  canvas.height = H;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Canvas indisponible');
-
-  const { theme: th, estName, tableNumber, phrase } = opts;
-  const pad = 40;
-  const r = 80;
-
-  // Fond
-  ctx.fillStyle = th.cream;
-  roundRect(ctx, pad, pad, W - pad * 2, H - pad * 2, r);
-  ctx.fill();
-  ctx.strokeStyle = th.navy;
-  ctx.lineWidth = 18;
-  ctx.stroke();
-
-  // Bandes haut / bas
-  ctx.fillStyle = th.navy;
-  roundRect(ctx, W * 0.22, pad, W * 0.56, 120, 40);
-  ctx.fill();
-  roundRect(ctx, W * 0.18, H - pad - 140, W * 0.64, 140, 40);
-  ctx.fill();
-
-  // Bandes latérales or
-  const gradL = ctx.createLinearGradient(0, 0, 0, H);
-  gradL.addColorStop(0, th.gold);
-  gradL.addColorStop(0.5, th.navy);
-  gradL.addColorStop(1, th.gold);
-  ctx.fillStyle = gradL;
-  ctx.fillRect(pad + 8, H * 0.2, 28, H * 0.6);
-  ctx.fillRect(W - pad - 36, H * 0.2, 28, H * 0.6);
-
-  // Coins QR
-  const qrImg = await loadImage(opts.qrSrc);
-  const cornerSize = Math.min(W, H) * 0.22;
-  const corners: [number, number][] = [
-    [pad + 20, pad + 20],
-    [W - pad - cornerSize - 20, pad + 20],
-    [pad + 20, H - pad - cornerSize - 20],
-    [W - pad - cornerSize - 20, H - pad - cornerSize - 20],
-  ];
-  for (const [x, y] of corners) {
-    ctx.fillStyle = th.navy;
-    roundRect(ctx, x, y, cornerSize, cornerSize, 36);
-    ctx.fill();
-    ctx.strokeStyle = th.gold;
-    ctx.lineWidth = 10;
-    ctx.stroke();
-    const qi = cornerSize * 0.12;
-    ctx.fillStyle = '#ffffff';
-    roundRect(ctx, x + qi, y + qi, cornerSize - qi * 2, cornerSize - qi * 2.4, 16);
-    ctx.fill();
-    ctx.drawImage(qrImg, x + qi + 12, y + qi + 12, cornerSize - qi * 2 - 24, cornerSize - qi * 2 - 40);
-    ctx.fillStyle = th.gold;
-    ctx.font = `bold ${Math.round(cornerSize * 0.08)}px sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.fillText('Scannez ici', x + cornerSize / 2, y + cornerSize - qi * 0.6);
-  }
-
-  // Centre
-  ctx.textAlign = 'center';
-  ctx.fillStyle = th.gold;
-  ctx.font = `bold ${Math.round(W * 0.022)}px sans-serif`;
-  ctx.fillText('Scannez pour commander votre menu !', W / 2, H * 0.28);
-
-  if (opts.logoUrl) {
-    try {
-      const logo = await loadImage(opts.logoUrl);
-      const ls = Math.round(H * 0.12);
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(W / 2, H * 0.36, ls / 2, 0, Math.PI * 2);
-      ctx.closePath();
-      ctx.clip();
-      ctx.drawImage(logo, W / 2 - ls / 2, H * 0.36 - ls / 2, ls, ls);
-      ctx.restore();
-      ctx.strokeStyle = th.gold;
-      ctx.lineWidth = 8;
-      ctx.beginPath();
-      ctx.arc(W / 2, H * 0.36, ls / 2, 0, Math.PI * 2);
-      ctx.stroke();
-    } catch {
-      /* logo skip */
-    }
-  }
-
-  ctx.fillStyle = th.ink;
-  ctx.font = `bold ${Math.round(W * 0.045)}px Georgia, serif`;
-  const name = (estName || 'Établissement').slice(0, 36);
-  ctx.fillText(name, W / 2, H * 0.48);
-
-  ctx.fillStyle = th.ink;
-  ctx.globalAlpha = 0.75;
-  ctx.font = `italic ${Math.round(W * 0.02)}px sans-serif`;
-  ctx.fillText((phrase || '').slice(0, 50), W / 2, H * 0.53);
-  ctx.globalAlpha = 1;
-
-  // Badge table
-  const badgeW = W * 0.22;
-  const badgeH = H * 0.12;
-  const bx = W / 2 - badgeW / 2;
-  const by = H * 0.56;
-  ctx.fillStyle = th.navy;
-  roundRect(ctx, bx, by, badgeW, badgeH * 0.35, 12);
-  ctx.fill();
-  ctx.fillStyle = '#fff';
-  ctx.font = `bold ${Math.round(W * 0.016)}px sans-serif`;
-  ctx.fillText('TABLE N°', W / 2, by + badgeH * 0.25);
-  ctx.fillStyle = th.gold;
-  roundRect(ctx, bx, by + badgeH * 0.32, badgeW, badgeH * 0.55, 16);
-  ctx.fill();
-  ctx.fillStyle = th.navy;
-  ctx.font = `bold ${Math.round(W * 0.055)}px sans-serif`;
-  const tn = /^\d+$/.test(String(tableNumber)) ? `T${tableNumber}` : String(tableNumber);
-  ctx.fillText(tn, W / 2, by + badgeH * 0.72);
-
-  ctx.fillStyle = th.ink;
-  ctx.globalAlpha = 0.55;
-  ctx.font = `${Math.round(W * 0.016)}px sans-serif`;
-  ctx.fillText('Cuisine  ·  Boissons  ·  Service', W / 2, H * 0.74);
-  ctx.globalAlpha = 1;
-
-  ctx.fillStyle = th.gold;
-  ctx.font = `bold ${Math.round(W * 0.015)}px sans-serif`;
-  ctx.fillText('Merci de votre visite · GESMAK', W / 2, H - pad - 50);
-
-  const a = document.createElement('a');
-  a.download = opts.fileName;
-  a.href = canvas.toDataURL('image/png', 1.0);
-  a.click();
 }
 
 function roundRect(
@@ -255,6 +109,174 @@ function roundRect(
   ctx.closePath();
 }
 
+/** PNG HD — design présentoir (fond riche, nom large, badge table). */
+async function exportPlacematPng(opts: {
+  estName: string;
+  logoUrl: string | null;
+  tableNumber: string;
+  phrase: string;
+  qrSrc: string;
+  theme: Theme;
+  fileName: string;
+}) {
+  const W = 3508;
+  const H = 2480;
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas indisponible');
+  const th = opts.theme;
+
+  // Fond dégradé riche
+  const bg = ctx.createRadialGradient(W * 0.5, H * 0.45, 80, W * 0.5, H * 0.5, W * 0.7);
+  bg.addColorStop(0, th.dark ? '#1a1a1a' : '#fff7ed');
+  bg.addColorStop(0.45, th.cream);
+  bg.addColorStop(1, th.navy);
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  // Motifs décoratifs (cercles / lueur or)
+  ctx.globalAlpha = 0.12;
+  ctx.fillStyle = th.gold;
+  ctx.beginPath();
+  ctx.arc(W * 0.15, H * 0.5, W * 0.18, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(W * 0.88, H * 0.35, W * 0.14, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  // Cadre or double
+  ctx.strokeStyle = th.gold;
+  ctx.lineWidth = 14;
+  roundRect(ctx, 48, 48, W - 96, H - 96, 48);
+  ctx.stroke();
+  ctx.lineWidth = 4;
+  ctx.globalAlpha = 0.5;
+  roundRect(ctx, 72, 72, W - 144, H - 144, 36);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+
+  // Feuilles / accents coins (formes)
+  ctx.fillStyle = th.dark ? 'rgba(34,197,94,0.15)' : 'rgba(180,83,9,0.12)';
+  for (const [fx, fy] of [
+    [0, 0],
+    [W, 0],
+    [0, H],
+    [W, H],
+  ] as [number, number][]) {
+    ctx.beginPath();
+    ctx.ellipse(fx, fy, W * 0.2, H * 0.18, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  const qrImg = await loadImage(opts.qrSrc);
+  const cornerSize = Math.min(W, H) * 0.2;
+  const corners: [number, number][] = [
+    [90, 90],
+    [W - 90 - cornerSize, 90],
+    [90, H - 90 - cornerSize],
+    [W - 90 - cornerSize, H - 90 - cornerSize],
+  ];
+  for (const [x, y] of corners) {
+    ctx.fillStyle = '#ffffff';
+    roundRect(ctx, x, y, cornerSize, cornerSize * 1.12, 28);
+    ctx.fill();
+    ctx.strokeStyle = th.gold;
+    ctx.lineWidth = 8;
+    ctx.stroke();
+    const m = cornerSize * 0.1;
+    ctx.drawImage(qrImg, x + m, y + m, cornerSize - m * 2, cornerSize - m * 2);
+    ctx.fillStyle = th.navy;
+    ctx.fillRect(x, y + cornerSize * 0.92, cornerSize, cornerSize * 0.2);
+    ctx.fillStyle = th.gold;
+    ctx.font = `bold ${Math.round(cornerSize * 0.09)}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillText('Scannez ici', x + cornerSize / 2, y + cornerSize * 1.06);
+  }
+
+  // Centre — logo grand
+  ctx.textAlign = 'center';
+  if (opts.logoUrl) {
+    try {
+      const logo = await loadImage(opts.logoUrl);
+      const ls = Math.round(H * 0.16);
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(W / 2, H * 0.28, ls / 2 + 12, 0, Math.PI * 2);
+      ctx.fillStyle = th.gold;
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(W / 2, H * 0.28, ls / 2, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(logo, W / 2 - ls / 2, H * 0.28 - ls / 2, ls, ls);
+      ctx.restore();
+    } catch {
+      /* */
+    }
+  }
+
+  // Nom établissement — TRÈS grand
+  ctx.fillStyle = th.gold;
+  ctx.font = `bold ${Math.round(W * 0.07)}px Impact, Haettenschweiler, sans-serif`;
+  const name = (opts.estName || 'ÉTABLISSEMENT').toUpperCase().slice(0, 28);
+  // ombre
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+  ctx.fillText(name, W / 2 + 6, H * 0.44 + 6);
+  ctx.fillStyle = th.gold;
+  ctx.fillText(name, W / 2, H * 0.44);
+
+  // Ruban slogan
+  ctx.fillStyle = th.gold;
+  ctx.globalAlpha = 0.9;
+  roundRect(ctx, W * 0.28, H * 0.47, W * 0.44, 8, 4);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = th.ink;
+  ctx.font = `italic ${Math.round(W * 0.028)}px Georgia, serif`;
+  ctx.fillText((opts.phrase || 'Bon repas, bonne ambiance !').slice(0, 48), W / 2, H * 0.52);
+
+  // Badge TABLE
+  const bw = W * 0.28;
+  const bh = H * 0.18;
+  const bx = W / 2 - bw / 2;
+  const by = H * 0.56;
+  // forme bouclier simplifiée
+  ctx.fillStyle = th.gold;
+  roundRect(ctx, bx, by, bw, bh, 28);
+  ctx.fill();
+  ctx.fillStyle = th.navy;
+  ctx.font = `bold ${Math.round(W * 0.028)}px sans-serif`;
+  ctx.fillText('TABLE', W / 2, by + bh * 0.32);
+  ctx.font = `bold ${Math.round(W * 0.09)}px Impact, sans-serif`;
+  const tn = String(opts.tableNumber).padStart(2, '0');
+  ctx.fillText(tn, W / 2, by + bh * 0.78);
+
+  // Textes latéraux
+  ctx.fillStyle = th.gold;
+  ctx.font = `bold ${Math.round(W * 0.02)}px sans-serif`;
+  ctx.textAlign = 'left';
+  ctx.fillText('★ Savourez', W * 0.68, H * 0.58);
+  ctx.fillText('★ Commandez', W * 0.68, H * 0.63);
+  ctx.fillText('★ Profitez !', W * 0.68, H * 0.68);
+
+  ctx.textAlign = 'center';
+  ctx.font = `italic ${Math.round(W * 0.022)}px Georgia, serif`;
+  ctx.fillStyle = th.ink;
+  ctx.globalAlpha = 0.85;
+  ctx.fillText('Votre satisfaction, notre priorité !', W / 2, H * 0.88);
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = th.gold;
+  ctx.font = `bold ${Math.round(W * 0.018)}px sans-serif`;
+  ctx.fillText('GESMAK', W / 2, H * 0.93);
+
+  const a = document.createElement('a');
+  a.download = opts.fileName;
+  a.href = canvas.toDataURL('image/png', 1.0);
+  a.click();
+}
+
 function PlacematCard({
   estName,
   logoUrl,
@@ -262,7 +284,6 @@ function PlacematCard({
   qrSrc,
   phrase,
   theme,
-  cardRef,
 }: {
   estName: string;
   logoUrl: string | null;
@@ -270,67 +291,65 @@ function PlacematCard({
   qrSrc: string;
   phrase: string;
   theme: Theme;
-  cardRef?: (el: HTMLElement | null) => void;
 }) {
   const { navy, gold, cream, ink, dark } = theme;
 
   const Corner = ({ pos }: { pos: 'tl' | 'tr' | 'bl' | 'br' }) => {
     const posCls =
       pos === 'tl'
-        ? 'top-0 left-0 rounded-br-[2rem]'
+        ? 'top-2 left-2'
         : pos === 'tr'
-          ? 'top-0 right-0 rounded-bl-[2rem]'
+          ? 'top-2 right-2'
           : pos === 'bl'
-            ? 'bottom-0 left-0 rounded-tr-[2rem]'
-            : 'bottom-0 right-0 rounded-tl-[2rem]';
+            ? 'bottom-2 left-2'
+            : 'bottom-2 right-2';
     return (
-      <div
-        className={`absolute ${posCls} w-[26%] max-w-[130px] aspect-square flex flex-col items-center justify-center p-1.5 z-10`}
-        style={{
-          background: navy,
-          boxShadow: `inset 0 0 0 2.5px ${gold}`,
-        }}
-      >
-        <div className="bg-white rounded-md p-0.5 shadow w-[88%] aspect-square flex items-center justify-center">
-          <img src={qrSrc} alt="" className="w-full h-full object-contain" />
+      <div className={`absolute ${posCls} z-20 w-[22%] max-w-[110px]`}>
+        <div
+          className="rounded-xl overflow-hidden bg-white shadow-lg"
+          style={{ boxShadow: `0 0 0 2px ${gold}` }}
+        >
+          <img src={qrSrc} alt="" className="w-full aspect-square object-contain p-1" />
+          <p
+            className="text-center text-[7px] sm:text-[8px] font-bold py-0.5 leading-tight"
+            style={{ background: navy, color: gold }}
+          >
+            Scannez ici
+          </p>
         </div>
-        <p className="text-[8px] font-semibold mt-0.5" style={{ color: gold }}>
-          Scannez ici
-        </p>
       </div>
     );
   };
 
   return (
     <article
-      ref={cardRef as never}
       className="qr-print-card qr-nappe relative overflow-hidden print:break-inside-avoid"
       style={{
-        background: cream,
+        background: dark
+          ? `radial-gradient(ellipse at 50% 40%, #1f1f1f 0%, ${cream} 55%, ${navy} 100%)`
+          : `radial-gradient(ellipse at 50% 40%, #fff 0%, ${cream} 70%, #fde68a 100%)`,
         color: ink,
-        aspectRatio: '1.4 / 1',
-        minHeight: 260,
-        borderRadius: 18,
-        border: `3px solid ${navy}`,
+        aspectRatio: '1.35 / 1',
+        minHeight: 300,
+        borderRadius: 20,
+        border: `3px solid ${gold}`,
         WebkitPrintColorAdjust: 'exact',
         printColorAdjust: 'exact',
+        boxShadow: dark ? '0 12px 40px rgba(0,0,0,0.5)' : '0 8px 24px rgba(0,0,0,0.12)',
       }}
     >
+      {/* lueurs décoratives */}
       <div
-        className="absolute top-0 left-[22%] right-[22%] h-9 rounded-b-3xl z-[1]"
-        style={{ background: navy }}
+        className="absolute -left-8 top-1/3 w-32 h-32 rounded-full opacity-20 pointer-events-none"
+        style={{ background: gold }}
       />
       <div
-        className="absolute bottom-0 left-[18%] right-[18%] h-11 rounded-t-3xl z-[1]"
-        style={{ background: navy }}
+        className="absolute -right-6 bottom-1/4 w-28 h-28 rounded-full opacity-15 pointer-events-none"
+        style={{ background: gold }}
       />
       <div
-        className="absolute left-0 top-[20%] bottom-[20%] w-2.5 z-[1]"
-        style={{ background: `linear-gradient(${gold}, ${navy}, ${gold})` }}
-      />
-      <div
-        className="absolute right-0 top-[20%] bottom-[20%] w-2.5 z-[1]"
-        style={{ background: `linear-gradient(${gold}, ${navy}, ${gold})` }}
+        className="absolute inset-2 rounded-[16px] pointer-events-none opacity-40"
+        style={{ border: `1px solid ${gold}` }}
       />
 
       <Corner pos="tl" />
@@ -338,61 +357,71 @@ function PlacematCard({
       <Corner pos="bl" />
       <Corner pos="br" />
 
-      <div className="absolute inset-0 flex flex-col items-center justify-center z-[5] px-14 sm:px-16 text-center pointer-events-none">
-        <p className="text-[10px] sm:text-[11px] font-bold tracking-wide mb-1" style={{ color: gold }}>
-          Scannez pour commander votre menu !
-        </p>
+      {/* Centre pro */}
+      <div className="absolute inset-0 flex flex-col items-center justify-center z-10 px-16 sm:px-20 text-center">
         {logoUrl ? (
-          <img
-            src={logoUrl}
-            alt=""
-            className="w-14 h-14 sm:w-16 sm:h-16 object-cover rounded-full bg-white border-2 shadow mb-1"
-            style={{ borderColor: gold }}
-            crossOrigin="anonymous"
-          />
+          <div
+            className="rounded-full p-1 mb-1 shadow-lg"
+            style={{ background: gold }}
+          >
+            <img
+              src={logoUrl}
+              alt=""
+              className="w-16 h-16 sm:w-20 sm:h-20 object-cover rounded-full"
+              crossOrigin="anonymous"
+            />
+          </div>
         ) : (
           <div
-            className="w-14 h-14 rounded-full flex items-center justify-center mb-1 border-2"
-            style={{ background: navy, borderColor: gold, color: gold }}
+            className="w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center mb-1 border-2"
+            style={{ borderColor: gold, color: gold, background: 'rgba(0,0,0,0.3)' }}
           >
-            <QrCode size={24} />
+            <QrCode size={28} />
           </div>
         )}
+
         <h2
-          className="text-lg sm:text-2xl font-black leading-tight max-w-[72%]"
-          style={{ color: ink, fontFamily: 'Georgia, serif' }}
+          className="text-2xl sm:text-3xl md:text-4xl font-black leading-none tracking-tight uppercase max-w-[78%]"
+          style={{
+            color: gold,
+            textShadow: dark ? '0 3px 0 rgba(0,0,0,0.6), 0 0 24px rgba(245,197,24,0.25)' : 'none',
+            fontFamily: 'Impact, Haettenschweiler, Arial Black, sans-serif',
+          }}
         >
           {estName || 'Mon établissement'}
         </h2>
-        <p className="text-[10px] italic opacity-80 mt-0.5 max-w-[70%]">{phrase}</p>
-        <div className="mt-2 flex flex-col items-center">
-          <span
-            className="text-[9px] font-bold uppercase tracking-wider px-3 py-0.5 rounded-t-lg"
-            style={{ background: navy, color: '#fff' }}
+
+        <div className="w-24 h-1 rounded-full my-1.5" style={{ background: gold }} />
+
+        <p
+          className="text-xs sm:text-sm italic max-w-[70%] opacity-95"
+          style={{ fontFamily: 'Georgia, serif' }}
+        >
+          {phrase || 'Bon repas, bonne ambiance !'}
+        </p>
+
+        {/* Badge table type bouclier */}
+        <div
+          className="mt-2 px-6 py-2 rounded-2xl min-w-[7rem] shadow-lg"
+          style={{
+            background: `linear-gradient(180deg, ${gold} 0%, #d4a017 100%)`,
+            color: navy,
+          }}
+        >
+          <p className="text-[10px] font-black tracking-widest opacity-80">TABLE</p>
+          <p
+            className="text-3xl sm:text-4xl font-black leading-none"
+            style={{ fontFamily: 'Impact, sans-serif' }}
           >
-            Table N°
-          </span>
-          <span
-            className="text-xl sm:text-2xl font-black px-5 py-0.5 rounded-b-xl min-w-[4rem]"
-            style={{ background: gold, color: dark ? navy : navy }}
-          >
-            {/^\d+$/.test(String(tableNumber)) ? `T${tableNumber}` : tableNumber}
-          </span>
+            {String(tableNumber).padStart(2, '0')}
+          </p>
         </div>
-        <div className="flex gap-3 mt-2 text-[9px] opacity-60">
-          <span>Cuisine</span>
-          <span>·</span>
-          <span>Boissons</span>
-          <span>·</span>
-          <span>Service</span>
+
+        <div className="mt-2 flex flex-col gap-0.5 text-[10px] font-semibold" style={{ color: gold }}>
+          <span>★ Savourez · Commandez · Profitez !</span>
         </div>
+        <p className="text-[9px] mt-1 opacity-70 italic">Votre satisfaction, notre priorité !</p>
       </div>
-      <p
-        className="absolute bottom-1.5 left-0 right-0 text-center text-[9px] font-medium z-20"
-        style={{ color: gold }}
-      >
-        Merci de votre visite · GESMAK
-      </p>
     </article>
   );
 }
@@ -408,7 +437,7 @@ export default function PrintTableQR() {
   const [qrCfg, setQrCfg] = useState<QrConfig>({});
   const [themeId, setThemeId] = useState<ThemeId>('marine_or');
   const [selected, setSelected] = useState<string | 'all'>('all');
-  const [phrase, setPhrase] = useState('Bon goût, bonne ambiance !');
+  const [phrase, setPhrase] = useState('Bon repas, bonne ambiance !');
   const [exporting, setExporting] = useState(false);
   const [exportMsg, setExportMsg] = useState<string | null>(null);
 
@@ -473,7 +502,7 @@ export default function PrintTableQR() {
     try {
       for (const tb of visibleTables) {
         const url = cardUrl(tb.number);
-        const qr = qrImageUrl(url, { ...cfg, color: '0b1f4a', bg: 'ffffff' }, 512);
+        const qr = qrImageUrl(url, { ...cfg, color: '0a0a0a', bg: 'ffffff' }, 512);
         await exportPlacematPng({
           estName,
           logoUrl,
@@ -481,11 +510,11 @@ export default function PrintTableQR() {
           phrase,
           qrSrc: qr,
           theme,
-          fileName: `GESMAK-nappe-${estName || 'table'}-${tb.number}.png`.replace(/\s+/g, '-'),
+          fileName: `GESMAK-nappe-${(estName || 'table').replace(/\s+/g, '-')}-T${tb.number}.png`,
         });
         await new Promise((r) => setTimeout(r, 400));
       }
-      setExportMsg(`PNG haute qualité téléchargé (${visibleTables.length})`);
+      setExportMsg(`PNG HD téléchargé (${visibleTables.length})`);
     } catch (e) {
       setExportMsg(e instanceof Error ? e.message : 'Export échoué');
     } finally {
@@ -522,7 +551,7 @@ export default function PrintTableQR() {
             <Printer className="text-amber-400" /> Nappes QR tables
           </h1>
           <p className="text-sm text-stone-400 mt-1">
-            4 QR · logo · n° table · PNG HD ou PDF (impression)
+            Style présentoir pro · logo & nom grands · PNG HD / PDF
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -533,7 +562,7 @@ export default function PrintTableQR() {
             className="btn-secondary flex items-center gap-2 text-sm"
           >
             {exporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
-            PNG HD (JPG-quality)
+            PNG HD
           </button>
           <button
             type="button"
@@ -591,7 +620,7 @@ export default function PrintTableQR() {
         </div>
 
         <div>
-          <label className="text-xs text-stone-400">Slogan (sous le nom)</label>
+          <label className="text-xs text-stone-400">Slogan</label>
           <input
             className="input w-full mt-1"
             value={phrase}
@@ -611,7 +640,7 @@ export default function PrintTableQR() {
         <div id="qr-print-area" data-nappe="1" className="grid grid-cols-1 gap-4">
           {visibleTables.map((tb) => {
             const url = cardUrl(tb.number);
-            const qr = qrImageUrl(url, { ...cfg, color: '0b1f4a', bg: 'ffffff' }, 280);
+            const qr = qrImageUrl(url, { ...cfg, color: '0a0a0a', bg: 'ffffff' }, 280);
             return (
               <div key={tb.id} className="space-y-2">
                 <PlacematCard
@@ -636,11 +665,11 @@ export default function PrintTableQR() {
                             logoUrl,
                             tableNumber: tb.number,
                             phrase,
-                            qrSrc: qrImageUrl(url, { ...cfg, color: '0b1f4a', bg: 'ffffff' }, 512),
+                            qrSrc: qrImageUrl(url, { ...cfg, color: '0a0a0a', bg: 'ffffff' }, 512),
                             theme,
                             fileName: `GESMAK-nappe-T${tb.number}.png`,
                           });
-                          setExportMsg(`PNG table ${tb.number} téléchargé`);
+                          setExportMsg(`PNG table ${tb.number} OK`);
                         } catch (e) {
                           setExportMsg(e instanceof Error ? e.message : 'Erreur');
                         } finally {
@@ -649,7 +678,7 @@ export default function PrintTableQR() {
                       })();
                     }}
                   >
-                    Télécharger PNG HD cette table
+                    PNG HD cette table
                   </button>
                 </div>
               </div>
@@ -660,39 +689,28 @@ export default function PrintTableQR() {
 
       <style>{`
         @media print {
-          @page {
-            size: A4 landscape;
-            margin: 8mm;
-          }
+          @page { size: A4 landscape; margin: 6mm; }
           html, body {
-            background: white !important;
+            background: #000 !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
           body * { visibility: hidden !important; }
           #qr-print-area, #qr-print-area * { visibility: visible !important; }
           #qr-print-area {
-            position: absolute;
-            left: 0; top: 0;
-            width: 100%;
-            padding: 0 !important;
-            display: block !important;
-            background: white !important;
+            position: absolute; left: 0; top: 0; width: 100%;
+            padding: 0 !important; display: block !important;
           }
           #qr-print-area .qr-nappe {
-            break-after: page;
-            page-break-after: always;
-            width: 100% !important;
-            height: 180mm !important;
-            max-height: 180mm !important;
-            aspect-ratio: auto !important;
+            break-after: page; page-break-after: always;
+            width: 100% !important; height: 185mm !important;
+            max-height: 185mm !important; aspect-ratio: auto !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
             box-shadow: none !important;
           }
           #qr-print-area .qr-nappe:last-child {
-            break-after: auto;
-            page-break-after: auto;
+            break-after: auto; page-break-after: auto;
           }
           .print\\:hidden { display: none !important; }
         }
