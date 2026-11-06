@@ -21,13 +21,14 @@ export async function initNativeApp(): Promise<void> {
   try {
     const { StatusBar, Style } = await import('@capacitor/status-bar');
     await StatusBar.setStyle({ style: Style.Dark });
-    await StatusBar.setBackgroundColor({ color: '#0c0a09' });
+    await StatusBar.setBackgroundColor({ color: '#0f172a' });
   } catch {
     /* */
   }
   try {
     const { SplashScreen } = await import('@capacitor/splash-screen');
-    await SplashScreen.hide();
+    // Cacher tout de suite le splash natif (icône carrée noire) → le CSS motion prend le relais
+    await SplashScreen.hide({ fadeOutDuration: 150 });
   } catch {
     /* */
   }
