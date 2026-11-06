@@ -320,7 +320,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   let prov = provider;
   if (!prov) {
-    if (
+    if (model.startsWith('codecraft/')) {
+      prov = 'codecraft';
+    } else if (
       model.startsWith('anthropic/') ||
       model.startsWith('openai/') ||
       model.startsWith('deepseek/') ||
@@ -334,7 +336,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       prov = 'openrouter';
     } else if (model.startsWith('gemini') || model.includes('gemini')) {
       prov = 'gemini';
-    } else if (model.includes('/') ) {
+    } else if (model.includes('/')) {
       prov = 'openrouter';
     } else if (model.includes('llama') || model.includes('gpt-oss')) {
       prov = 'groq';
@@ -342,8 +344,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       prov = 'gemini';
     }
   }
-  // Forcer OpenRouter si le modèle est clairement un ID OpenRouter
-  if (
+  // Forcer le bon provider selon le préfixe modèle
+  if (model.startsWith('codecraft/')) {
+    prov = 'codecraft';
+  } else if (
     model.startsWith('anthropic/') ||
     model.startsWith('openai/') ||
     model.startsWith('deepseek/') ||
@@ -365,6 +369,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!key) return res.status(503).json({ error: 'GROQ_API_KEY manquant (secret Vercel)' });
       const m = model && !model.includes('/') ? model : 'llama-3.1-8b-instant';
       const out = await chatOpenAICompat('https://api.groq.com/openai/v1', key, m, body, 'groq');
+      if ('error' in out && out.error) return res.status(out.status || 502).json(out);
+      return res.status(200).json({ ok: true, mode: 'chat', ...out });
+    }
+    if (prov === 'codecraft') {
+      const key = process.env.CODECRAFT_API_KEY || '';
+      if (!key) return res.status(503).json({ error: 'CODECRAFT_API_KEY manquant sur le serveur' });
+      let m = model || 'deepseek-v4-flash';
+      if (m.startsWith('codecraft/')) m = m.slice('codecraft/'.length);
+      const out = await chatOpenAICompat('https://codecraftapi.com/v1', key, m, body, 'codecraft');
       if ('error' in out && out.error) return res.status(out.status || 502).json(out);
       return res.status(200).json({ ok: true, mode: 'chat', ...out });
     }
