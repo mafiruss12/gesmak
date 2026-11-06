@@ -6,7 +6,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
-import { Loader2 } from 'lucide-react';
+import { GesmakLoading } from '@/components/GesmakLoading';
 
 export default function AuthCallback() {
   const navigate = useNavigate();
@@ -112,26 +112,23 @@ export default function AuthCallback() {
     };
   }, [navigate]);
 
+  if (!error) {
+    return <GesmakLoading variant="full" label={message || 'Finalisation de la connexion…'} />;
+  }
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#F5F5F5] p-4">
+    <div className="min-h-screen flex items-center justify-center p-4 auth-gesmak-shell"
+      style={{ background: 'linear-gradient(165deg, #f8fafc 0%, #eef2ff 40%, #fff7ed 100%)' }}>
       <div className="max-w-sm w-full rounded-2xl bg-white border border-stone-200 shadow-lg p-6 text-center space-y-4">
-        {!error ? (
-          <>
-            <Loader2 className="mx-auto h-8 w-8 animate-spin text-orange-500" />
-            <p className="text-sm text-stone-700">{message}</p>
-          </>
-        ) : (
-          <>
-            <p className="text-sm text-red-600">{error}</p>
-            <button
-              type="button"
-              className="btn-primary w-full"
-              onClick={() => navigate('/login', { replace: true })}
-            >
-              Retour à la connexion
-            </button>
-          </>
-        )}
+        <img src="/logo-circle.png" alt="GESMAK" className="w-14 h-14 rounded-full mx-auto object-cover" />
+        <p className="text-sm text-red-600">{error}</p>
+        <button
+          type="button"
+          className="btn-primary w-full"
+          onClick={() => navigate('/login', { replace: true })}
+        >
+          Retour à la connexion
+        </button>
       </div>
     </div>
   );

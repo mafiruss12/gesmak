@@ -191,8 +191,18 @@ export default function TypePicker({ mode, onDone, defaultName = '' }: Props) {
   }
 
   return (
-    <div className="min-h-[70vh] flex items-center justify-center p-4">
-      <div className="w-full max-w-2xl">
+    <div className="min-h-[70vh] flex items-center justify-center p-4 relative overflow-hidden">
+      <div className="pointer-events-none absolute inset-0 opacity-40" aria-hidden
+        style={{ background: 'radial-gradient(ellipse 60% 40% at 50% 0%, rgba(37,99,235,.25), transparent 60%), radial-gradient(ellipse 50% 35% at 90% 80%, rgba(245,158,11,.15), transparent 55%)' }}
+      />
+      <div className="w-full max-w-2xl relative z-[1] tp-enter">
+        <div className="flex flex-col items-center mb-5">
+          <div className="relative w-16 h-16 mb-2 flex items-center justify-center">
+            <span className="absolute inset-0 rounded-full border-2 border-transparent border-t-blue-500 border-r-amber-400 animate-spin" style={{ animationDuration: '2.8s' }} aria-hidden />
+            <img src="/logo-circle.png" alt="" className="relative z-[1] w-[78%] h-[78%] rounded-full object-cover" draggable={false} />
+          </div>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-amber-400/90">Bienvenue sur GESMAK</p>
+        </div>
         <h1 className="text-2xl font-bold font-display text-stone-100 text-center mb-2">
           {mode === 'create' ? 'Créer votre activité' : 'Quel type d’activité ?'}
         </h1>
@@ -317,5 +327,14 @@ export default function TypePicker({ mode, onDone, defaultName = '' }: Props) {
         </button>
       </div>
     </div>
+
+      <style>{`
+        .tp-enter { animation: tpEnter .55s ease both; }
+        @keyframes tpEnter {
+          from { opacity: 0; transform: translateY(12px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @media (prefers-reduced-motion: reduce) { .tp-enter { animation: none; } }
+      `}</style>
   );
 }

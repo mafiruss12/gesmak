@@ -400,7 +400,7 @@ async function resendConfirmation() {
 
 
   return (
-    <div className="min-h-screen bg-[#F5F5F5] flex items-center justify-center p-4 relative overflow-hidden">
+    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden auth-gesmak-shell">
       <div className="auth-marquee-bar absolute top-0 left-0 right-0">
         <div className="auth-marquee-track">
           {MARQUEE_MESSAGES.concat(MARQUEE_MESSAGES).map((msg, i) => (
@@ -443,6 +443,9 @@ async function resendConfirmation() {
           }}
         />
       </div>
+
+      <div className="auth-orb auth-orb-a" aria-hidden />
+      <div className="auth-orb auth-orb-b" aria-hidden />
 
       <div className="relative z-10 w-full max-w-6xl mt-12 mb-8 px-2 grid lg:grid-cols-2 gap-6 lg:gap-10 items-center">
         {/* Panneau avantages animé */}
@@ -530,10 +533,14 @@ async function resendConfirmation() {
         <div className="order-1 lg:order-2 w-full max-w-md mx-auto lg:mx-0 lg:ml-auto">
         <div className="bg-white border border-stone-200 rounded-3xl p-8 sm:p-10 shadow-xl auth-form-card">
           <div className="flex flex-col items-center mb-6">
+            <div className="auth-mark relative mb-3 w-20 h-20 sm:w-24 sm:h-24 flex items-center justify-center">
+              <span className="auth-mark-ring absolute inset-0 rounded-full border-2 border-transparent border-t-blue-500 border-r-amber-400" aria-hidden />
+              <img src="/logo-circle.png" alt="" className="relative z-[1] w-[78%] h-[78%] rounded-full object-cover shadow-md" draggable={false} />
+            </div>
             <img
               src="/logo-gesmak-wide.png"
               alt="GESMAK — Gestion Simplifiée, Business Maîtrisé"
-              className="h-auto w-full max-w-[320px] object-contain mb-3"
+              className="h-auto w-full max-w-[280px] object-contain mb-1"
             />
             <h1 className="sr-only">GESMAK</h1>
             <p className="text-sm text-stone-500 mt-1">
@@ -726,7 +733,9 @@ async function resendConfirmation() {
               )}
             </button>
           </form>
-          <div className="mt-8 pt-2"><BrandFooter compact light /></div>
+          <div className="mt-8 pt-2">
+            <BrandFooter compact light />
+          </div>
 
           {mode === 'forgot' ? (
             <button
@@ -744,6 +753,40 @@ async function resendConfirmation() {
         </div>
         </div>
       </div>
+
+      <style>{`
+        .auth-gesmak-shell {
+          background: linear-gradient(165deg, #f8fafc 0%, #eef2ff 40%, #fff7ed 100%);
+        }
+        .auth-orb {
+          position: absolute; border-radius: 50%; filter: blur(48px); pointer-events: none; z-index: 0;
+        }
+        .auth-orb-a {
+          width: min(55vw, 320px); height: min(55vw, 320px);
+          top: 8%; left: -8%; background: rgba(37, 99, 235, 0.18);
+          animation: authOrb 7s ease-in-out infinite alternate;
+        }
+        .auth-orb-b {
+          width: min(45vw, 260px); height: min(45vw, 260px);
+          bottom: 12%; right: -6%; background: rgba(245, 158, 11, 0.16);
+          animation: authOrb 8s ease-in-out infinite alternate-reverse;
+        }
+        .auth-mark-ring { animation: authSpin 2.8s linear infinite; }
+        .auth-mark { animation: authFloat 2.8s ease-in-out infinite; }
+        @keyframes authSpin { to { transform: rotate(360deg); } }
+        @keyframes authFloat {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-5px); }
+        }
+        @keyframes authOrb {
+          from { transform: translate(0, 0); }
+          to { transform: translate(18px, -14px); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .auth-orb-a, .auth-orb-b, .auth-mark-ring, .auth-mark { animation: none !important; }
+        }
+      `}</style>
+
     </div>
   );
 }
