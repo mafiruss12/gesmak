@@ -29,18 +29,25 @@
     <meta name="twitter:title" content="GESMAK" />
     <meta name="twitter:description" content="Gestion intelligente stock &amp; caisse pour maquis et commerces." />
   </head>
-  <body>
-    <div id="gesmak-boot-splash" style="position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(165deg,#0f172a 0%,#1e293b 45%,#0f172a 100%);font-family:system-ui,-apple-system,sans-serif;">
-      <img src="/logo-circle.png" alt="GESMAK" width="160" height="160" style="width:min(42vw,160px);height:auto;border-radius:50%;box-shadow:0 12px 40px rgba(0,0,0,.35);animation:gesmak-pulse 1.6s ease-in-out infinite;" />
-      <p style="margin:18px 0 4px;font-size:1.65rem;font-weight:800;letter-spacing:.02em;background:linear-gradient(90deg,#2563eb,#f59e0b);-webkit-background-clip:text;background-clip:text;color:transparent;">GESMAK</p>
-      <p style="margin:0 16px 28px;font-size:12px;color:#94a3b8;text-align:center;max-width:260px;">Gestion Simplifiée, Business Maîtrisé</p>
-      <div style="width:min(70vw,220px);height:6px;border-radius:999px;background:rgba(255,255,255,.12);overflow:hidden;">
-        <div id="gesmak-boot-bar" style="height:100%;width:8%;border-radius:999px;background:linear-gradient(90deg,#2563eb,#f59e0b);animation:gesmak-load 2.4s ease-out forwards;"></div>
+<body>
+    <div id="gesmak-boot-splash" style="position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:max(16px,env(safe-area-inset-top)) 16px max(20px,env(safe-area-inset-bottom));background:linear-gradient(165deg,#0f172a 0%,#1e293b 50%,#0f172a 100%);font-family:system-ui,-apple-system,sans-serif;box-sizing:border-box;">
+      <div style="position:relative;width:min(42vw,160px);height:min(42vw,160px);display:flex;align-items:center;justify-content:center;">
+        <div style="position:absolute;inset:0;border-radius:50%;border:2px solid transparent;border-top-color:#3b82f6;border-right-color:#f59e0b;animation:gesmak-boot-spin 2.8s linear infinite;"></div>
+        <img src="/logo-circle.png" alt="GESMAK" width="140" height="140" style="width:86%;height:86%;border-radius:50%;object-fit:cover;box-shadow:0 12px 40px rgba(0,0,0,.4);animation:gesmak-boot-pulse 1.6s ease-in-out infinite;" />
       </div>
-      <p style="margin-top:14px;font-size:11px;color:#64748b;">Chargement…</p>
+      <p style="margin:16px 0 4px;font-size:clamp(1.4rem,6vw,1.75rem);font-weight:900;letter-spacing:.02em;background:linear-gradient(90deg,#2563eb,#f59e0b);-webkit-background-clip:text;background-clip:text;color:transparent;">GESMAK</p>
+      <p style="margin:0 12px 24px;font-size:clamp(11px,2.8vw,13px);color:#94a3b8;text-align:center;max-width:min(90vw,280px);">Gestion Simplifiée, Business Maîtrisé</p>
+      <div style="width:min(70vw,220px);height:7px;border-radius:999px;background:rgba(255,255,255,.12);overflow:hidden;">
+        <div style="height:100%;width:8%;border-radius:999px;background:linear-gradient(90deg,#2563eb,#f59e0b);animation:gesmak-boot-load 2.6s ease-out forwards;"></div>
+      </div>
+      <p style="margin-top:12px;font-size:11px;color:#64748b;">Chargement…</p>
       <style>
-        @keyframes gesmak-pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.04)} }
-        @keyframes gesmak-load { from{width:8%} to{width:100%} }
+        @keyframes gesmak-boot-pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.04)} }
+        @keyframes gesmak-boot-spin { to{transform:rotate(360deg)} }
+        @keyframes gesmak-boot-load { from{width:8%} to{width:100%} }
+        @media (max-height:420px) and (orientation:landscape) {
+          #gesmak-boot-splash { padding:8px; }
+        }
       </style>
     </div>
     <div id="root"></div>
