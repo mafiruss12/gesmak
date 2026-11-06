@@ -3,6 +3,7 @@ import { lazyWithRetry as lazy } from '@/lib/lazyWithRetry';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { AuthProvider, useAuth } from '@/lib/auth';
+import { AppSplash, useAppSplash } from '@/components/AppSplash';
 import PlanGate from '@/components/PlanGate';
 import { isLocationEvent, isBtp } from '@/lib/businessTypes';
 import { isHotelComplex } from '@/lib/hotel';
@@ -292,7 +293,9 @@ function PublicOrApp() {
   );
 }
 
-export default function App() {
+function AppWithSplash() {
+  const { splashDone, progress } = useAppSplash();
+  if (!splashDone) return <AppSplash progress={progress} />;
   return (
     <BrowserRouter>
       <AuthProvider>
@@ -302,4 +305,8 @@ export default function App() {
       </AuthProvider>
     </BrowserRouter>
   );
+}
+
+export default function App() {
+  return <AppWithSplash />;
 }

@@ -30,7 +30,21 @@
     <meta name="twitter:description" content="Gestion intelligente stock &amp; caisse pour maquis et commerces." />
   </head>
   <body>
+    <div id="gesmak-boot-splash" style="position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(165deg,#0f172a 0%,#1e293b 45%,#0f172a 100%);font-family:system-ui,-apple-system,sans-serif;">
+      <img src="/logo-circle.png" alt="GESMAK" width="160" height="160" style="width:min(42vw,160px);height:auto;border-radius:50%;box-shadow:0 12px 40px rgba(0,0,0,.35);animation:gesmak-pulse 1.6s ease-in-out infinite;" />
+      <p style="margin:18px 0 4px;font-size:1.65rem;font-weight:800;letter-spacing:.02em;background:linear-gradient(90deg,#2563eb,#f59e0b);-webkit-background-clip:text;background-clip:text;color:transparent;">GESMAK</p>
+      <p style="margin:0 16px 28px;font-size:12px;color:#94a3b8;text-align:center;max-width:260px;">Gestion Simplifiée, Business Maîtrisé</p>
+      <div style="width:min(70vw,220px);height:6px;border-radius:999px;background:rgba(255,255,255,.12);overflow:hidden;">
+        <div id="gesmak-boot-bar" style="height:100%;width:8%;border-radius:999px;background:linear-gradient(90deg,#2563eb,#f59e0b);animation:gesmak-load 2.4s ease-out forwards;"></div>
+      </div>
+      <p style="margin-top:14px;font-size:11px;color:#64748b;">Chargement…</p>
+      <style>
+        @keyframes gesmak-pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.04)} }
+        @keyframes gesmak-load { from{width:8%} to{width:100%} }
+      </style>
+    </div>
     <div id="root"></div>
+
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
