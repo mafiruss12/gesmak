@@ -701,6 +701,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           </div>
         )}
         <div className="p-3 border-t border-stone-800 shrink-0">
+          <div className="px-3 pb-2 flex items-center gap-1.5 opacity-70">
+            <img src="/logo-circle.png" alt="" className="w-4 h-4 rounded-full object-cover" />
+            <span className="text-[10px] font-semibold tracking-wide text-stone-500">GESMAK</span>
+          </div>
           <div className="flex items-center gap-2 px-3 py-2 mb-2">
             <div className="w-8 h-8 rounded-full bg-stone-700 flex items-center justify-center shrink-0">
               <Users size={16} className="text-stone-300" />
@@ -725,11 +729,15 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             <Menu size={22} />
           </button>
           <div className="flex items-center gap-2 min-w-0 flex-1 justify-center px-1">
-            <img
-              src="/logo-gesmak-icon.png"
-              alt="GESMAK"
-              className="h-10 w-10 rounded-full object-cover shrink-0 border border-orange-200/40 bg-white"
-            />
+            <span className="relative inline-flex h-10 w-10 shrink-0 items-center justify-center">
+              <span className="absolute inset-0 rounded-full border border-amber-400/40 border-t-blue-400/60 opacity-90" aria-hidden />
+              <img
+                src="/logo-circle.png"
+                alt="GESMAK"
+                className="relative z-[1] h-9 w-9 rounded-full object-cover border border-orange-200/40 bg-white"
+                onError={(e) => { (e.target as HTMLImageElement).src = '/logo-gesmak-icon.png'; }}
+              />
+            </span>
             <span className="font-display font-bold text-stone-100 truncate text-sm">
               {estName || 'GESMAK'}
             </span>

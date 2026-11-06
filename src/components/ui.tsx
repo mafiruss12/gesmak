@@ -75,10 +75,26 @@ export function Badge({ children, color = 'neutral' }: { children: ReactNode; co
 
 export function EmptyState({ icon, title, message }: { icon: ReactNode; title: string; message: string }) {
   return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <div className="text-stone-600 mb-3">{icon}</div>
+    <div className="flex flex-col items-center justify-center py-12 text-center empty-state-motion px-4">
+      <div className="relative mb-4">
+        <span className="absolute -inset-2 rounded-full border border-amber-500/20 border-t-blue-400/30 opacity-80" aria-hidden />
+        <div className="relative z-[1] text-stone-500 w-14 h-14 rounded-2xl bg-stone-900/80 border border-stone-800 flex items-center justify-center">
+          {icon}
+        </div>
+      </div>
+      <p className="text-[10px] font-semibold tracking-widest text-amber-500/80 mb-1">GESMAK</p>
       <p className="text-lg font-semibold text-stone-300">{title}</p>
-      <p className="text-sm text-stone-500 mt-1">{message}</p>
+      <p className="text-sm text-stone-500 mt-1 max-w-xs leading-relaxed">{message}</p>
+      <style>{`
+        .empty-state-motion { animation: emptyIn .45s ease both; }
+        @keyframes emptyIn {
+          from { opacity: 0; transform: translateY(8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .empty-state-motion { animation: none; }
+        }
+      `}</style>
     </div>
   );
 }

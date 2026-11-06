@@ -127,6 +127,25 @@ body {
   border-radius: 0.65rem;
   transition: transform 0.2s ease, background 0.2s ease;
 }
+
+/* Partie 6 — focus / hover menu discret */
+.nav-item-link {
+  transition: transform 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease;
+}
+.nav-item-link:hover {
+  transform: translateX(2px);
+}
+.nav-item-link:focus-visible {
+  outline: 2px solid rgba(245, 158, 11, 0.55);
+  outline-offset: 2px;
+}
+.nav-item-link.active {
+  box-shadow: inset 3px 0 0 rgba(245, 158, 11, 0.85);
+}
+@media (prefers-reduced-motion: reduce) {
+  .nav-item-link:hover { transform: none; }
+}
+
 .nav-item-link:hover .nav-item-icon {
   animation: nav-icon-wiggle 0.6s ease;
 }
