@@ -153,6 +153,7 @@ export async function onRequest(context: Ctx) {
   let prov = provider;
   if (!prov) {
     if (model.includes('gemini')) prov = 'gemini';
+    else if (model.startsWith('codecraft/') || model.includes('codecraft')) prov = 'codecraft';
     else if (model.startsWith('anthropic/') || model.startsWith('openai/') || model.startsWith('deepseek/') || model.startsWith('x-ai/') || model.includes(':free') || model.includes('/')) prov = 'openrouter';
     else if (model.includes('llama') || model.includes('gpt-oss')) prov = 'groq';
     else prov = 'gemini';
@@ -170,6 +171,15 @@ export async function onRequest(context: Ctx) {
       const key = env(context, 'GROQ_API_KEY') || '';
       if (!key) return json({ error: 'GROQ_API_KEY manquant' }, 503);
       const out = await chatOpenAICompat('https://api.groq.com/openai/v1', key, model || 'llama-3.3-70b-versatile', body, 'groq', appUrl);
+      if ('error' in out && out.error) return json(out, out.status || 502);
+      return json({ ok: true, mode: 'chat', ...out });
+    }
+    if (prov === 'codecraft') {
+      const key = env(context, 'CODECRAFT_API_KEY') || '';
+      if (!key) return json({ error: 'CODECRAFT_API_KEY manquant sur le serveur' }, 503);
+      let m = model || 'deepseek-v4-flash';
+      if (m.startsWith('codecraft/')) m = m.slice('codecraft/'.length);
+      const out = await chatOpenAICompat('https://codecraftapi.com/v1', key, m, body, 'codecraft', appUrl);
       if ('error' in out && out.error) return json(out, out.status || 502);
       return json({ ok: true, mode: 'chat', ...out });
     }

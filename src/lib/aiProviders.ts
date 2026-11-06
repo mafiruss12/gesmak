@@ -1,7 +1,7 @@
 /** Catalogue modèles IA — GESMAK (vérifié Oct 2026) */
 export type AiCapability = 'chat' | 'vision' | 'image' | 'video' | 'file';
 
-export type AiProviderId = 'gemini' | 'groq' | 'openrouter' | 'pollinations' | 'local';
+export type AiProviderId = 'gemini' | 'groq' | 'openrouter' | 'codecraft' | 'pollinations' | 'local';
 
 export interface AiModelOption {
   id: string;
@@ -37,6 +37,34 @@ export const AI_MODELS: AiModelOption[] = [
     provider: 'openrouter',
     label: 'Grok 4.7 (xAI)',
     description: 'Dernière génération Grok via OpenRouter',
+    caps: ['chat', 'file'],
+  },
+  {
+    id: 'codecraft/claude-opus-4.8',
+    provider: 'codecraft',
+    label: 'CodeCraft · Claude Opus',
+    description: 'Via CodeCraft API — raisonnement avancé',
+    caps: ['chat', 'file'],
+  },
+  {
+    id: 'codecraft/deepseek-v4-flash',
+    provider: 'codecraft',
+    label: 'CodeCraft · DeepSeek Flash',
+    description: 'Via CodeCraft API — rapide et économique',
+    caps: ['chat', 'file'],
+  },
+  {
+    id: 'codecraft/deepseek-v4-pro',
+    provider: 'codecraft',
+    label: 'CodeCraft · DeepSeek Pro',
+    description: 'Via CodeCraft API — code et raisonnement',
+    caps: ['chat', 'file'],
+  },
+  {
+    id: 'codecraft/qwen3.8-27b',
+    provider: 'codecraft',
+    label: 'CodeCraft · Qwen 27B',
+    description: 'Via CodeCraft API — polyvalent',
     caps: ['chat', 'file'],
   },
   {
