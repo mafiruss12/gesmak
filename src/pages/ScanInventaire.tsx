@@ -369,11 +369,31 @@ export default function ScanInventaire() {
       )}
 
       {step === 'ocr' && (
-        <div className="card flex flex-col items-center py-12 gap-3">
-          <Loader2 className="animate-spin text-amber-400" size={36} />
-          <p className="text-stone-300">OCR français en cours…</p>
+        <div className="card flex flex-col items-center py-10 gap-4 relative overflow-hidden">
+          <div className="absolute inset-0 pointer-events-none opacity-30" aria-hidden
+            style={{ background: 'radial-gradient(ellipse 60% 50% at 50% 30%, rgba(245,158,11,.25), transparent 70%)' }}
+          />
+          <div className="relative w-28 h-28 flex items-center justify-center">
+            <span className="absolute inset-0 rounded-full border-2 border-transparent border-t-amber-400 border-r-blue-500 animate-spin" style={{ animationDuration: '1.4s' }} aria-hidden />
+            <span className="absolute inset-2 rounded-full border border-amber-400/40 animate-ping" style={{ animationDuration: '1.8s' }} aria-hidden />
+            <span className="absolute inset-[18%] rounded-full bg-stone-900/80 flex items-center justify-center z-[1]">
+              <Sparkles className="text-amber-400" size={28} />
+            </span>
+          </div>
+          <p className="text-stone-100 font-semibold relative z-[1]">Analyse IA en cours…</p>
+          <p className="text-xs text-stone-400 text-center max-w-xs relative z-[1]">{ocrStatus || 'Lecture de la photo…'}</p>
+          <div className="w-52 h-2 rounded-full bg-stone-800 overflow-hidden relative z-[1]">
+            <div
+              className="h-full rounded-full transition-all duration-200"
+              style={{
+                width: `${Math.max(8, Math.min(100, ocrProgress || 12))}%`,
+                background: 'linear-gradient(90deg,#2563eb,#f59e0b)',
+              }}
+            />
+          </div>
+          <p className="text-[11px] text-stone-500 relative z-[1]">{Math.round(ocrProgress || 0)}%</p>
           {preview && (
-            <img src={preview} alt="scan" className="max-h-40 rounded-xl border border-stone-700 mt-2" />
+            <img src={preview} alt="scan" className="max-h-36 rounded-xl border border-stone-700 mt-1 relative z-[1] opacity-90" />
           )}
         </div>
       )}
@@ -554,10 +574,20 @@ export default function ScanInventaire() {
       )}
 
       {step === 'done' && (
-        <div className="card text-center space-y-3 py-10">
-          <div className="mx-auto w-14 h-14 rounded-2xl bg-emerald-500/20 flex items-center justify-center">
-            <Check className="text-emerald-400" size={28} />
+        <div className="card text-center space-y-3 py-10 scan-done-motion">
+          <div className="relative mx-auto w-16 h-16 flex items-center justify-center">
+            <span className="absolute inset-0 rounded-full bg-emerald-400/20 animate-ping" aria-hidden />
+            <div className="relative z-[1] w-14 h-14 rounded-2xl bg-emerald-500/20 flex items-center justify-center">
+              <Check className="text-emerald-400" size={28} />
+            </div>
           </div>
+          <style>{`
+            .scan-done-motion { animation: scanDoneIn .45s cubic-bezier(.22,1,.36,1) both; }
+            @keyframes scanDoneIn {
+              from { opacity: 0; transform: scale(.92); }
+              to { opacity: 1; transform: scale(1); }
+            }
+          `}</style>
           <h2 className="text-xl font-bold text-stone-100">Inventaire mis à jour</h2>
           <p className="text-sm text-stone-400">
             {stats.updated} mis à jour · {stats.created} créés · {stats.skipped} ignorés
