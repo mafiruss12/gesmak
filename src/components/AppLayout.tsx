@@ -512,8 +512,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     return (
       <div className="min-h-screen bg-stone-950 text-stone-100 flex items-center justify-center p-6">
       {!isOnline && (
-        <div className="sticky top-0 z-[60] bg-amber-600 text-stone-950 text-center text-xs font-semibold py-1.5 px-3">
-          Hors ligne — vous pouvez continuer le travail local ; synchronisation dès le retour du réseau
+        <div className="sticky top-0 z-[60] bg-gradient-to-r from-amber-600 via-amber-500 to-orange-500 text-stone-950 text-center text-xs font-bold py-2 px-3 flex items-center justify-center gap-2 shadow-md">
+          <span className="inline-flex h-2 w-2 rounded-full bg-stone-950 animate-pulse" aria-hidden />
+          Hors ligne — travail local actif · sync au retour du réseau
         </div>
       )}
         <div className="max-w-md text-center space-y-3">
