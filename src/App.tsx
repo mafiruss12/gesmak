@@ -1,9 +1,9 @@
 import { useState, useEffect, Suspense } from 'react';
 import { lazyWithRetry as lazy } from '@/lib/lazyWithRetry';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { AppSplash, useAppSplash } from '@/components/AppSplash';
+import { GesmakLoading } from '@/components/GesmakLoading';
 import PlanGate from '@/components/PlanGate';
 import { isLocationEvent, isBtp } from '@/lib/businessTypes';
 import { isHotelComplex } from '@/lib/hotel';
@@ -113,11 +113,7 @@ function DailyReportSafe() {
 
 
 function PageFallback() {
-  return (
-    <div className="min-h-[40vh] flex items-center justify-center">
-      <Loader2 className="animate-spin text-[#FF7900]" size={28} />
-    </div>
-  );
+  return <GesmakLoading variant="page" label="Chargement de la page…" />;
 }
 
 function ConfigError() {
@@ -161,11 +157,7 @@ function ProtectedRoutes() {
   // Si session locale déjà connue (user posé en synchrone), afficher l’app tout de suite.
   // Spinner discret uniquement s’il n’y a vraiment aucune session en mémoire.
   if (loading && !user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F5F5F5]">
-        <Loader2 className="animate-spin text-[#FF7900]" size={28} />
-      </div>
-    );
+    return <GesmakLoading variant="full" label="Préparation de votre session…" />;
   }
 
   if (!user) return <Navigate to="/" replace />;
