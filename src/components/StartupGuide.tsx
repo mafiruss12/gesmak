@@ -218,13 +218,19 @@ export default function StartupGuide({ compact = false }: { compact?: boolean })
 
   return (
     <div
-      className={`rounded-2xl border border-amber-500/30 bg-stone-900/70 startup-guide-card ${compact ? 'mb-6 p-4' : 'p-5'}`}
+      className={`rounded-2xl border border-amber-500/30 bg-stone-900/70 startup-guide-card sg-motion ${compact ? 'mb-6 p-4' : 'p-5'}`}
     >
       <div className="flex items-start justify-between gap-3 mb-4">
         <Link to="/guide" className="block min-w-0 flex-1 hover:opacity-90 cursor-pointer">
-          <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--color-accent, #E89B2D)' }}>
-            Guide de démarrage · {BUSINESS_LABELS[bizType]}
-          </p>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="relative inline-flex w-8 h-8 items-center justify-center">
+              <span className="absolute inset-0 rounded-full border border-amber-400/50 border-t-blue-400 animate-spin" style={{ animationDuration: '3s' }} aria-hidden />
+              <img src="/logo-circle.png" alt="" className="w-6 h-6 rounded-full object-cover relative z-[1]" draggable={false} />
+            </span>
+            <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--color-accent, #E89B2D)' }}>
+              Guide de démarrage · {BUSINESS_LABELS[bizType]}
+            </p>
+          </div>
           <h2 className="text-lg font-bold text-stone-100 mt-0.5">
             {allDone ? 'Configuration terminée 🎉' : 'Mettez votre activité en route'}
           </h2>
@@ -292,5 +298,14 @@ export default function StartupGuide({ compact = false }: { compact?: boolean })
         })}
       </ul>
     </div>
+
+      <style>{`
+        .sg-motion { animation: sgEnter .5s ease both; }
+        @keyframes sgEnter {
+          from { opacity: 0; transform: translateY(10px) scale(.98); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @media (prefers-reduced-motion: reduce) { .sg-motion { animation: none; } }
+      `}</style>
   );
 }

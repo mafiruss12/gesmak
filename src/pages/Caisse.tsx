@@ -517,10 +517,20 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
 
       <Modal open={checkoutOpen} onClose={() => !processing && setCheckoutOpen(false)} title="Encaissement">
         {success ? (
-          <div className="flex flex-col items-center py-6 space-y-3">
-            <CheckCircle2 size={48} className="text-success-400" />
+          <div className="flex flex-col items-center py-6 space-y-3 caisse-success-motion">
+            <div className="relative w-16 h-16 flex items-center justify-center">
+              <span className="absolute inset-0 rounded-full bg-emerald-400/25 animate-ping" aria-hidden />
+              <CheckCircle2 size={52} className="relative z-[1] text-emerald-400 drop-shadow" />
+            </div>
             <p className="text-lg font-semibold text-stone-100">Vente enregistrée</p>
             <p className="text-2xl font-black text-amber-300">{formatFCFA(lastTicket?.total || netTotal)}</p>
+            <style>{`
+              .caisse-success-motion { animation: caisseOk .5s cubic-bezier(.22,1,.36,1) both; }
+              @keyframes caisseOk {
+                from { opacity: 0; transform: scale(.9); }
+                to { opacity: 1; transform: scale(1); }
+              }
+            `}</style>
             <div className="flex gap-2 w-full">
               <button type="button" className="btn-primary flex-1 flex items-center justify-center gap-2" onClick={printTicket}>
                 <Printer size={18} /> Ticket

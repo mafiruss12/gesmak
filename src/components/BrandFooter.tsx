@@ -28,6 +28,11 @@ export default function BrandFooter({
       <div className="max-w-lg mx-auto flex flex-col items-center gap-1.5 text-center">
         <div className="flex items-center gap-2">
           <img
+            src="/logo-circle.png"
+            alt="GESMAK"
+            className={`rounded-full object-cover ${compact || light ? 'h-7 w-7' : 'h-8 w-8'}`}
+          />
+          <img
             src="/kevin-tech-pro-logo.png"
             alt="Kevin Tech Pro"
             className={`rounded-lg object-contain bg-white p-0.5 ${compact || light ? 'h-7 w-7' : 'h-9 w-9'}`}

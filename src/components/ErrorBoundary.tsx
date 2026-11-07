@@ -81,14 +81,26 @@ export default class ErrorBoundary extends Component<Props, State> {
         typeof window !== 'undefined' && isPublicPath(window.location.pathname);
 
       return (
-        <div className="min-h-[50vh] bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-stone-100 flex items-center justify-center p-6">
-          <div className="max-w-md text-center space-y-4">
-            <h1 className="text-lg font-semibold text-stone-800 dark:text-stone-100">
+        <div className="min-h-[50vh] flex items-center justify-center p-6"
+          style={{ background: 'linear-gradient(165deg,#f8fafc 0%,#eef2ff 45%,#fff7ed 100%)' }}>
+          <div className="max-w-md text-center space-y-4 error-net-motion">
+            <div className="relative mx-auto w-16 h-16 flex items-center justify-center">
+              <span className="absolute inset-0 rounded-full border-2 border-transparent border-t-blue-500 border-r-amber-400 animate-spin" style={{ animationDuration: '2.5s' }} aria-hidden />
+              <img src="/logo-circle.png" alt="GESMAK" className="relative z-[1] w-[78%] h-[78%] rounded-full object-cover" />
+            </div>
+            <h1 className="text-lg font-semibold text-stone-800">
               Impossible d&apos;ouvrir cette page
             </h1>
-            <p className="text-sm text-stone-600 dark:text-stone-400 leading-relaxed">
+            <p className="text-sm text-stone-600 leading-relaxed">
               {this.friendlyMessage()}
             </p>
+            <style>{`
+              .error-net-motion { animation: errNetIn .45s ease both; }
+              @keyframes errNetIn {
+                from { opacity: 0; transform: translateY(10px); }
+                to { opacity: 1; transform: translateY(0); }
+              }
+            `}</style>
             <div className="flex flex-col gap-2 justify-center">
               <button
                 type="button"

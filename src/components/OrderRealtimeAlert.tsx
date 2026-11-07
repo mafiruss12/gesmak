@@ -206,10 +206,11 @@ export default function OrderRealtimeAlert() {
   return (
     <>
       {popup && (
-        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-3 bg-black/55">
-          <div className="w-full max-w-md rounded-2xl border-2 border-red-500 bg-stone-900 shadow-2xl shadow-red-900/50 overflow-hidden animate-pulse">
-            <div className="bg-red-600 px-4 py-3 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 font-bold text-white text-lg">
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-3 bg-black/60 backdrop-blur-[2px]">
+          <div className="w-full max-w-md rounded-2xl border-2 border-red-500 bg-stone-900 shadow-2xl shadow-red-900/50 overflow-hidden order-alert-motion">
+            <div className="bg-gradient-to-r from-red-700 via-red-600 to-orange-600 px-4 py-3 flex items-center justify-between gap-2 relative overflow-hidden">
+              <span className="absolute inset-0 bg-white/10 animate-pulse pointer-events-none" aria-hidden />
+              <div className="relative flex items-center gap-2 font-bold text-white text-lg">
                 <Bell className="animate-bounce" size={24} />
                 🚨 Nouvelle commande
               </div>
@@ -276,5 +277,23 @@ export default function OrderRealtimeAlert() {
         </div>
       )}
     </>
+
+      <style>{`
+        .order-alert-motion {
+          animation: orderAlertIn .45s cubic-bezier(.22,1,.36,1) both,
+                     orderAlertPulse 1.6s ease-in-out .45s infinite;
+        }
+        @keyframes orderAlertIn {
+          from { opacity: 0; transform: translateY(24px) scale(.94); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes orderAlertPulse {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,.45); }
+          50% { box-shadow: 0 0 0 10px rgba(239,68,68,0); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .order-alert-motion { animation: orderAlertIn .3s ease both; }
+        }
+      `}</style>
   );
 }

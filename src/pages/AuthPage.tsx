@@ -400,7 +400,7 @@ async function resendConfirmation() {
 
 
   return (
-    <div className="min-h-screen bg-[#F5F5F5] flex items-center justify-center p-4 relative overflow-hidden">
+    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden auth-gesmak-shell">
       <div className="auth-marquee-bar absolute top-0 left-0 right-0">
         <div className="auth-marquee-track">
           {MARQUEE_MESSAGES.concat(MARQUEE_MESSAGES).map((msg, i) => (
@@ -443,6 +443,9 @@ async function resendConfirmation() {
           }}
         />
       </div>
+
+      <div className="auth-orb auth-orb-a" aria-hidden />
+      <div className="auth-orb auth-orb-b" aria-hidden />
 
       <div className="relative z-10 w-full max-w-6xl mt-12 mb-8 px-2 grid lg:grid-cols-2 gap-6 lg:gap-10 items-center">
         {/* Panneau avantages animé */}
@@ -529,14 +532,30 @@ async function resendConfirmation() {
         {/* Formulaire connexion */}
         <div className="order-1 lg:order-2 w-full max-w-md mx-auto lg:mx-0 lg:ml-auto">
         <div className="bg-white border border-stone-200 rounded-3xl p-8 sm:p-10 shadow-xl auth-form-card">
-          <div className="flex flex-col items-center mb-6">
+          <div className="flex flex-col items-center mb-6 auth-logo-block">
+            <div className="auth-mark relative mb-4 w-[7.5rem] h-[7.5rem] sm:w-36 sm:h-36 flex items-center justify-center">
+              {/* anneaux type splash motion */}
+              <span className="auth-ring auth-ring-outer absolute inset-0 rounded-full" aria-hidden />
+              <span className="auth-ring auth-ring-mid absolute inset-[8%] rounded-full" aria-hidden />
+              <span className="auth-ring auth-ring-inner absolute inset-[16%] rounded-full" aria-hidden />
+              <span className="auth-glow absolute inset-[12%] rounded-full" aria-hidden />
+              <span className="auth-spark auth-spark-a" aria-hidden />
+              <span className="auth-spark auth-spark-b" aria-hidden />
+              <span className="auth-spark auth-spark-c" aria-hidden />
+              <img
+                src="/logo-circle.png"
+                alt="GESMAK"
+                className="auth-logo-img relative z-[2] w-[72%] h-[72%] rounded-full object-cover shadow-xl ring-2 ring-white/80"
+                draggable={false}
+              />
+            </div>
             <img
               src="/logo-gesmak-wide.png"
               alt="GESMAK — Gestion Simplifiée, Business Maîtrisé"
-              className="h-auto w-full max-w-[320px] object-contain mb-3"
+              className="auth-wordmark h-auto w-full max-w-[280px] object-contain mb-1"
             />
             <h1 className="sr-only">GESMAK</h1>
-            <p className="text-sm text-stone-500 mt-1">
+            <p className="text-sm text-stone-500 mt-1 auth-tagline">
               {mode === 'forgot' ? 'Réinitialiser le mot de passe' : 'Gestion simplifiée · Business maîtrisé'}
             </p>
           </div>
@@ -726,7 +745,9 @@ async function resendConfirmation() {
               )}
             </button>
           </form>
-          <div className="mt-8 pt-2"><BrandFooter compact light /></div>
+          <div className="mt-8 pt-2">
+            <BrandFooter compact light />
+          </div>
 
           {mode === 'forgot' ? (
             <button
@@ -744,6 +765,126 @@ async function resendConfirmation() {
         </div>
         </div>
       </div>
+
+      <style>{`
+        .auth-gesmak-shell {
+          background: linear-gradient(165deg, #f8fafc 0%, #eef2ff 40%, #fff7ed 100%);
+        }
+        .auth-orb {
+          position: absolute; border-radius: 50%; filter: blur(48px); pointer-events: none; z-index: 0;
+        }
+        .auth-orb-a {
+          width: min(55vw, 320px); height: min(55vw, 320px);
+          top: 8%; left: -8%; background: rgba(37, 99, 235, 0.18);
+          animation: authOrb 7s ease-in-out infinite alternate;
+        }
+        .auth-orb-b {
+          width: min(45vw, 260px); height: min(45vw, 260px);
+          bottom: 12%; right: -6%; background: rgba(245, 158, 11, 0.16);
+          animation: authOrb 8s ease-in-out infinite alternate-reverse;
+        }
+        .auth-logo-block {
+          animation: authLogoEnter .7s cubic-bezier(.22,1,.36,1) both;
+        }
+        .auth-mark {
+          animation: authFloat 3.2s ease-in-out infinite;
+        }
+        .auth-ring {
+          border-style: solid;
+          border-color: transparent;
+          pointer-events: none;
+        }
+        .auth-ring-outer {
+          border-width: 2.5px;
+          border-top-color: #2563eb;
+          border-right-color: #f59e0b;
+          animation: authSpin 2.4s linear infinite;
+          filter: drop-shadow(0 0 6px rgba(37,99,235,.35));
+        }
+        .auth-ring-mid {
+          border-width: 2px;
+          border-bottom-color: #f59e0b;
+          border-left-color: #3b82f6;
+          animation: authSpinReverse 3.4s linear infinite;
+          opacity: .85;
+        }
+        .auth-ring-inner {
+          border-width: 1.5px;
+          border-top-color: rgba(251,191,36,.7);
+          border-right-color: rgba(59,130,246,.55);
+          animation: authSpin 4.2s linear infinite;
+          opacity: .7;
+        }
+        .auth-glow {
+          background: radial-gradient(circle, rgba(245,158,11,.28) 0%, rgba(37,99,235,.12) 45%, transparent 70%);
+          animation: authGlowPulse 2.4s ease-in-out infinite;
+        }
+        .auth-logo-img {
+          animation: authLogoPulse 2.8s ease-in-out infinite;
+        }
+        .auth-wordmark {
+          animation: authWordIn .8s ease .15s both;
+        }
+        .auth-tagline {
+          animation: authWordIn .8s ease .28s both;
+        }
+        .auth-spark {
+          position: absolute;
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: #fbbf24;
+          box-shadow: 0 0 8px #f59e0b;
+          z-index: 3;
+          animation: authSpark 2.2s ease-in-out infinite;
+        }
+        .auth-spark-a { top: 8%; right: 18%; animation-delay: 0s; }
+        .auth-spark-b { bottom: 14%; left: 12%; background: #60a5fa; box-shadow: 0 0 8px #3b82f6; animation-delay: .4s; }
+        .auth-spark-c { top: 22%; left: 8%; width: 4px; height: 4px; animation-delay: .9s; }
+        .auth-form-card {
+          animation: authCardIn .55s cubic-bezier(.22,1,.36,1) both;
+        }
+        @keyframes authLogoEnter {
+          from { opacity: 0; transform: scale(.82) translateY(12px); }
+          to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        @keyframes authCardIn {
+          from { opacity: 0; transform: translateY(16px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes authWordIn {
+          from { opacity: 0; transform: translateY(6px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes authSpin { to { transform: rotate(360deg); } }
+        @keyframes authSpinReverse { to { transform: rotate(-360deg); } }
+        @keyframes authFloat {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-7px); }
+        }
+        @keyframes authLogoPulse {
+          0%, 100% { transform: scale(1); box-shadow: 0 8px 24px rgba(15,23,42,.18); }
+          50% { transform: scale(1.04); box-shadow: 0 12px 32px rgba(37,99,235,.22); }
+        }
+        @keyframes authGlowPulse {
+          0%, 100% { opacity: .55; transform: scale(1); }
+          50% { opacity: 1; transform: scale(1.08); }
+        }
+        @keyframes authSpark {
+          0%, 100% { opacity: .2; transform: scale(.6); }
+          50% { opacity: 1; transform: scale(1.25); }
+        }
+        @keyframes authOrb {
+          from { transform: translate(0, 0); }
+          to { transform: translate(18px, -14px); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .auth-orb-a, .auth-orb-b, .auth-mark, .auth-ring, .auth-logo-img,
+          .auth-glow, .auth-spark, .auth-logo-block, .auth-form-card,
+          .auth-wordmark, .auth-tagline { animation: none !important; }
+        }
+      `}</style>
+
     </div>
   );
 }

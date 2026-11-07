@@ -45,6 +45,7 @@ export default function PublicTableOrder() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [showIntro, setShowIntro] = useState(true);
   const [clientHistory, setClientHistory] = useState<{ id: string; created_at: string; total: number; status: string }[]>([]);
   const [customerPhone, setCustomerPhone] = useState('');
 
@@ -86,6 +87,14 @@ export default function PublicTableOrder() {
       try { wake?.release?.(); } catch { /* */ }
     };
   }, [kioskMode]);
+
+
+  // Intro motion « Bienvenue chez … » (Partie 3) — non bloquant longtemps
+  useEffect(() => {
+    if (loading || !est || !showIntro) return;
+    const t = window.setTimeout(() => setShowIntro(false), 2000);
+    return () => window.clearTimeout(t);
+  }, [loading, est, showIntro]);
 
   useEffect(() => {
     if (!estParam) {
@@ -374,8 +383,16 @@ export default function PublicTableOrder() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white text-stone-500">
-        <Loader2 className="animate-spin" />
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3 px-6"
+        style={{ background: 'linear-gradient(165deg,#fff7ed 0%,#ffffff 45%,#eff6ff 100%)' }}>
+        <div className="relative w-20 h-20 flex items-center justify-center">
+          <span className="absolute inset-0 rounded-full border-2 border-transparent border-t-blue-500 border-r-amber-400 animate-spin" style={{ animationDuration: '1.8s' }} aria-hidden />
+          <img src="/logo-circle.png" alt="GESMAK" className="relative z-[1] w-[78%] h-[78%] rounded-full object-cover" />
+        </div>
+        <p className="text-sm font-semibold text-stone-600">Préparation du menu…</p>
+        <div className="w-40 h-1.5 rounded-full bg-stone-200 overflow-hidden">
+          <div className="h-full w-2/5 rounded-full bg-gradient-to-r from-blue-500 to-amber-400 animate-pulse" />
+        </div>
       </div>
     );
   }
@@ -388,6 +405,58 @@ export default function PublicTableOrder() {
     );
   }
 
+
+  if (showIntro && est) {
+    return (
+      <div
+        className="min-h-screen flex flex-col items-center justify-center px-6 text-center relative overflow-hidden qr-intro"
+        style={{ background: 'linear-gradient(165deg,#0f172a 0%,#1e293b 50%,#0f172a 100%)' }}
+        role="status"
+        aria-label="Bienvenue"
+      >
+        <div className="absolute inset-0 pointer-events-none" aria-hidden
+          style={{ background: 'radial-gradient(ellipse 70% 40% at 50% 20%, rgba(249,115,22,.2), transparent 55%)' }}
+        />
+        <div className="relative z-[1] flex flex-col items-center gap-3 animate-[qrIntroIn_.6s_ease_both]">
+          <div className="relative w-28 h-28 sm:w-32 sm:h-32 flex items-center justify-center">
+            <span className="absolute inset-0 rounded-full border-2 border-transparent border-t-blue-400 border-r-amber-400 animate-spin" style={{ animationDuration: '2.8s' }} aria-hidden />
+            <img
+              src={logoUrl || '/logo-circle.png'}
+              alt=""
+              className="relative z-[1] w-[82%] h-[82%] rounded-full object-cover shadow-2xl ring-2 ring-white/20"
+              onError={(e) => { (e.target as HTMLImageElement).src = '/logo-circle.png'; }}
+            />
+          </div>
+          <p className="text-xs font-semibold uppercase tracking-widest text-amber-400/90">Bienvenue chez</p>
+          <h1 className="text-2xl sm:text-3xl font-black text-white max-w-xs leading-tight">{est.name}</h1>
+          {tableNum ? (
+            <p className="text-sm text-orange-300 font-bold bg-orange-500/15 border border-orange-400/30 rounded-full px-4 py-1.5">
+              Table {tableNum}
+            </p>
+          ) : null}
+          <p className="text-sm text-slate-400 max-w-[260px] mt-1">{welcome}</p>
+          <div className="mt-4 flex gap-4 text-2xl" aria-hidden>
+            <span className="opacity-90">🍺</span>
+            <span className="opacity-90">🍽️</span>
+          </div>
+          <button
+            type="button"
+            className="mt-5 text-xs font-semibold text-slate-400 underline underline-offset-2"
+            onClick={() => setShowIntro(false)}
+          >
+            Passer →
+          </button>
+        </div>
+        <style>{`
+          @keyframes qrIntroIn {
+            from { opacity: 0; transform: scale(.88) translateY(12px); }
+            to { opacity: 1; transform: scale(1) translateY(0); }
+          }
+        `}</style>
+      </div>
+    );
+  }
+
   if (done) {
     const waitMin = estimateWaitMinutes(trackStatus, pendingAhead);
     const steps = ['pending', 'preparing', 'ready', 'served'] as const;
@@ -395,12 +464,21 @@ export default function PublicTableOrder() {
     return (
       <div className="min-h-screen bg-white text-stone-900 px-4 py-6 pb-24">
         <div className="max-w-lg mx-auto space-y-4">
-          <div className="text-center space-y-2">
-            <CheckCircle2 className="text-emerald-400 mx-auto" size={48} />
-            <h1 className="text-xl font-bold">Commande reçue</h1>
-            <p className="text-stone-400 text-sm">
-              {tableNum ? `Table ${tableNum}` : 'Votre commande'} · {est?.name}
+          <div className="text-center space-y-3 gesmak-pop">
+            <div className="relative mx-auto w-20 h-20 flex items-center justify-center">
+              <span className="absolute inset-0 rounded-full bg-emerald-400/20 animate-ping" aria-hidden />
+              <CheckCircle2 className="relative z-[1] text-emerald-500 drop-shadow-md" size={52} />
+            </div>
+            {logoUrl ? (
+              <img src={logoUrl} alt="" className="w-12 h-12 rounded-full object-cover mx-auto ring-2 ring-emerald-300" />
+            ) : (
+              <img src="/logo-circle.png" alt="" className="w-12 h-12 rounded-full object-cover mx-auto opacity-90" />
+            )}
+            <h1 className="text-xl font-black text-stone-900">Commande reçue !</h1>
+            <p className="text-stone-500 text-sm">
+              {tableNum ? `Table ${tableNum}` : 'Votre commande'} · <span className="font-semibold text-stone-700">{est?.name}</span>
             </p>
+            <p className="text-xs text-emerald-600 font-medium">Le personnel a été notifié</p>
           </div>
 
           {trackServer && (
@@ -610,18 +688,20 @@ export default function PublicTableOrder() {
 
       <header className="sticky top-0 z-20 border-b border-orange-100 bg-white px-4 py-3 shadow-md shadow-orange-100/50">
         <div className="max-w-lg mx-auto flex items-center gap-3">
-          <div className="gesmak-float rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 p-2.5 shadow-lg shadow-orange-300/60">
-            <Beer className="text-white" size={22} />
-          </div>
+          {logoUrl ? (
+            <img src={logoUrl} alt="" className="w-12 h-12 rounded-2xl object-cover ring-2 ring-orange-300 shadow-md gesmak-float" />
+          ) : (
+            <div className="gesmak-float rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 p-2.5 shadow-lg shadow-orange-300/60">
+              <Beer className="text-white" size={22} />
+            </div>
+          )}
           <div className="min-w-0 flex-1">
             <h1 className="font-black truncate text-lg tracking-tight text-stone-900">{est?.name || 'Menu'}</h1>
             <p className="text-xs text-orange-700 font-semibold">
               {tableNum ? `Table ${tableNum}` : 'Commande'} · scan &amp; commandez
             </p>
           </div>
-          {logoUrl && (
-            <img src={logoUrl} alt="" className="w-11 h-11 rounded-xl object-cover ring-2 ring-orange-300 shadow-md" />
-          )}
+          <img src="/logo-circle.png" alt="GESMAK" className="w-9 h-9 rounded-full object-cover opacity-90" title="Propulsé par GESMAK" />
         </div>
       </header>
 

@@ -61,15 +61,19 @@ export default function SyncPending() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-4">
+    <div className="max-w-2xl mx-auto space-y-4 sync-page-motion">
       <div className="flex items-center gap-3">
         <Link to="/dashboard" className="text-stone-400 hover:text-stone-200">
           <ArrowLeft size={20} />
         </Link>
+        <div className="relative w-10 h-10 flex items-center justify-center shrink-0">
+          <span className={`absolute inset-0 rounded-full border-2 border-transparent ${online ? 'border-t-emerald-400 border-r-sky-400' : 'border-t-amber-400 border-r-orange-400'} ${syncing ? 'animate-spin' : ''}`} style={{ animationDuration: '1.6s' }} aria-hidden />
+          <img src="/logo-circle.png" alt="" className="relative z-[1] w-[72%] h-[72%] rounded-full object-cover" />
+        </div>
         <div>
           <h1 className="text-xl font-semibold text-stone-100">Actions en attente</h1>
           <p className="text-sm text-stone-500">
-            Opérations faites hors ligne, à envoyer quand le réseau revient.
+            Opérations hors ligne · synchronisation GESMAK
           </p>
         </div>
       </div>
@@ -79,10 +83,14 @@ export default function SyncPending() {
           online ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-100' : 'border-amber-500/30 bg-amber-500/10 text-amber-100'
         }`}
       >
-        {online ? 'En ligne' : (
-          <>
+        {online ? (
+          <span className="inline-flex items-center gap-1.5 font-semibold">
+            <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" /> En ligne
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 font-semibold">
             <WifiOff size={16} /> Hors ligne
-          </>
+          </span>
         )}
         <span className="text-stone-400">· {items.length} en file</span>
         <button
@@ -133,5 +141,13 @@ export default function SyncPending() {
         </ul>
       )}
     </div>
+
+      <style>{`
+        .sync-page-motion { animation: syncPageIn .45s ease both; }
+        @keyframes syncPageIn {
+          from { opacity: 0; transform: translateY(8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
   );
 }

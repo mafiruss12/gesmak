@@ -494,6 +494,18 @@ export default function PrintTableQR() {
 
   return (
     <div className="max-w-5xl mx-auto space-y-4 pb-16">
+
+      {exporting && (
+        <div className="fixed inset-0 z-[90] flex flex-col items-center justify-center bg-stone-950/70 backdrop-blur-sm exporting-overlay">
+          <div className="relative w-24 h-24 flex items-center justify-center mb-3">
+            <span className="absolute inset-0 rounded-full border-2 border-transparent border-t-blue-400 border-r-amber-400 animate-spin" style={{ animationDuration: '1.2s' }} />
+            <img src="/logo-circle.png" alt="" className="w-[70%] h-[70%] rounded-full object-cover relative z-[1]" />
+          </div>
+          <p className="text-stone-100 font-semibold">Préparation des nappes QR…</p>
+          <p className="text-xs text-stone-400 mt-1">PNG HD en cours</p>
+        </div>
+      )}
+
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 print:hidden">
         <div>
           <Link to="/tables" className="text-xs text-amber-400 hover:underline flex items-center gap-1 mb-1">

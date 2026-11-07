@@ -14,13 +14,20 @@ export default function GuidePage() {
   const theme = BUSINESS_THEMES[bizType];
 
   return (
-    <div className="max-w-2xl mx-auto pb-16">
+    <div className="max-w-2xl mx-auto pb-16 guide-page-motion">
       <Link
         to="/dashboard"
         className="inline-flex items-center gap-1 text-sm text-stone-400 hover:text-stone-200 mb-4"
       >
         <ArrowLeft size={16} /> Accueil
       </Link>
+
+      <div className="flex justify-center mb-4">
+        <div className="relative w-14 h-14 flex items-center justify-center">
+          <span className="absolute inset-0 rounded-full border-2 border-transparent border-t-blue-500 border-r-amber-400 animate-spin" style={{ animationDuration: '2.8s' }} aria-hidden />
+          <img src="/logo-circle.png" alt="GESMAK" className="relative z-[1] w-[78%] h-[78%] rounded-full object-cover" draggable={false} />
+        </div>
+      </div>
 
       <div className="mb-6">
         <p className="text-xs font-medium uppercase tracking-wide" style={{ color: theme.primary }}>
@@ -47,5 +54,13 @@ export default function GuidePage() {
         </ul>
       </div>
     </div>
+
+      <style>{`
+        .guide-page-motion { animation: guideEnter .5s ease both; }
+        @keyframes guideEnter {
+          from { opacity: 0; transform: translateY(8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
   );
 }

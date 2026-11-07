@@ -599,9 +599,19 @@ export default function LiveDaySales() {
       )}
 
       {phase === 'done' && day && agg && (
-        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-6 text-center space-y-3">
-          <CheckCircle2 className="mx-auto text-emerald-400" size={40} />
+        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-6 text-center space-y-3 live-done-motion">
+          <div className="relative mx-auto w-16 h-16 flex items-center justify-center">
+            <span className="absolute inset-0 rounded-full bg-emerald-400/20 animate-ping" aria-hidden />
+            <CheckCircle2 className="relative z-[1] mx-auto text-emerald-400" size={44} />
+          </div>
           <h2 className="text-xl font-bold text-stone-100">Journée clôturée</h2>
+          <style>{`
+            .live-done-motion { animation: liveDoneIn .5s cubic-bezier(.22,1,.36,1) both; }
+            @keyframes liveDoneIn {
+              from { opacity: 0; transform: translateY(10px) scale(.96); }
+              to { opacity: 1; transform: translateY(0) scale(1); }
+            }
+          `}</style>
           <p className="text-stone-300">
             {agg.ticketCount} ventes · {formatFCFA(agg.total)}
           </p>

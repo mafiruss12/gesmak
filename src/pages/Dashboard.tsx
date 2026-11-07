@@ -28,6 +28,7 @@ import StartupGuide from '@/components/StartupGuide';
 import ExchangeRatesCard from '@/components/ExchangeRatesCard';
 import SectorNews from '@/components/SectorNews';
 import OwnerSitesBar from '@/components/OwnerSitesBar';
+import { GesmakLoading } from '@/components/GesmakLoading';
 
 function DashLink({ to, children, className = '' }: { to: string; children: ReactNode; className?: string }) {
   return (
@@ -394,12 +395,7 @@ export default function Dashboard() {
     );
   }
   if (loading && !data) {
-    return (
-      <div className="flex flex-col items-center justify-center py-16 gap-3 text-stone-500">
-        <div className="h-8 w-8 rounded-full border-2 border-[#FF7900] border-t-transparent animate-spin" />
-        <p className="text-sm">Chargement du tableau de bord…</p>
-      </div>
-    );
+    return <GesmakLoading variant="page" label="Chargement du tableau de bord…" />;
   }
   if (!data) {
     return (
