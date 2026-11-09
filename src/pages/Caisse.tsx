@@ -467,24 +467,63 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
             <EmptyState icon={<ShoppingCart size={48} />} title={ui.productPlural} message={ui.emptyProducts} />
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-              {filtered.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => addToCart(p)}
-                  disabled={Number(p.stock) <= 0}
-                  className="card text-left p-2 transition hover:border-amber-500/50 disabled:opacity-40 active:scale-95"
-                >
-                  <div className="aspect-square rounded-xl bg-stone-950 flex items-center justify-center mb-1.5 overflow-hidden">
-                    <ProductThumb name={p.name} category={p.category} imageUrl={(p as any).image_url} size={88} />
+              {filtered.map((p) => {
+                const q = cart.find((c) => c.product.id === p.id)?.qty ?? 0;
+                const out = Number(p.stock) <= 0;
+                return (
+                  <div
+                    key={p.id}
+                    className={`card text-left p-2.5 transition ${
+                      q > 0 ? 'border-orange-400/70 bg-orange-500/5 ring-1 ring-orange-400/30' : 'hover:border-amber-500/40'
+                    } ${out ? 'opacity-40' : ''}`}
+                  >
+                    <button
+                      type="button"
+                      disabled={out}
+                      onClick={() => addToCart(p)}
+                      className="w-full text-left disabled:pointer-events-none"
+                    >
+                      <div className="aspect-square rounded-xl bg-stone-950 flex items-center justify-center mb-1.5 overflow-hidden relative">
+                        <ProductThumb name={p.name} category={p.category} imageUrl={(p as any).image_url} size={88} />
+                        {q > 0 && (
+                          <span className="absolute top-1 right-1 min-w-[22px] h-[22px] px-1 rounded-full bg-orange-500 text-white text-[11px] font-black flex items-center justify-center shadow">
+                            {q}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs font-semibold text-stone-100 truncate">{p.name}</p>
+                      <p className="text-sm font-bold text-orange-400 dark:text-amber-300">{formatFCFA(Number(p.price) || 0)}</p>
+                      <p className={`text-[10px] ${Number(p.stock) <= Number(p.min_stock) ? 'text-warning-400' : 'text-stone-500'}`}>
+                        Stock {p.stock}
+                      </p>
+                    </button>
+                    {/* + / − sous chaque bouteille */}
+                    <div className="mt-2 flex items-center justify-between gap-1">
+                      <button
+                        type="button"
+                        disabled={q <= 0}
+                        onClick={() => setQty(p.id, q - 1)}
+                        className="flex-1 min-h-[40px] rounded-xl bg-stone-800 text-stone-100 flex items-center justify-center disabled:opacity-30 active:scale-95"
+                        aria-label="Retirer"
+                      >
+                        <Minus size={18} />
+                      </button>
+                      <span className={`w-9 text-center text-base font-black ${q > 0 ? 'text-orange-400' : 'text-stone-500'}`}>
+                        {q}
+                      </span>
+                      <button
+                        type="button"
+                        disabled={out || q >= Number(p.stock)}
+                        onClick={() => (q === 0 ? addToCart(p) : setQty(p.id, q + 1))}
+                        className="flex-1 min-h-[40px] rounded-xl bg-orange-500 text-white flex items-center justify-center disabled:opacity-30 active:scale-95 shadow-sm"
+                        aria-label="Ajouter"
+                      >
+                        <Plus size={18} />
+                      </button>
+                    </div>
                   </div>
-                  <p className="text-xs font-semibold text-stone-100 truncate">{p.name}</p>
-                  <p className="text-sm font-bold text-amber-300">{formatFCFA(Number(p.price) || 0)}</p>
-                  <p className={`text-[10px] ${Number(p.stock) <= Number(p.min_stock) ? 'text-warning-400' : 'text-stone-500'}`}>
-                    Stock {p.stock}
-                  </p>
-                </button>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
