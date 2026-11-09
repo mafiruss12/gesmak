@@ -140,8 +140,6 @@ export default function SyncPending() {
           ))}
         </ul>
       )}
-    </div>
-
       <style>{`
         .sync-page-motion { animation: syncPageIn .45s ease both; }
         @keyframes syncPageIn {
@@ -149,5 +147,6 @@ export default function SyncPending() {
           to { opacity: 1; transform: translateY(0); }
         }
       `}</style>
+    </div>
   );
 }
