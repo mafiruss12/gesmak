@@ -326,8 +326,6 @@ export default function TypePicker({ mode, onDone, defaultName = '' }: Props) {
           Se déconnecter
         </button>
       </div>
-    </div>
-
       <style>{`
         .tp-enter { animation: tpEnter .55s ease both; }
         @keyframes tpEnter {
@@ -336,5 +334,6 @@ export default function TypePicker({ mode, onDone, defaultName = '' }: Props) {
         }
         @media (prefers-reduced-motion: reduce) { .tp-enter { animation: none; } }
       `}</style>
+    </div>
   );
 }

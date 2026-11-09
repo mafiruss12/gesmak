@@ -53,8 +53,6 @@ export default function GuidePage() {
           <li>• Clôturer le soir (Clôture Z) pour figer le rapport du jour.</li>
         </ul>
       </div>
-    </div>
-
       <style>{`
         .guide-page-motion { animation: guideEnter .5s ease both; }
         @keyframes guideEnter {
@@ -62,5 +60,6 @@ export default function GuidePage() {
           to { opacity: 1; transform: translateY(0); }
         }
       `}</style>
+    </div>
   );
 }

@@ -297,8 +297,6 @@ export default function StartupGuide({ compact = false }: { compact?: boolean })
           );
         })}
       </ul>
-    </div>
-
       <style>{`
         .sg-motion { animation: sgEnter .5s ease both; }
         @keyframes sgEnter {
@@ -307,5 +305,6 @@ export default function StartupGuide({ compact = false }: { compact?: boolean })
         }
         @media (prefers-reduced-motion: reduce) { .sg-motion { animation: none; } }
       `}</style>
+    </div>
   );
 }
