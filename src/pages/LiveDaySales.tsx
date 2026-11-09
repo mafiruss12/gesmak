@@ -319,7 +319,7 @@ export default function LiveDaySales({
   }
 
   return (
-    <div className="max-w-3xl mx-auto space-y-4 pb-28">
+    <div className="max-w-3xl mx-auto space-y-4 pb-40">
       {!embedded && (
       <div className="flex items-start justify-between gap-3">
         <div>
@@ -430,7 +430,7 @@ export default function LiveDaySales({
           </div>
 
           {cartLines.length > 0 && (
-            <div className="fixed bottom-16 inset-x-0 z-30 px-3 lg:bottom-4">
+            <div className="fixed bottom-[calc(3.5rem+env(safe-area-inset-bottom))] lg:bottom-4 inset-x-0 z-40 px-3">
               <div className="max-w-3xl mx-auto rounded-2xl border border-amber-500/40 bg-stone-950 shadow-xl p-3 space-y-2">
                 <div className="flex justify-between text-sm">
                   <span className="text-stone-300 flex items-center gap-1">

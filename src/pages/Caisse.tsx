@@ -373,7 +373,7 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
   }
 
   return (
-    <div className={`max-w-5xl mx-auto space-y-3 pb-8 ${embedded ? '' : 'px-1'}`}>
+    <div className={`max-w-5xl mx-auto space-y-3 pb-40 ${embedded ? '' : 'px-1'}`}>
       <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2.5 text-sm text-stone-200">
         <p className="font-semibold text-amber-200">Vente journalière — clients sans QR</p>
         <p className="text-xs text-stone-400 mt-0.5">
@@ -408,11 +408,11 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
         </div>
       )}
 
-      {/* Commandes à encaisser (QR / salle) */}
+      {/* Commandes QR — collées en haut, visibles sans scroller */}
       {readyOrders.length > 0 && (
-        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-3 space-y-2">
+        <div className="sticky top-0 z-30 rounded-2xl border border-amber-500/40 bg-stone-950/95 backdrop-blur-md p-3 space-y-2 shadow-lg">
           <p className="text-xs font-bold uppercase text-amber-300 flex items-center gap-1">
-            <QrCode size={14} /> Commandes à encaisser
+            <QrCode size={14} /> Commandes à encaisser ({readyOrders.length})
           </p>
           <div className="flex gap-2 overflow-x-auto pb-1">
             {readyOrders.map((o) => (
@@ -489,8 +489,8 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
           )}
         </div>
 
-        {/* Panier */}
-        <div className="lg:col-span-2 card flex flex-col min-h-[320px]">
+        {/* Panier desktop */}
+        <div className="hidden lg:flex lg:col-span-2 card flex-col min-h-[320px]">
           <h2 className="text-lg font-semibold text-stone-100 mb-2 flex items-center gap-2">
             <ShoppingCart size={18} /> Panier
             {linkedOrderId && (
@@ -555,6 +555,54 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
               className="btn-primary w-full min-h-[48px] text-base font-bold"
             >
               Encaisser
+            </button>
+          </div>
+        </div>
+      </div>
+
+
+      {/* Barre panier fixe — valider sans scroller */}
+      <div className="fixed bottom-[calc(3.5rem+env(safe-area-inset-bottom))] lg:bottom-4 inset-x-0 z-40 px-3 pointer-events-none">
+        <div className="pointer-events-auto max-w-lg mx-auto rounded-2xl border border-amber-500/40 bg-stone-950/95 backdrop-blur-md shadow-2xl shadow-black/50 p-3 space-y-2">
+          {readyOrders.length > 0 && (
+            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-0.5 -mx-0.5">
+              {readyOrders.slice(0, 8).map((o) => (
+                <button
+                  key={`bar-${o.id}`}
+                  type="button"
+                  onClick={() => void loadOrderIntoCart(o.id)}
+                  className={`shrink-0 rounded-lg border px-2.5 py-1.5 text-[10px] font-semibold ${
+                    linkedOrderId === o.id
+                      ? 'border-amber-400 bg-amber-500/25 text-amber-100'
+                      : 'border-stone-700 bg-stone-900 text-stone-300'
+                  }`}
+                >
+                  {(o.customer_name || 'Client').slice(0, 12)}
+                  {o.table_number ? ` · T${o.table_number}` : ''}
+                  <span className="text-amber-300 ml-1">{formatFCFA(Number(o.total) || 0)}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="flex items-center gap-3">
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] uppercase tracking-wide text-stone-500 font-bold">
+                Panier · {cart.reduce((s, i) => s + i.qty, 0)} art.
+              </p>
+              <p className="text-lg font-black text-amber-300 leading-tight">{formatFCFA(netTotal)}</p>
+              {cart.length > 0 && (
+                <p className="text-[11px] text-stone-400 truncate">
+                  {cart.map((i) => `${i.product.name}×${i.qty}`).join(' · ')}
+                </p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={openCheckout}
+              disabled={cart.length === 0}
+              className="shrink-0 btn-primary min-h-[52px] px-5 text-base font-bold rounded-xl disabled:opacity-40"
+            >
+              Valider
             </button>
           </div>
         </div>
