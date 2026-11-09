@@ -1,19 +1,19 @@
 import { useMemo, type ReactNode } from 'react';
-import { useSearchParams, Navigate, Link } from 'react-router-dom';
+import { useSearchParams, Navigate } from 'react-router-dom';
 import {
-  ShoppingCart, History, Moon, FileText,
+  ShoppingCart, History, Moon, BarChart3,
 } from 'lucide-react';
 import Caisse from '@/pages/Caisse';
 import LiveDaySales from '@/pages/LiveDaySales';
-import Documents from '@/pages/Documents';
+import VenteRapports from '@/pages/VenteRapports';
 
-type TabId = 'encaisser' | 'historique' | 'terminer' | 'docs';
+type TabId = 'encaisser' | 'historique' | 'terminer' | 'rapport';
 
 const TABS: { id: TabId; label: string; icon: ReactNode; short: string }[] = [
   { id: 'encaisser', label: 'Encaisser', short: 'Encaisser', icon: <ShoppingCart size={16} /> },
   { id: 'historique', label: 'Historique', short: 'Historique', icon: <History size={16} /> },
   { id: 'terminer', label: 'Terminer la journée', short: 'Clôturer', icon: <Moon size={16} /> },
-  { id: 'docs', label: 'Documents', short: 'Docs', icon: <FileText size={16} /> },
+  { id: 'rapport', label: 'Rapport', short: 'Rapport', icon: <BarChart3 size={16} /> },
 ];
 
 function parseTab(raw: string | null): TabId {
@@ -29,15 +29,12 @@ function parseTab(raw: string | null): TabId {
   if (raw === 'terminer' || raw === 'close' || raw === 'cloture' || raw === 'z' || raw === 'point') {
     return 'terminer';
   }
-  if (raw === 'docs' || raw === 'documents' || raw === 'devis' || raw === 'facture') return 'docs';
-  // caisse / pos / défaut → encaisser
+  if (raw === 'rapport' || raw === 'docs' || raw === 'documents' || raw === 'reports' || raw === 'pdf') {
+    return 'rapport';
+  }
   return 'encaisser';
 }
 
-/**
- * Vente journalière unique :
- * Encaisser (panier, stock décrémenté à la validation) · Historique (traces) · Terminer la journée
- */
 export default function DailyReportHub() {
   const [params, setParams] = useSearchParams();
   const tab = useMemo(() => parseTab(params.get('tab')), [params]);
@@ -57,19 +54,12 @@ export default function DailyReportHub() {
           Vente journalière
         </h1>
         <p className="text-sm text-stone-400 mt-1">
-          Panier → valider après l&apos;argent · le stock baisse tout de suite · les traces restent dans{' '}
-          <button
-            type="button"
-            className="text-amber-400 font-semibold underline-offset-2 hover:underline"
-            onClick={() => setTab('historique')}
-          >
-            Historique
-          </button>
+          Encaisser · Historique détaillé · Clôturer · Rapports (jour / semaine / mois / année / PDF)
         </p>
       </div>
 
-      <div className="sticky top-0 z-20 -mx-1 px-1 py-1 bg-stone-950/90 backdrop-blur border-b border-stone-800">
-        <div className="flex gap-1 overflow-x-auto no-scrollbar pb-1">
+      <div className="overflow-x-auto -mx-1 px-1">
+        <div className="flex gap-1.5 min-w-max pb-1">
           {TABS.map((t) => {
             const active = tab === t.id;
             return (
@@ -98,18 +88,7 @@ export default function DailyReportHub() {
         {tab === 'encaisser' && <Caisse embedded />}
         {tab === 'historique' && <LiveDaySales embedded mode="history" />}
         {tab === 'terminer' && <LiveDaySales embedded mode="close" />}
-        {tab === 'docs' && (
-          <div className="space-y-3">
-            <p className="text-sm text-stone-400">
-              Devis / factures (optionnel). Le quotidien = onglet{' '}
-              <button type="button" className="text-amber-400 underline" onClick={() => setTab('encaisser')}>
-                Encaisser
-              </button>
-              .
-            </p>
-            <Documents embedded />
-          </div>
-        )}
+        {tab === 'rapport' && <VenteRapports />}
       </div>
     </div>
   );
@@ -124,7 +103,8 @@ export function RedirectToReportTab({ tab }: { tab: string }) {
     pos: 'encaisser',
     cloture: 'terminer',
     z: 'terminer',
-    docs: 'docs',
+    docs: 'rapport',
+    rapport: 'rapport',
     historique: 'historique',
     encaisser: 'encaisser',
     terminer: 'terminer',

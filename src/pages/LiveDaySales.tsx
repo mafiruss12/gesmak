@@ -487,17 +487,18 @@ export default function LiveDaySales({
                 {day.tickets.map((ticket) => {
                   const voided = Boolean(ticket.voided);
                   const d = new Date(ticket.at);
-                  const dateStr = d.toLocaleDateString('fr-FR', {
-                    weekday: 'short',
-                    day: '2-digit',
-                    month: '2-digit',
-                    year: 'numeric',
-                  });
-                  const timeStr = d.toLocaleTimeString('fr-FR', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit',
-                  });
+                  const valid = !Number.isNaN(d.getTime());
+                  const dateStr = valid
+                    ? d.toLocaleDateString('fr-FR', {
+                        weekday: 'short',
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                      })
+                    : 'Date inconnue';
+                  const timeStr = valid
+                    ? `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`
+                    : '--:--:--';
                   const payLabel =
                     ticket.pay === 'cash' ? 'Espèces' : ticket.pay === 'mobile' ? 'Mobile Money' : 'Mixte';
                   const costSum = ticket.lines.reduce(
@@ -517,7 +518,10 @@ export default function LiveDaySales({
                       <div className="px-3 py-2 border-b border-stone-800/80 flex flex-wrap items-center justify-between gap-2 bg-stone-950/50">
                         <div>
                           <p className="text-xs font-bold text-stone-200">
-                            {dateStr} · <span className="text-amber-300 font-mono">{timeStr}</span>
+                            {dateStr}
+                          </p>
+                          <p className="text-sm font-black text-amber-300 font-mono tracking-wide mt-0.5">
+                            ⏱ {timeStr}
                           </p>
                           <p className="text-[10px] text-stone-500 mt-0.5">
                             {payLabel}
