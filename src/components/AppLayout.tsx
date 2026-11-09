@@ -56,9 +56,9 @@ const NAV_SECTIONS: NavSection[] = [
       { to: '/hotel/settings', label: 'Paramètres hôtel', icon: <Settings size={20} />, roles: ['super_admin', 'admin', 'owner'] },
       { to: '/patron', label: 'Mode patron', icon: <Crown size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager'] },
       { to: '/mon-service', label: 'Mon service', icon: <Users size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'cashier', 'employee'] },
-      { to: '/live-sales', label: 'Ventes journée', icon: <ShoppingCart size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'cashier', 'employee'] },
-      { to: '/daily-report', label: 'Point avancé', icon: <ClipboardCheck size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager'] },
-      { to: '/live-sales', label: 'Ventes journée', icon: <ShoppingCart size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'cashier', 'employee'] },
+      { to: '/daily-report?tab=ventes', label: 'Ventes du jour', icon: <ShoppingCart size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'cashier', 'employee'] },
+      { to: '/daily-report', label: 'Caisse & journée', icon: <ClipboardCheck size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'cashier', 'employee'] },
+      { to: '/daily-report?tab=terminer', label: 'Terminer la journée', icon: <ClipboardCheck size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'cashier', 'employee'] },
       { to: '/point-manuel', label: 'Point manuel', icon: <ClipboardList size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'cashier', 'employee'] },
       { to: '/orders', label: 'Commandes', icon: <Receipt size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'cashier', 'employee'] },
       { to: '/menu-carte', label: 'Carte', icon: <Receipt size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager'] },
@@ -866,10 +866,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             : bizType === 'maquis'
             ? [
                 { to: '/dashboard', label: 'Accueil', icon: <LayoutDashboard size={22} /> },
-                { to: '/live-sales', label: 'Ventes journée', icon: <ShoppingCart size={20} /> },
                 { to: '/pos', label: 'Caisse', icon: <ShoppingCart size={22} /> },
-                { to: '/inventory', label: 'Boissons', icon: <Package size={22} /> },
                 { to: '/orders', label: 'Commandes', icon: <Receipt size={22} /> },
+                { to: '/daily-report?tab=terminer', label: 'Clôturer', icon: <ClipboardCheck size={22} /> },
+                { to: '/inventory', label: 'Stock', icon: <Package size={22} /> },
               ]
             : [
                 { to: '/dashboard', label: 'Accueil', icon: <LayoutDashboard size={22} /> },

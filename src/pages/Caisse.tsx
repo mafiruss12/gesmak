@@ -15,6 +15,7 @@ import { useEstId } from '@/lib/useEstId';
 import { formatFCFA } from '@/lib/format';
 import { Link } from 'react-router-dom';
 import ProductThumb from '@/components/ProductThumb';
+import { addTicket } from '@/lib/liveDaySales';
 
 interface CartItem {
   product: Product;
@@ -306,6 +307,37 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
         method: MOBILE_MONEY_LABELS[method as MobileMoneyProvider] || method,
         at: new Date().toLocaleString('fr-FR'),
       });
+      try {
+        const payMap: Record<string, 'cash' | 'mobile' | 'mixed'> = {
+          cash: 'cash',
+          mobile_money: 'mobile',
+          wave: 'mobile',
+          orange_money: 'mobile',
+          mtn_money: 'mobile',
+          moov_money: 'mobile',
+          card: 'mobile',
+          mixed: 'mixed',
+        };
+        const livePay = payMap[String(method)] || 'cash';
+        const today = new Date().toISOString().split('T')[0];
+        addTicket(
+          estId,
+          today,
+          cart.map((i) => ({
+            product_id: i.product.id,
+            name: i.product.name,
+            price: Number(i.product.price) || 0,
+            cost: Number(i.product.cost) || 0,
+            qty: i.qty,
+          })),
+          livePay,
+          'caisse',
+          member.full_name || member.role,
+          true,
+        );
+      } catch {
+        /* */
+      }
       setCart([]);
       setDiscount('');
       setSuccess(true);
@@ -342,6 +374,17 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
 
   return (
     <div className={`max-w-5xl mx-auto space-y-3 pb-8 ${embedded ? '' : 'px-1'}`}>
+      <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2.5 text-sm text-stone-200">
+        <p className="font-semibold text-amber-200">Caisse — clients sans QR</p>
+        <p className="text-xs text-stone-400 mt-0.5">
+          Panier → paiement → valider après réception de l&apos;argent.
+          Le soir :{' '}
+          <Link to="/daily-report?tab=terminer" className="text-amber-400 underline">
+            Terminer la journée
+          </Link>{' '}
+          (rapport automatique).
+        </p>
+      </div>
       {!embedded && (
         <div className="flex flex-wrap items-end justify-between gap-2">
           <div>

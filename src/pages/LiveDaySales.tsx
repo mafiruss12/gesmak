@@ -33,7 +33,13 @@ function todayISO() {
 
 type Phase = 'sell' | 'close' | 'done';
 
-export default function LiveDaySales() {
+export default function LiveDaySales({
+  embedded = false,
+  mode = 'full',
+}: {
+  embedded?: boolean;
+  mode?: 'full' | 'history' | 'close';
+} = {}) {
   const { member, activeEstablishment, effectiveRole } = useAuth();
   const estId = useEstId();
   const role = String(effectiveRole || member?.role || '');
@@ -43,7 +49,7 @@ export default function LiveDaySales() {
   const [day, setDay] = useState<LiveDayState | null>(null);
   const [cart, setCart] = useState<Record<string, number>>({});
   const [pay, setPay] = useState<LivePayMethod>('cash');
-  const [phase, setPhase] = useState<Phase>('sell');
+  const [phase, setPhase] = useState<Phase>(() => (mode === 'close' ? 'close' : 'sell'));
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [aiTips, setAiTips] = useState<string[]>([]);
@@ -99,7 +105,19 @@ export default function LiveDaySales() {
 
   useEffect(() => {
     if (day?.closed_at) setPhase(day.stock_deducted ? 'done' : 'close');
-  }, [day?.closed_at, day?.stock_deducted]);
+    else if (mode === 'close') setPhase('close');
+    else if (mode === 'history') setPhase('sell');
+  }, [day?.closed_at, day?.stock_deducted, mode]);
+
+  useEffect(() => {
+    if (mode !== 'close' || !day || day.closed_at) return;
+    const tips = verifyDayHeuristics(day, products);
+    setAiTips(tips);
+    const a = aggregateDay(day);
+    setCashConfirm(String(a.cash));
+    setMobileConfirm(String(a.mobile));
+    setPhase('close');
+  }, [mode, day, products]);
 
   const cartLines: LiveSaleLine[] = useMemo(() => {
     return products
@@ -182,10 +200,20 @@ export default function LiveDaySales() {
         total: l.qty * l.price,
       }));
 
-      // 1) Décrément stock UNE seule fois à la clôture
+      // 1) Décrément stock seulement si pas déjà fait à la caisse
       let deducted = Boolean(day.stock_deducted);
       if (!deducted) {
-        for (const line of items) {
+        const needStock: Record<string, { product_id: string; name: string; qty: number }> = {};
+        for (const tk of day.tickets) {
+          if (tk.voided || tk.stock_applied) continue;
+          for (const l of tk.lines) {
+            if (!needStock[l.product_id]) {
+              needStock[l.product_id] = { product_id: l.product_id, name: l.name, qty: 0 };
+            }
+            needStock[l.product_id].qty += l.qty;
+          }
+        }
+        for (const line of Object.values(needStock)) {
           const prod = products.find((p) => p.id === line.product_id);
           if (!prod) continue;
           const prev = Math.floor(Number(prod.stock) || 0);
@@ -208,7 +236,7 @@ export default function LiveDaySales() {
         deducted = true;
         setProducts((prev) =>
           prev.map((p) => {
-            const line = items.find((i) => i.product_id === p.id);
+            const line = needStock[p.id];
             if (!line) return p;
             return {
               ...p,
@@ -292,19 +320,34 @@ export default function LiveDaySales() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-4 pb-28">
+      {!embedded && (
       <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-stone-100 flex items-center gap-2">
-            <Beer className="text-amber-400" size={24} /> Ventes du jour
+            <Beer className="text-amber-400" size={24} />
+            {mode === 'close' ? 'Terminer la journée' : 'Ventes du jour'}
           </h1>
           <p className="text-sm text-stone-400 mt-1">
-            Cochez chaque client · le stock ne bouge qu’à la <strong className="text-stone-300">clôture du soir</strong>
+            {mode === 'close'
+              ? 'Récap automatique · envoi au propriétaire'
+              : 'Historique des ventes validées · Caisse pour encaisser'}
           </p>
         </div>
         <Link to="/daily-report" className="text-xs text-amber-400 hover:underline shrink-0">
-          Point classique
+          Caisse
         </Link>
       </div>
+      )}
+      {embedded && mode === 'close' && (
+        <div className="rounded-xl border border-orange-500/30 bg-orange-500/10 px-3 py-2 text-sm text-orange-100">
+          Vérifiez les totaux puis validez <strong>Terminer la journée</strong> — rapport au propriétaire.
+        </div>
+      )}
+      {embedded && mode === 'history' && (
+        <div className="rounded-xl border border-stone-700 bg-stone-900/80 px-3 py-2 text-sm text-stone-300">
+          Ventes validées aujourd&apos;hui. Encaisser sans QR → onglet <strong>Caisse</strong>.
+        </div>
+      )}
 
       {agg && (
         <div className="grid grid-cols-3 gap-2">
@@ -331,7 +374,7 @@ export default function LiveDaySales() {
         </p>
       )}
 
-      {phase === 'sell' && !day?.closed_at && (
+      {phase === 'sell' && !day?.closed_at && mode === 'full' && (
         <>
           <div className="rounded-2xl border border-stone-800 bg-stone-900/50 p-3">
             <p className="text-xs text-stone-400 mb-2">Appuyez pour ajouter · stock non décrémenté</p>
@@ -527,7 +570,7 @@ export default function LiveDaySales() {
         </>
       )}
 
-      {phase === 'close' && day && agg && (
+      {(phase === 'close' || (mode === 'close' && !day?.closed_at)) && day && agg && (
         <div className="space-y-4">
           <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4 space-y-2">
             <h2 className="font-bold text-stone-100 flex items-center gap-2">

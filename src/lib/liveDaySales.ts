@@ -21,6 +21,8 @@ export type LiveSaleTicket = {
   note?: string;
   /** Verrouillé dès l’enregistrement — non modifiable sauf propriétaire */
   locked?: boolean;
+  /** Stock déjà décrémenté à la vente (ex. caisse POS) */
+  stock_applied?: boolean;
   voided?: boolean;
   voided_at?: string;
   voided_by?: string;
@@ -104,6 +106,7 @@ export function addTicket(
   pay: LivePayMethod,
   note?: string,
   by?: string,
+  stockApplied = false,
 ): LiveDayState {
   const state = loadLiveDay(estId, date);
   if (state.closed_at) return state;
@@ -118,6 +121,7 @@ export function addTicket(
     pay,
     note,
     locked: true,
+    stock_applied: stockApplied,
   };
   state.tickets = [ticket, ...state.tickets];
   pushActivity(

@@ -1,35 +1,31 @@
 import { useMemo, type ReactNode } from 'react';
-import { useSearchParams, Navigate } from 'react-router-dom';
+import { useSearchParams, Navigate, Link } from 'react-router-dom';
 import {
-  ClipboardCheck, ShoppingCart, Wallet, FileText,
+  ShoppingCart, History, Moon, FileText,
 } from 'lucide-react';
-import DailyReportPage from '@/pages/DailyReport';
 import Caisse from '@/pages/Caisse';
-import ClotureZPage from '@/pages/ClotureZ';
-import Documents from '@/pages/Documents';
 import LiveDaySales from '@/pages/LiveDaySales';
+import Documents from '@/pages/Documents';
 
-type TabId = 'point' | 'live' | 'caisse' | 'cloture' | 'docs';
+type TabId = 'caisse' | 'ventes' | 'terminer' | 'docs';
 
 const TABS: { id: TabId; label: string; icon: ReactNode; short: string }[] = [
-  { id: 'live', label: 'Ventes journée', short: 'Ventes', icon: <ShoppingCart size={16} /> },
-  { id: 'point', label: 'Point du soir', short: 'Point', icon: <ClipboardCheck size={16} /> },
   { id: 'caisse', label: 'Caisse', short: 'Caisse', icon: <ShoppingCart size={16} /> },
-  { id: 'cloture', label: 'Clôture Z', short: 'Clôture', icon: <Wallet size={16} /> },
-  { id: 'docs', label: 'Devis & Factures', short: 'Docs', icon: <FileText size={16} /> },
+  { id: 'ventes', label: 'Ventes du jour', short: 'Ventes', icon: <History size={16} /> },
+  { id: 'terminer', label: 'Terminer la journée', short: 'Clôturer', icon: <Moon size={16} /> },
+  { id: 'docs', label: 'Documents', short: 'Docs', icon: <FileText size={16} /> },
 ];
 
 function parseTab(raw: string | null): TabId {
-  if (raw === 'live' || raw === 'ventes' || raw === 'live-sales') return 'live';
-  if (raw === 'caisse' || raw === 'pos') return 'caisse';
-  if (raw === 'cloture' || raw === 'z') return 'cloture';
+  if (raw === 'ventes' || raw === 'live' || raw === 'live-sales' || raw === 'historique') return 'ventes';
+  if (raw === 'terminer' || raw === 'close' || raw === 'cloture' || raw === 'z' || raw === 'point') return 'terminer';
   if (raw === 'docs' || raw === 'documents' || raw === 'devis' || raw === 'facture') return 'docs';
-  return 'point';
+  return 'caisse';
 }
 
 /**
- * Rapport du jour unifié :
- * Point boissons + Caisse + Clôture Z + Devis/Factures
+ * Journée unifiée :
+ * Caisse (clients sans QR) → historique → Terminer la journée (rapport auto)
  */
 export default function DailyReportHub() {
   const [params, setParams] = useSearchParams();
@@ -37,20 +33,27 @@ export default function DailyReportHub() {
 
   function setTab(id: TabId) {
     const next = new URLSearchParams(params);
-    if (id === 'point') next.delete('tab');
+    if (id === 'caisse') next.delete('tab');
     else next.set('tab', id);
     setParams(next, { replace: true });
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-4">
+    <div className="max-w-5xl mx-auto space-y-4">
       <div>
         <h1 className="text-2xl font-bold font-display text-stone-100 flex items-center gap-2">
-          <ClipboardCheck className="text-amber-400" size={26} />
-          Rapport du jour
+          <ShoppingCart className="text-amber-400" size={26} />
+          Caisse & journée
         </h1>
         <p className="text-sm text-stone-400 mt-1">
-          Tout en un : point · caisse · clôture Z · devis & factures
+          Vendez au panier (clients sans QR) · le rapport part automatiquement quand vous{' '}
+          <button
+            type="button"
+            className="text-amber-400 font-semibold underline-offset-2 hover:underline"
+            onClick={() => setTab('terminer')}
+          >
+            Terminez la journée
+          </button>
         </p>
       </div>
 
@@ -65,7 +68,9 @@ export default function DailyReportHub() {
                 onClick={() => setTab(t.id)}
                 className={`flex items-center gap-1.5 shrink-0 px-3 py-2 rounded-xl text-xs font-semibold border transition ${
                   active
-                    ? 'bg-amber-500/20 text-amber-100 border-amber-500/40'
+                    ? t.id === 'terminer'
+                      ? 'bg-orange-500/25 text-orange-100 border-orange-500/50'
+                      : 'bg-amber-500/20 text-amber-100 border-amber-500/40'
                     : 'bg-stone-900 text-stone-400 border-stone-800 hover:text-stone-200'
                 }`}
               >
@@ -79,17 +84,40 @@ export default function DailyReportHub() {
       </div>
 
       <div className="min-h-[50vh]">
-        {tab === 'live' && <LiveDaySales />}
-      {tab === 'point' && <DailyReportPage embedded />}
         {tab === 'caisse' && <Caisse embedded />}
-        {tab === 'cloture' && <ClotureZPage embedded />}
-        {tab === 'docs' && <Documents embedded />}
+        {tab === 'ventes' && <LiveDaySales embedded mode="history" />}
+        {tab === 'terminer' && <LiveDaySales embedded mode="close" />}
+        {tab === 'docs' && (
+          <div className="space-y-3">
+            <p className="text-sm text-stone-400">
+              Devis et factures (optionnel). Pour le quotidien maquis, utilisez d&apos;abord la{' '}
+              <button type="button" className="text-amber-400 underline" onClick={() => setTab('caisse')}>
+                Caisse
+              </button>
+              .
+            </p>
+            <Documents embedded />
+            <Link to="/documents" className="text-xs text-stone-500 hover:text-amber-400">
+              Ouvrir la page Documents complète →
+            </Link>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
 /** Redirections anciennes URL → onglets du hub */
-export function RedirectToReportTab({ tab }: { tab: TabId }) {
-  return <Navigate to={`/daily-report?tab=${tab}`} replace />;
+export function RedirectToReportTab({ tab }: { tab: string }) {
+  const map: Record<string, string> = {
+    point: 'terminer',
+    live: 'ventes',
+    caisse: 'caisse',
+    pos: 'caisse',
+    cloture: 'terminer',
+    z: 'terminer',
+    docs: 'docs',
+  };
+  const t = map[tab] || 'caisse';
+  return <Navigate to={t === 'caisse' ? '/daily-report' : `/daily-report?tab=${t}`} replace />;
 }
