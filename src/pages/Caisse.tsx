@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Search, Plus, Minus, Trash2, ShoppingCart, CreditCard, Smartphone, Loader2,
-  CheckCircle2, QrCode, Printer,
+  CheckCircle2, QrCode, Printer, Wallet,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { MOBILE_MONEY_PROVIDERS, MOBILE_MONEY_LABELS, type MobileMoneyProvider } from '@/lib/integrations';
@@ -561,52 +561,86 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
       </div>
 
 
-      {/* Barre panier fixe — valider sans scroller */}
-      <div className="fixed bottom-[calc(3.5rem+env(safe-area-inset-bottom))] lg:bottom-4 inset-x-0 z-40 px-3 pointer-events-none">
-        <div className="pointer-events-auto max-w-lg mx-auto rounded-2xl border border-amber-500/40 bg-stone-950/95 backdrop-blur-md shadow-2xl shadow-black/50 p-3 space-y-2">
-          {readyOrders.length > 0 && (
-            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-0.5 -mx-0.5">
-              {readyOrders.slice(0, 8).map((o) => (
-                <button
-                  key={`bar-${o.id}`}
-                  type="button"
-                  onClick={() => void loadOrderIntoCart(o.id)}
-                  className={`shrink-0 rounded-lg border px-2.5 py-1.5 text-[10px] font-semibold ${
-                    linkedOrderId === o.id
-                      ? 'border-amber-400 bg-amber-500/25 text-amber-100'
-                      : 'border-stone-700 bg-stone-900 text-stone-300'
-                  }`}
-                >
-                  {(o.customer_name || 'Client').slice(0, 12)}
-                  {o.table_number ? ` · T${o.table_number}` : ''}
-                  <span className="text-amber-300 ml-1">{formatFCFA(Number(o.total) || 0)}</span>
-                </button>
-              ))}
+      {/* Barre panier type « Ventes du jour » : Espèces / Mobile / Mixte + Valider */}
+      {cart.length > 0 && (
+        <div className="fixed bottom-[calc(3.75rem+env(safe-area-inset-bottom))] lg:bottom-5 inset-x-0 z-40 px-3 pointer-events-none">
+          <div className="pointer-events-auto max-w-lg mx-auto rounded-2xl border border-stone-200/20 bg-white text-stone-900 shadow-2xl p-3 space-y-2.5 dark:bg-stone-950 dark:text-stone-100 dark:border-amber-500/40">
+            {readyOrders.length > 0 && (
+              <div className="flex gap-2 overflow-x-auto no-scrollbar">
+                {readyOrders.slice(0, 6).map((o) => (
+                  <button
+                    key={`bar-${o.id}`}
+                    type="button"
+                    onClick={() => void loadOrderIntoCart(o.id)}
+                    className={`shrink-0 rounded-lg border px-2.5 py-1.5 text-[10px] font-semibold ${
+                      linkedOrderId === o.id
+                        ? 'border-orange-400 bg-orange-50 text-orange-800'
+                        : 'border-stone-200 bg-stone-50 text-stone-600'
+                    }`}
+                  >
+                    {(o.customer_name || 'Client').slice(0, 10)}
+                    {o.table_number ? ` · T${o.table_number}` : ''}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm font-semibold text-stone-700 dark:text-stone-200 flex items-center gap-1.5">
+                <ShoppingCart size={16} className="text-orange-500" /> Panier
+              </span>
+              <span className="text-base font-black text-orange-600 dark:text-amber-300">{formatFCFA(netTotal)}</span>
             </div>
-          )}
-          <div className="flex items-center gap-3">
-            <div className="flex-1 min-w-0">
-              <p className="text-[10px] uppercase tracking-wide text-stone-500 font-bold">
-                Panier · {cart.reduce((s, i) => s + i.qty, 0)} art.
-              </p>
-              <p className="text-lg font-black text-amber-300 leading-tight">{formatFCFA(netTotal)}</p>
-              {cart.length > 0 && (
-                <p className="text-[11px] text-stone-400 truncate">
-                  {cart.map((i) => `${i.product.name}×${i.qty}`).join(' · ')}
-                </p>
-              )}
+            <p className="text-[11px] text-stone-500 truncate -mt-1">
+              {cart.map((i) => `${i.product.name}×${i.qty}`).join(' · ')}
+            </p>
+            <div className="flex gap-1.5">
+              {(
+                [
+                  ['cash', 'Espèces', Wallet],
+                  ['mobile_money', 'Mobile', Smartphone],
+                  ['card', 'Mixte', CreditCard],
+                ] as const
+              ).map(([id, label, Icon]) => {
+                const active =
+                  paymentMethod === id ||
+                  (id === 'mobile_money' &&
+                    ['wave', 'orange_money', 'mtn_money', 'moov_money', 'mobile_money'].includes(
+                      String(paymentMethod),
+                    ));
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setPaymentMethod(id as PaymentMethod)}
+                    className={`flex-1 flex items-center justify-center gap-1 text-xs py-2.5 rounded-xl font-semibold transition ${
+                      active
+                        ? 'bg-orange-500 text-white shadow-md'
+                        : 'bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300'
+                    }`}
+                  >
+                    <Icon size={14} /> {label}
+                  </button>
+                );
+              })}
             </div>
             <button
               type="button"
-              onClick={openCheckout}
-              disabled={cart.length === 0}
-              className="shrink-0 btn-primary min-h-[52px] px-5 text-base font-bold rounded-xl disabled:opacity-40"
+              disabled={processing || cart.length === 0}
+              onClick={() => {
+                if (paymentMethod === 'card') {
+                  openCheckout();
+                  return;
+                }
+                void processSale();
+              }}
+              className="w-full min-h-[52px] rounded-2xl bg-orange-500 hover:bg-orange-600 text-white text-base font-bold shadow-lg disabled:opacity-40 flex items-center justify-center gap-2"
             >
-              Valider
+              {processing ? <Loader2 className="animate-spin" size={20} /> : null}
+              Valider la vente
             </button>
           </div>
         </div>
-      </div>
+      )}
 
       <Modal open={checkoutOpen} onClose={() => !processing && setCheckoutOpen(false)} title="Encaissement">
         {success ? (

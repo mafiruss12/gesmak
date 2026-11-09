@@ -911,14 +911,15 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         </button>
       )}
 
+      {/* Actualiser en haut à droite — ne masque jamais le panier / Valider */}
       <button
         type="button"
-        className="fixed bottom-20 right-3 z-[70] inline-flex items-center gap-2 rounded-full border border-amber-500/50 bg-stone-900/95 px-4 py-2.5 text-sm font-bold text-amber-300 shadow-lg backdrop-blur hover:bg-stone-800 sm:bottom-6"
+        className="fixed top-[max(4.5rem,env(safe-area-inset-top)+3.5rem)] right-3 z-30 inline-flex items-center gap-1.5 rounded-full border border-stone-300 bg-white/95 px-3 py-2 text-xs font-semibold text-stone-700 shadow-md backdrop-blur hover:bg-stone-50 dark:border-stone-600 dark:bg-stone-900/95 dark:text-stone-200"
         title="Actualiser la page"
         aria-label="Actualiser la page"
         onClick={() => window.location.reload()}
       >
-        <RefreshCw size={18} />
+        <RefreshCw size={14} />
         Actualiser
       </button>
     </div>
