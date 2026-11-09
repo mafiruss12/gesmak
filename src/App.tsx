@@ -187,7 +187,7 @@ function ProtectedRoutes() {
         <Route path="/btp/clients" element={<BtpClients />} />
         <Route path="/btp/materials" element={<BtpMaterials />} />
         <Route path="/documents" element={<RedirectToReportTab tab="docs" />} />
-        <Route path="/pos" element={<Caisse />} />
+        <Route path="/pos" element={<Navigate to="/daily-report" replace />} />
         <Route path="/caisse" element={<Navigate to="/pos" replace />} />
         <Route path="/orders" element={<Orders />} />
         <Route path="/menu-carte" element={<MenuCarte />} />
@@ -222,7 +222,7 @@ function ProtectedRoutes() {
         <Route path="/statistics" element={<PlanGate feature="advancedReports" label="Statistiques avancees"><Statistics /></PlanGate>} />
         <Route path="/reports" element={<Navigate to="/daily-report" replace />} />
         <Route path="/daily-report" element={<DailyReportSafe />} />
-        <Route path="/live-sales" element={<LiveDaySales />} />
+        <Route path="/live-sales" element={<Navigate to="/daily-report" replace />} />
         <Route path="/mon-service" element={<MonService />} />
         <Route path="/print-qr" element={<PlanGate feature="qrOrdering" label="Imprimer QR tables"><PrintTableQR /></PlanGate>} />
         <Route path="/patron" element={<PatronMode />} />

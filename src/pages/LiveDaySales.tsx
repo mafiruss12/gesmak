@@ -330,11 +330,11 @@ export default function LiveDaySales({
           <p className="text-sm text-stone-400 mt-1">
             {mode === 'close'
               ? 'Récap automatique · envoi au propriétaire'
-              : 'Historique des ventes validées · Caisse pour encaisser'}
+              : 'Traces des ventes du jour · stock déjà décrémenté à chaque validation'}
           </p>
         </div>
         <Link to="/daily-report" className="text-xs text-amber-400 hover:underline shrink-0">
-          Caisse
+          Vente journalière
         </Link>
       </div>
       )}
@@ -345,7 +345,8 @@ export default function LiveDaySales({
       )}
       {embedded && mode === 'history' && (
         <div className="rounded-xl border border-stone-700 bg-stone-900/80 px-3 py-2 text-sm text-stone-300">
-          Ventes validées aujourd&apos;hui. Encaisser sans QR → onglet <strong>Caisse</strong>.
+          <strong className="text-stone-100">Historique</strong> — traces des ventes validées (non modifiables pour l&apos;équipe).
+          Nouvelle vente → onglet <strong>Encaisser</strong>.
         </div>
       )}
 

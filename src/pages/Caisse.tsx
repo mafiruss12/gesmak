@@ -369,20 +369,22 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
   }
 
   if (loading) {
-    return <div className="p-8 text-center text-stone-400">Chargement caisse…</div>;
+    return <div className="p-8 text-center text-stone-400">Chargement vente journalière…</div>;
   }
 
   return (
     <div className={`max-w-5xl mx-auto space-y-3 pb-8 ${embedded ? '' : 'px-1'}`}>
       <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2.5 text-sm text-stone-200">
-        <p className="font-semibold text-amber-200">Caisse — clients sans QR</p>
+        <p className="font-semibold text-amber-200">Vente journalière — clients sans QR</p>
         <p className="text-xs text-stone-400 mt-0.5">
-          Panier → paiement → valider après réception de l&apos;argent.
+          Panier → paiement → valider après l&apos;argent : le <strong className="text-stone-300">stock diminue tout de suite</strong>,
+          la vente reste dans l&apos;{' '}
+          <Link to="/daily-report?tab=historique" className="text-amber-400 underline">historique</Link>.
           Le soir :{' '}
           <Link to="/daily-report?tab=terminer" className="text-amber-400 underline">
             Terminer la journée
-          </Link>{' '}
-          (rapport automatique).
+          </Link>
+          .
         </p>
       </div>
       {!embedded && (
