@@ -569,13 +569,7 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
             </div>
             <p className="text-lg font-semibold text-stone-100">Vente enregistrée</p>
             <p className="text-2xl font-black text-amber-300">{formatFCFA(lastTicket?.total || netTotal)}</p>
-            <style>{`
-              .caisse-success-motion { animation: caisseOk .5s cubic-bezier(.22,1,.36,1) both; }
-              @keyframes caisseOk {
-                from { opacity: 0; transform: scale(.9); }
-                to { opacity: 1; transform: scale(1); }
-              }
-            `}</style>
+            <style dangerouslySetInnerHTML={{ __html: "\n              .caisse-success-motion { animation: caisseOk .5s cubic-bezier(.22,1,.36,1) both; }\n              @keyframes caisseOk {\n                from { opacity: 0; transform: scale(.9); }\n                to { opacity: 1; transform: scale(1); }\n              }\n            " }} />
             <div className="flex gap-2 w-full">
               <button type="button" className="btn-primary flex-1 flex items-center justify-center gap-2" onClick={printTicket}>
                 <Printer size={18} /> Ticket

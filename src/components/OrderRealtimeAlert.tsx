@@ -276,24 +276,7 @@ export default function OrderRealtimeAlert() {
           </div>
         </div>
       )}
+      <style dangerouslySetInnerHTML={{ __html: "\n        .order-alert-motion {\n          animation: orderAlertIn .45s cubic-bezier(.22,1,.36,1) both,\n                     orderAlertPulse 1.6s ease-in-out .45s infinite;\n        }\n        @keyframes orderAlertIn {\n          from { opacity: 0; transform: translateY(24px) scale(.94); }\n          to { opacity: 1; transform: translateY(0) scale(1); }\n        }\n        @keyframes orderAlertPulse {\n          0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,.45); }\n          50% { box-shadow: 0 0 0 10px rgba(239,68,68,0); }\n        }\n        @media (prefers-reduced-motion: reduce) {\n          .order-alert-motion { animation: orderAlertIn .3s ease both; }\n        }\n      " }} />
     </>
-
-      <style>{`
-        .order-alert-motion {
-          animation: orderAlertIn .45s cubic-bezier(.22,1,.36,1) both,
-                     orderAlertPulse 1.6s ease-in-out .45s infinite;
-        }
-        @keyframes orderAlertIn {
-          from { opacity: 0; transform: translateY(24px) scale(.94); }
-          to { opacity: 1; transform: translateY(0) scale(1); }
-        }
-        @keyframes orderAlertPulse {
-          0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,.45); }
-          50% { box-shadow: 0 0 0 10px rgba(239,68,68,0); }
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .order-alert-motion { animation: orderAlertIn .3s ease both; }
-        }
-      `}</style>
   );
 }

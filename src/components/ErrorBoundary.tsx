@@ -94,13 +94,7 @@ export default class ErrorBoundary extends Component<Props, State> {
             <p className="text-sm text-stone-600 leading-relaxed">
               {this.friendlyMessage()}
             </p>
-            <style>{`
-              .error-net-motion { animation: errNetIn .45s ease both; }
-              @keyframes errNetIn {
-                from { opacity: 0; transform: translateY(10px); }
-                to { opacity: 1; transform: translateY(0); }
-              }
-            `}</style>
+            <style dangerouslySetInnerHTML={{ __html: "\n              .error-net-motion { animation: errNetIn .45s ease both; }\n              @keyframes errNetIn {\n                from { opacity: 0; transform: translateY(10px); }\n                to { opacity: 1; transform: translateY(0); }\n              }\n            " }} />
             <div className="flex flex-col gap-2 justify-center">
               <button
                 type="button"

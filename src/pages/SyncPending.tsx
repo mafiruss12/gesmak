@@ -140,13 +140,7 @@ export default function SyncPending() {
           ))}
         </ul>
       )}
-      <style>{`
-        .sync-page-motion { animation: syncPageIn .45s ease both; }
-        @keyframes syncPageIn {
-          from { opacity: 0; transform: translateY(8px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-      `}</style>
+      <style dangerouslySetInnerHTML={{ __html: "\n        .sync-page-motion { animation: syncPageIn .45s ease both; }\n        @keyframes syncPageIn {\n          from { opacity: 0; transform: translateY(8px); }\n          to { opacity: 1; transform: translateY(0); }\n        }\n      " }} />
     </div>
   );
 }

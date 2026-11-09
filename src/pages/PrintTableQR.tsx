@@ -745,23 +745,7 @@ export default function PrintTableQR() {
         </div>
       )}
 
-      <style>{`
-        @media print {
-          @page { size: A4 landscape; margin: 5mm; }
-          html, body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-          body * { visibility: hidden !important; }
-          #qr-print-area, #qr-print-area * { visibility: visible !important; }
-          #qr-print-area { position: absolute; left: 0; top: 0; width: 100%; padding: 0 !important; display: block !important; }
-          #qr-print-area .qr-nappe {
-            break-after: page; page-break-after: always;
-            width: 100% !important; height: 188mm !important; max-height: 188mm !important;
-            aspect-ratio: auto !important;
-            -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
-          }
-          #qr-print-area .qr-nappe:last-child { break-after: auto; page-break-after: auto; }
-          .print\\:hidden { display: none !important; }
-        }
-      `}</style>
+      <style dangerouslySetInnerHTML={{ __html: "\n        @media print {\n          @page { size: A4 landscape; margin: 5mm; }\n          html, body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }\n          body * { visibility: hidden !important; }\n          #qr-print-area, #qr-print-area * { visibility: visible !important; }\n          #qr-print-area { position: absolute; left: 0; top: 0; width: 100%; padding: 0 !important; display: block !important; }\n          #qr-print-area .qr-nappe {\n            break-after: page; page-break-after: always;\n            width: 100% !important; height: 188mm !important; max-height: 188mm !important;\n            aspect-ratio: auto !important;\n            -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;\n          }\n          #qr-print-area .qr-nappe:last-child { break-after: auto; page-break-after: auto; }\n          .print\\\\:hidden { display: none !important; }\n        }\n      " }} />
     </div>
   );
 }

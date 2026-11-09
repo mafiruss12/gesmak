@@ -297,14 +297,7 @@ export default function StartupGuide({ compact = false }: { compact?: boolean })
           );
         })}
       </ul>
-      <style>{`
-        .sg-motion { animation: sgEnter .5s ease both; }
-        @keyframes sgEnter {
-          from { opacity: 0; transform: translateY(10px) scale(.98); }
-          to { opacity: 1; transform: translateY(0) scale(1); }
-        }
-        @media (prefers-reduced-motion: reduce) { .sg-motion { animation: none; } }
-      `}</style>
+      <style dangerouslySetInnerHTML={{ __html: "\n        .sg-motion { animation: sgEnter .5s ease both; }\n        @keyframes sgEnter {\n          from { opacity: 0; transform: translateY(10px) scale(.98); }\n          to { opacity: 1; transform: translateY(0) scale(1); }\n        }\n        @media (prefers-reduced-motion: reduce) { .sg-motion { animation: none; } }\n      " }} />
     </div>
   );
 }

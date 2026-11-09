@@ -25,29 +25,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="gesmak-admin min-h-screen text-slate-100">
-      <style>{`
-        .gesmak-admin {
-          --admin-bg: #0b1220;
-          --admin-surface: #111827;
-          --admin-border: #1e293b;
-          --admin-accent: #6366f1;
-          --admin-accent-2: #22d3ee;
-          background:
-            radial-gradient(ellipse 80% 50% at 100% -10%, rgba(99,102,241,0.25), transparent 50%),
-            radial-gradient(ellipse 60% 40% at 0% 100%, rgba(34,211,238,0.12), transparent 45%),
-            var(--admin-bg);
-        }
-        .gesmak-admin .admin-card {
-          background: rgba(17, 24, 39, 0.9);
-          border: 1px solid var(--admin-border);
-          border-radius: 1rem;
-        }
-        .gesmak-admin .admin-nav-active {
-          background: linear-gradient(135deg, rgba(99,102,241,0.35), rgba(34,211,238,0.15));
-          color: #e0e7ff;
-          border-color: rgba(99,102,241,0.5);
-        }
-      `}</style>
+      <style dangerouslySetInnerHTML={{ __html: "\n        .gesmak-admin {\n          --admin-bg: #0b1220;\n          --admin-surface: #111827;\n          --admin-border: #1e293b;\n          --admin-accent: #6366f1;\n          --admin-accent-2: #22d3ee;\n          background:\n            radial-gradient(ellipse 80% 50% at 100% -10%, rgba(99,102,241,0.25), transparent 50%),\n            radial-gradient(ellipse 60% 40% at 0% 100%, rgba(34,211,238,0.12), transparent 45%),\n            var(--admin-bg);\n        }\n        .gesmak-admin .admin-card {\n          background: rgba(17, 24, 39, 0.9);\n          border: 1px solid var(--admin-border);\n          border-radius: 1rem;\n        }\n        .gesmak-admin .admin-nav-active {\n          background: linear-gradient(135deg, rgba(99,102,241,0.35), rgba(34,211,238,0.15));\n          color: #e0e7ff;\n          border-color: rgba(99,102,241,0.5);\n        }\n      " }} />
 
       <header className="sticky top-0 z-40 border-b border-slate-800/80 bg-slate-950/90 backdrop-blur-md">
         <div className="max-w-6xl mx-auto px-4 h-14 flex items-center gap-3">

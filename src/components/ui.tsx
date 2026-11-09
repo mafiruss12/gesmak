@@ -85,16 +85,7 @@ export function EmptyState({ icon, title, message }: { icon: ReactNode; title: s
       <p className="text-[10px] font-semibold tracking-widest text-amber-500/80 mb-1">GESMAK</p>
       <p className="text-lg font-semibold text-stone-300">{title}</p>
       <p className="text-sm text-stone-500 mt-1 max-w-xs leading-relaxed">{message}</p>
-      <style>{`
-        .empty-state-motion { animation: emptyIn .45s ease both; }
-        @keyframes emptyIn {
-          from { opacity: 0; transform: translateY(8px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .empty-state-motion { animation: none; }
-        }
-      `}</style>
+      <style dangerouslySetInnerHTML={{ __html: "\n        .empty-state-motion { animation: emptyIn .45s ease both; }\n        @keyframes emptyIn {\n          from { opacity: 0; transform: translateY(8px); }\n          to { opacity: 1; transform: translateY(0); }\n        }\n        @media (prefers-reduced-motion: reduce) {\n          .empty-state-motion { animation: none; }\n        }\n      " }} />
     </div>
   );
 }

@@ -649,13 +649,7 @@ export default function LiveDaySales({
             <CheckCircle2 className="relative z-[1] mx-auto text-emerald-400" size={44} />
           </div>
           <h2 className="text-xl font-bold text-stone-100">Journée clôturée</h2>
-          <style>{`
-            .live-done-motion { animation: liveDoneIn .5s cubic-bezier(.22,1,.36,1) both; }
-            @keyframes liveDoneIn {
-              from { opacity: 0; transform: translateY(10px) scale(.96); }
-              to { opacity: 1; transform: translateY(0) scale(1); }
-            }
-          `}</style>
+          <style dangerouslySetInnerHTML={{ __html: "\n            .live-done-motion { animation: liveDoneIn .5s cubic-bezier(.22,1,.36,1) both; }\n            @keyframes liveDoneIn {\n              from { opacity: 0; transform: translateY(10px) scale(.96); }\n              to { opacity: 1; transform: translateY(0) scale(1); }\n            }\n          " }} />
           <p className="text-stone-300">
             {agg.ticketCount} ventes · {formatFCFA(agg.total)}
           </p>
