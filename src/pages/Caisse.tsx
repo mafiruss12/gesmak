@@ -326,8 +326,9 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
           cart.map((i) => ({
             product_id: i.product.id,
             name: i.product.name,
+            category: i.product.category || undefined,
             price: Number(i.product.price) || 0,
-            cost: Number(i.product.cost) || 0,
+            cost: Number((i.product as { cost?: number }).cost) || 0,
             qty: i.qty,
           })),
           livePay,

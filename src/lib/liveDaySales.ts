@@ -7,7 +7,10 @@ export type LivePayMethod = 'cash' | 'mobile' | 'mixed';
 export type LiveSaleLine = {
   product_id: string;
   name: string;
+  /** Type / catégorie (ex. bière, eau, soda) */
+  category?: string;
   price: number;
+  /** Prix d'achat unitaire */
   cost: number;
   qty: number;
 };

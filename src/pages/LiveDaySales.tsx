@@ -125,6 +125,7 @@ export default function LiveDaySales({
       .map((p) => ({
         product_id: p.id,
         name: p.name,
+        category: p.category || undefined,
         price: Math.round(Number(p.price) || 0),
         cost: Math.round(Number(p.cost) || 0),
         qty: cart[p.id] || 0,
@@ -467,7 +468,7 @@ export default function LiveDaySales({
 
           <section className="space-y-2">
             <div className="flex items-center justify-between gap-2">
-              <h2 className="text-sm font-semibold text-stone-300">Ventes enregistrées</h2>
+              <h2 className="text-sm font-semibold text-stone-300">Historique des ventes</h2>
               {!canManageSales && (
                 <span className="text-[10px] text-stone-500 flex items-center gap-1">
                   <Lock size={12} /> Verrouillées
@@ -479,60 +480,117 @@ export default function LiveDaySales({
                 </span>
               )}
             </div>
-            <p className="text-[11px] text-stone-500">
-              Une fois validée, une vente n’est plus modifiable par l’équipe. Seul le propriétaire peut l’annuler.
-            </p>
             {!day?.tickets.length ? (
-              <p className="text-sm text-stone-500">Aucune vente pour l’instant.</p>
+              <p className="text-sm text-stone-500 text-center py-6">Aucune vente pour l&apos;instant.</p>
             ) : (
-              <ul className="space-y-2">
-                {day.tickets.slice(0, 40).map((ticket) => {
-                  const locked = ticket.locked !== false || Boolean(ticket.at);
+              <ul className="space-y-3 max-h-[70vh] overflow-y-auto pr-0.5">
+                {day.tickets.map((ticket) => {
                   const voided = Boolean(ticket.voided);
+                  const d = new Date(ticket.at);
+                  const dateStr = d.toLocaleDateString('fr-FR', {
+                    weekday: 'short',
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                  });
+                  const timeStr = d.toLocaleTimeString('fr-FR', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                  });
+                  const payLabel =
+                    ticket.pay === 'cash' ? 'Espèces' : ticket.pay === 'mobile' ? 'Mobile Money' : 'Mixte';
+                  const costSum = ticket.lines.reduce(
+                    (s, l) => s + (Number(l.cost) || 0) * (Number(l.qty) || 0),
+                    0,
+                  );
+                  const margin = (Number(ticket.total) || 0) - costSum;
                   return (
                     <li
                       key={ticket.id}
-                      className={`rounded-xl border px-3 py-2 flex justify-between gap-2 ${
+                      className={`rounded-2xl border overflow-hidden ${
                         voided
-                          ? 'border-stone-800 bg-stone-950/80 opacity-50'
-                          : locked && !canManageSales
-                            ? 'border-stone-800 bg-stone-900/40 opacity-75'
-                            : 'border-stone-700 bg-stone-900/60'
+                          ? 'border-stone-800 bg-stone-900/30 opacity-60'
+                          : 'border-stone-700 bg-stone-900/70'
                       }`}
                     >
-                      <div className="min-w-0">
-                        <p className="text-xs text-stone-500">
-                          {new Date(ticket.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} ·{' '}
-                          {ticket.pay === 'cash' ? 'Espèces' : ticket.pay === 'mobile' ? 'Mobile' : 'Mixte'}
-                          {voided ? ' · Annulée' : locked ? ' · Enregistrée' : ''}
-                        </p>
-                        <p className={`text-sm truncate ${voided ? 'line-through text-stone-500' : 'text-stone-200'}`}>
-                          {ticket.lines.map((l) => `${l.name}×${l.qty}`).join(', ')}
-                        </p>
+                      <div className="px-3 py-2 border-b border-stone-800/80 flex flex-wrap items-center justify-between gap-2 bg-stone-950/50">
+                        <div>
+                          <p className="text-xs font-bold text-stone-200">
+                            {dateStr} · <span className="text-amber-300 font-mono">{timeStr}</span>
+                          </p>
+                          <p className="text-[10px] text-stone-500 mt-0.5">
+                            {payLabel}
+                            {ticket.note ? ` · ${ticket.note}` : ''}
+                            {ticket.stock_applied ? ' · stock décrémenté' : ''}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className={`font-black text-base ${voided ? 'line-through text-stone-500' : 'text-amber-300'}`}>
+                            {formatFCFA(ticket.total)}
+                          </p>
+                          <p className="text-[10px] text-stone-500">
+                            Achat {formatFCFA(costSum)} · Marge {formatFCFA(margin)}
+                          </p>
+                        </div>
                       </div>
-                      <div className="text-right shrink-0">
-                        <p className={`font-mono text-sm ${voided ? 'text-stone-500 line-through' : 'text-amber-300'}`}>
-                          {formatFCFA(ticket.total)}
-                        </p>
-                        {canManageSales && !voided && (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs">
+                          <thead>
+                            <tr className="text-[10px] uppercase tracking-wide text-stone-500 border-b border-stone-800">
+                              <th className="px-3 py-1.5 font-semibold">Boisson</th>
+                              <th className="px-1 py-1.5 font-semibold">Type</th>
+                              <th className="px-1 py-1.5 font-semibold text-center">Qté</th>
+                              <th className="px-1 py-1.5 font-semibold text-right">P. vente</th>
+                              <th className="px-1 py-1.5 font-semibold text-right">P. achat</th>
+                              <th className="px-3 py-1.5 font-semibold text-right">Total</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {ticket.lines.map((l, i) => {
+                              const lineTotal = (Number(l.price) || 0) * (Number(l.qty) || 0);
+                              return (
+                                <tr
+                                  key={`${ticket.id}-${l.product_id}-${i}`}
+                                  className={`border-b border-stone-800/60 ${voided ? 'line-through text-stone-500' : 'text-stone-200'}`}
+                                >
+                                  <td className="px-3 py-2 font-medium">{l.name}</td>
+                                  <td className="px-1 py-2 text-stone-400">{l.category || '—'}</td>
+                                  <td className="px-1 py-2 text-center font-bold text-amber-200">{l.qty}</td>
+                                  <td className="px-1 py-2 text-right font-mono">{formatFCFA(l.price)}</td>
+                                  <td className="px-1 py-2 text-right font-mono text-stone-400">
+                                    {formatFCFA(Number(l.cost) || 0)}
+                                  </td>
+                                  <td className="px-3 py-2 text-right font-mono font-semibold text-amber-300">
+                                    {formatFCFA(lineTotal)}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                      {canManageSales && !voided && (
+                        <div className="px-3 py-2 flex justify-end">
                           <button
                             type="button"
-                            className="text-[10px] text-red-400 mt-1"
+                            className="text-[11px] text-red-400 flex items-center gap-1"
                             onClick={() => removeTicket(ticket.id)}
                           >
-                            <Trash2 size={12} className="inline" /> Annuler
+                            <Trash2 size={12} /> Annuler cette vente
                           </button>
-                        )}
-                        {!canManageSales && (
-                          <p className="text-[10px] text-stone-600 mt-1">Lecture seule</p>
-                        )}
-                      </div>
+                        </div>
+                      )}
+                      {!canManageSales && (
+                        <p className="px-3 py-1.5 text-[10px] text-stone-600">Lecture seule</p>
+                      )}
                     </li>
                   );
                 })}
               </ul>
             )}
           </section>
+
 
           <section className="space-y-2 rounded-2xl border border-stone-800 bg-stone-900/40 p-3">
             <h2 className="text-sm font-semibold text-stone-300 flex items-center gap-2">
@@ -545,8 +603,14 @@ export default function LiveDaySales({
               <ul className="space-y-1.5 max-h-48 overflow-y-auto">
                 {(day.activity || []).slice(0, 50).map((a) => (
                   <li key={a.id} className="text-xs text-stone-400 border-b border-stone-800/80 pb-1.5">
-                    <span className="text-stone-500">
-                      {new Date(a.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                    <span className="text-stone-500 font-mono">
+                      {new Date(a.at).toLocaleString('fr-FR', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit',
+                      })}
                     </span>
                     {' · '}
                     <span className={
