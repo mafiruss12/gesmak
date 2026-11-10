@@ -77,20 +77,7 @@ export default function LiveDaySales({
 
   useEffect(() => {
     if (!estId) return;
-    void fetchServiceStatus(estId, date).then((s) => {
-      if (s.status === 'closed') {
-        setDay((d) => {
-          const live = loadLiveDay(estId, date);
-          if (!live.closed_at) {
-            // mirror closed for UI without wiping tickets
-            return { ...live, closed_at: s.closed_at || new Date().toISOString() };
-          }
-          return { ...live };
-        });
-      } else {
-        setDay({ ...loadLiveDay(estId, date) });
-      }
-    });
+    setDay({ ...loadLiveDay(estId, date) });
     return subscribeServiceDay(() => {
       setDay({ ...loadLiveDay(estId, date) });
     });

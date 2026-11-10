@@ -1,5 +1,4 @@
 import { fetchServiceStatus, isServiceOpenLocal, subscribeServiceDay, getActiveSessionId, assertServiceOpen } from '@/lib/serviceDay';
-import WorkDayBanner from '@/components/WorkDayBanner';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Search, Plus, Minus, Trash2, ShoppingCart, CreditCard, Smartphone, Loader2,
@@ -113,6 +112,7 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
 
   useEffect(() => {
     if (!estId) return;
+    setServiceOpen(isServiceOpenLocal(estId));
     void fetchServiceStatus(estId).then((s) => setServiceOpen(s.status === 'open'));
     return subscribeServiceDay(() => {
       setServiceOpen(isServiceOpenLocal(estId));
@@ -495,7 +495,6 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
         </div>
       )}
 
-      <WorkDayBanner />
       {!serviceOpen && (
         <div className="rounded-xl border-2 border-orange-400 bg-orange-50 px-4 py-4 text-sm text-stone-900 space-y-1">
           <p className="font-bold text-orange-900">Service fermé — stock masqué</p>
