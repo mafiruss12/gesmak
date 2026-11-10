@@ -104,9 +104,12 @@ export default function LiveDaySales({
   }, [estId, date]);
 
   useEffect(() => {
+    if (mode === 'history') {
+      setPhase('sell');
+      return;
+    }
     if (day?.closed_at) setPhase(day.stock_deducted ? 'done' : 'close');
     else if (mode === 'close') setPhase('close');
-    else if (mode === 'history') setPhase('sell');
   }, [day?.closed_at, day?.stock_deducted, mode]);
 
   useEffect(() => {
@@ -466,6 +469,12 @@ export default function LiveDaySales({
             </div>
           )}
 
+        </>
+      )}
+
+      {/* Historique détaillé — onglet Historique (et mode full) */}
+      {(mode === 'history' || mode === 'full') && (
+        <div className="space-y-4">
           <section className="space-y-2">
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-sm font-semibold text-stone-300">Historique des ventes</h2>
@@ -629,6 +638,10 @@ export default function LiveDaySales({
             )}
           </section>
 
+        </div>
+      )}
+
+      {mode === 'full' && phase === 'sell' && !day?.closed_at && (
           <button
             type="button"
             className="btn-primary w-full min-h-[52px] text-base flex items-center justify-center gap-2"
@@ -636,10 +649,9 @@ export default function LiveDaySales({
           >
             <Lock size={18} /> Clôturer la journée
           </button>
-        </>
       )}
 
-      {(phase === 'close' || (mode === 'close' && !day?.closed_at)) && day && agg && (
+      {(mode === 'close' || (mode === 'full' && phase === 'close')) && day && agg && !day.closed_at && (
         <div className="space-y-4">
           <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4 space-y-2">
             <h2 className="font-bold text-stone-100 flex items-center gap-2">
@@ -694,9 +706,11 @@ export default function LiveDaySales({
           </div>
 
           <div className="flex gap-2">
-            <button type="button" className="btn-secondary" onClick={() => setPhase('sell')}>
-              ← Revenir
-            </button>
+            {mode === 'full' ? (
+              <button type="button" className="btn-secondary" onClick={() => setPhase('sell')}>
+                ← Revenir aux ventes
+              </button>
+            ) : null}
             <button
               type="button"
               className="btn-primary flex-1 min-h-[48px] flex items-center justify-center gap-2"
@@ -710,7 +724,7 @@ export default function LiveDaySales({
         </div>
       )}
 
-      {phase === 'done' && day && agg && (
+      {phase === 'done' && mode !== 'history' && day && agg && (
         <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-6 text-center space-y-3 live-done-motion">
           <div className="relative mx-auto w-16 h-16 flex items-center justify-center">
             <span className="absolute inset-0 rounded-full bg-emerald-400/20 animate-ping" aria-hidden />

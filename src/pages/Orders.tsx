@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import {
   Receipt, Plus, Trash2, ShoppingBag, CheckCircle2, Clock, UtensilsCrossed, X, UserCog, RefreshCw, Wine, ChefHat,
 } from 'lucide-react';
+import { addTicket } from '@/lib/liveDaySales';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import type { Product, RestaurantTable, Order } from '@/lib/types';
@@ -341,6 +342,35 @@ export default function Orders() {
 
   async function updateStatus(id: string, status: string) {
     await supabase.from('orders').update({ status }).eq('id', id);
+    // Trace dans Vente journalière → Historique quand la commande est servie / terminée
+    if (status === 'served' || status === 'completed' || status === 'delivered') {
+      try {
+        const order = orders.find((o) => o.id === id);
+        const { data: items } = await supabase
+          .from('order_items')
+          .select('product_id, product_name, name, qty, quantity, unit_price, category')
+          .eq('order_id', id);
+        const lines = (items || [])
+          .map((i: any) => ({
+            product_id: String(i.product_id || i.product_name || i.name || 'x'),
+            name: String(i.product_name || i.name || 'Article'),
+            category: i.category ? String(i.category) : 'Commande QR',
+            price: Math.round(Number(i.unit_price) || 0),
+            cost: 0,
+            qty: Math.max(0, Number(i.qty ?? i.quantity) || 0),
+          }))
+          .filter((l) => l.qty > 0);
+        if (estId && lines.length && !(order as any)?.stock_deducted) {
+          const today = new Date().toISOString().split('T')[0];
+          const note = order
+            ? `commande QR${order.table_number ? ` · T.${order.table_number}` : ''}${order.customer_name ? ` · ${order.customer_name}` : ''}`
+            : 'commande QR';
+          addTicket(String(estId), today, lines, 'cash', note, member?.full_name || member?.role || 'equipe', false);
+        }
+      } catch (e) {
+        console.warn('trace historique commande', e);
+      }
+    }
     void load();
   }
 
