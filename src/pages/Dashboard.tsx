@@ -28,6 +28,7 @@ import StartupGuide from '@/components/StartupGuide';
 import ExchangeRatesCard from '@/components/ExchangeRatesCard';
 import SectorNews from '@/components/SectorNews';
 import OwnerSitesBar from '@/components/OwnerSitesBar';
+import ExploitationDayCard from '@/components/ExploitationDayCard';
 import { GesmakLoading } from '@/components/GesmakLoading';
 
 function DashLink({ to, children, className = '' }: { to: string; children: ReactNode; className?: string }) {
@@ -444,6 +445,7 @@ export default function Dashboard() {
     <div>
       <DashboardOrdersPanel />
       <OwnerSitesBar />
+      <ExploitationDayCard />
       {error && (
         <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-sm text-amber-900 dark:text-amber-100 mb-3">
           {error}

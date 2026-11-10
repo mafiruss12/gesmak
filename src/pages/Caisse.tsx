@@ -254,7 +254,7 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
   async function processSale() {
     if (!estId || !member || !cart.length) return;
     if (!isServiceOpenLocal(estId)) {
-      alert('Service fermé. Ouvrez la caisse dans Vente journalière pour encaisser.');
+      alert('Service fermé. Ouvrez la journée dans Vente journalière pour encaisser.');
       return;
     }
     setProcessing(true);

@@ -11,7 +11,7 @@ import {
 
 /**
  * Bandeau unique de service (MVP).
- * - Un seul bouton « Ouvrir la caisse » si fermé
+ * - Un seul bouton « Ouvrir la journée » si fermé
  * - Badge discret si ouvert
  * - Lien clôture si ouvert
  */
@@ -111,7 +111,7 @@ export default function WorkDayBanner({ compact = false }: { compact?: boolean }
                   hour: '2-digit',
                   minute: '2-digit',
                 })} — ventes et QR actifs`
-              : 'Ouvrez la caisse pour afficher le stock, activer les QR et encaisser'}
+              : 'Ouvrez la journée pour activer stock, ventes et commandes QR'}
           </p>
         </div>
       </div>
@@ -124,7 +124,7 @@ export default function WorkDayBanner({ compact = false }: { compact?: boolean }
             className="inline-flex items-center gap-1.5 rounded-xl bg-orange-500 px-3 py-2 text-sm font-bold text-white hover:bg-orange-600 disabled:opacity-60"
           >
             {busy ? <Loader2 size={14} className="animate-spin" /> : <Unlock size={14} />}
-            Ouvrir la caisse
+            Ouvrir la journée
           </button>
         )}
         {isOpen && (
@@ -132,7 +132,7 @@ export default function WorkDayBanner({ compact = false }: { compact?: boolean }
             to="/daily-report?tab=terminer"
             className="inline-flex items-center gap-1.5 rounded-xl border border-stone-400 bg-white px-3 py-2 text-sm font-semibold text-stone-800 hover:bg-stone-50"
           >
-            <Lock size={14} /> Clôturer le service
+            <Lock size={14} /> Clôturer la journée
           </Link>
         )}
       </div>

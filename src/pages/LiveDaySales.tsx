@@ -62,6 +62,14 @@ export default function LiveDaySales({
   const [aiTips, setAiTips] = useState<string[]>([]);
   const [cashConfirm, setCashConfirm] = useState('');
   const [mobileConfirm, setMobileConfirm] = useState('');
+  const [closeChecks, setCloseChecks] = useState<{
+    pendingOrders: number;
+    readyOrders: number;
+    preparingOrders: number;
+    loading: boolean;
+  }>({ pendingOrders: 0, readyOrders: 0, preparingOrders: 0, loading: false });
+  const [forceClose, setForceClose] = useState(false);
+
 
   useEffect(() => {
     document.title = 'Ventes journée · GESMAK';
@@ -231,7 +239,7 @@ export default function LiveDaySales({
 
   useEffect(() => {
     if (mode !== 'close' || !day || day.closed_at) return;
-    const tips = verifyDayHeuristics(day, products);
+    const tips = verifyDayHeuristics(day);
     setAiTips(tips);
     const a = aggregateDay(day);
     setCashConfirm(String(a.cash));
@@ -354,22 +362,47 @@ export default function LiveDaySales({
     setDay({ ...next });
   }
 
-  function startClose() {
+  async function startClose() {
     if (!day || !estId) return;
-    if (!day.tickets.length) {
-      setMsg('Aucune vente à clôturer.');
-      return;
-    }
-    const tips = verifyDayHeuristics(day, products);
+    const tips = verifyDayHeuristics(day);
     setAiTips(tips);
     const a = aggregateDay(day);
     setCashConfirm(String(a.cash));
     setMobileConfirm(String(a.mobile));
+    setForceClose(false);
+    setCloseChecks((c) => ({ ...c, loading: true }));
     setPhase('close');
+    try {
+      const { data: orders } = await supabase
+        .from('orders')
+        .select('id, status')
+        .eq('establishment_id', estId)
+        .in('status', ['pending', 'preparing', 'ready']);
+      const list = orders || [];
+      setCloseChecks({
+        loading: false,
+        pendingOrders: list.filter((o) => o.status === 'pending').length,
+        preparingOrders: list.filter((o) => o.status === 'preparing').length,
+        readyOrders: list.filter((o) => o.status === 'ready').length,
+      });
+      if (!day.tickets.length && list.length === 0) {
+        setMsg('Aucune vente ni commande — vous pouvez clôturer le service.');
+      }
+    } catch {
+      setCloseChecks({ pendingOrders: 0, readyOrders: 0, preparingOrders: 0, loading: false });
+    }
   }
 
   async function finalizeClose() {
     if (!estId || !day || !member) return;
+    const openOps =
+      closeChecks.pendingOrders + closeChecks.preparingOrders + closeChecks.readyOrders;
+    if (openOps > 0 && !forceClose) {
+      setMsg(
+        `Il reste ${openOps} commande(s) non terminée(s). Cochez « Forcer la clôture » pour confirmer.`,
+      );
+      return;
+    }
     setBusy(true);
     setMsg(null);
     try {
@@ -513,7 +546,7 @@ export default function LiveDaySales({
               });
             }}
           >
-            Ouvrir la caisse
+            Ouvrir la journée
           </button>
         </div>
       )}
@@ -833,6 +866,44 @@ export default function LiveDaySales({
                 </li>
               ))}
             </ul>
+          </div>
+
+
+          <div className="rounded-2xl border border-stone-300 bg-white p-4 space-y-2 shadow-sm">
+            <h3 className="font-bold text-stone-900 text-sm">Contrôles avant clôture</h3>
+            {closeChecks.loading ? (
+              <p className="text-sm text-stone-600 flex items-center gap-2">
+                <Loader2 className="animate-spin" size={14} /> Vérification des commandes…
+              </p>
+            ) : (
+              <ul className="text-sm text-stone-800 space-y-1">
+                <li className={closeChecks.pendingOrders ? 'text-red-700 font-semibold' : 'text-emerald-700'}>
+                  • Commandes en attente : {closeChecks.pendingOrders}
+                </li>
+                <li className={closeChecks.preparingOrders ? 'text-amber-800 font-semibold' : 'text-emerald-700'}>
+                  • En préparation : {closeChecks.preparingOrders}
+                </li>
+                <li className={closeChecks.readyOrders ? 'text-amber-800 font-semibold' : 'text-emerald-700'}>
+                  • Prêtes non encaissées : {closeChecks.readyOrders}
+                </li>
+                <li className="text-stone-700">
+                  • Tickets vente jour : {agg.ticketCount} · CA {formatFCFA(agg.total)}
+                </li>
+              </ul>
+            )}
+            {(closeChecks.pendingOrders + closeChecks.preparingOrders + closeChecks.readyOrders) > 0 && (
+              <label className="flex items-start gap-2 text-sm text-stone-800 mt-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={forceClose}
+                  onChange={(e) => setForceClose(e.target.checked)}
+                />
+                <span>
+                  Forcer la clôture malgré les commandes ouvertes (elles resteront visibles dans Commandes, mais les QR et nouvelles ventes seront coupés).
+                </span>
+              </label>
+            )}
           </div>
 
           <div className="rounded-2xl border border-sky-500/30 bg-sky-500/5 p-4 space-y-2">
