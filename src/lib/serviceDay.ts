@@ -55,16 +55,29 @@ export function readLocalService(estId: string, date = todayISO()): ServiceSnaps
   return { status: 'closed', source: 'none' };
 }
 
-export function writeLocalService(estId: string, snap: ServiceSnapshot, date = todayISO()) {
+export function writeLocalService(
+  estId: string,
+  snap: ServiceSnapshot,
+  date = todayISO(),
+  opts?: { silent?: boolean },
+) {
+  const prev = readLocalService(estId, date);
+  const next = { ...snap, source: snap.source || 'local' };
   try {
-    localStorage.setItem(localKey(estId, date), JSON.stringify({ ...snap, source: 'local' }));
+    localStorage.setItem(localKey(estId, date), JSON.stringify(next));
   } catch {
     /* */
   }
+  // Évite la boucle : pas d'event si statut identique ou lecture silencieuse
+  const unchanged =
+    prev.status === next.status &&
+    (prev.opened_at || '') === (next.opened_at || '') &&
+    (prev.closed_at || '') === (next.closed_at || '');
+  if (opts?.silent || unchanged) return;
   if (typeof window !== 'undefined') {
     try {
       window.dispatchEvent(
-        new CustomEvent(EVENT, { detail: { establishment_id: estId, date, ...snap } }),
+        new CustomEvent(EVENT, { detail: { establishment_id: estId, date, ...next } }),
       );
     } catch {
       /* */
@@ -95,7 +108,7 @@ export async function fetchServiceStatus(estId: string, date = todayISO()): Prom
         closed_at: data.closed_at,
         source: 'cash_sessions',
       };
-      writeLocalService(estId, snap, date);
+      writeLocalService(estId, snap, date, { silent: true });
       return snap;
     }
   } catch {
@@ -189,5 +202,34 @@ export function subscribeServiceDay(cb: () => void): () => void {
     window.removeEventListener(EVENT, handler);
     window.removeEventListener('gesmak-live-sales', handler);
     window.removeEventListener('storage', handler);
+  };
+}
+
+
+/** Session cash_sessions ouverte du jour (id) — pour lier orders/sales (P4) */
+export async function getActiveSessionId(estId: string, date = todayISO()): Promise<string | null> {
+  try {
+    const { data } = await supabase
+      .from('cash_sessions')
+      .select('id')
+      .eq('establishment_id', estId)
+      .eq('session_date', date)
+      .eq('status', 'open')
+      .order('opened_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    return data?.id || null;
+  } catch {
+    return null;
+  }
+}
+
+/** P3 — refuse côté app si service fermé (complément UI + avant insert orders) */
+export async function assertServiceOpen(estId: string): Promise<{ ok: boolean; message?: string }> {
+  const s = await fetchServiceStatus(estId);
+  if (s.status === 'open') return { ok: true };
+  return {
+    ok: false,
+    message: 'Le service est fermé. Aucune nouvelle commande ou vente n’est autorisée.',
   };
 }

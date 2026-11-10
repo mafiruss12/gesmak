@@ -1,48 +1,62 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Unlock, Lock, Loader2, Sun, Moon } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import {
   fetchServiceStatus,
   openService,
+  isServiceOpenLocal,
   type ServiceSnapshot,
   subscribeServiceDay,
 } from '@/lib/serviceDay';
 
 /**
- * Bandeau unique de service (MVP).
- * - Un seul bouton « Ouvrir la journée » si fermé
- * - Badge discret si ouvert
- * - Lien clôture si ouvert
+ * Bandeau unique de service — stable (pas de clignotement chargement).
  */
 export default function WorkDayBanner({ compact = false }: { compact?: boolean }) {
   const { member, activeEstablishment, user } = useAuth();
   const estId = activeEstablishment?.id || member?.establishment_id || null;
-  const [snap, setSnap] = useState<ServiceSnapshot | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [snap, setSnap] = useState<ServiceSnapshot | null>(() =>
+    estId ? { status: isServiceOpenLocal(estId) ? 'open' : 'closed', source: 'local' } : null,
+  );
+  const [booting, setBooting] = useState(true);
   const [busy, setBusy] = useState(false);
+  const mounted = useRef(true);
 
   const canManage = ['super_admin', 'admin', 'owner', 'manager', 'cashier'].includes(
     String(member?.role || ''),
   );
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (isBoot = false) => {
     if (!estId) {
-      setLoading(false);
+      setBooting(false);
       return;
     }
-    setLoading(true);
-    const s = await fetchServiceStatus(estId);
-    setSnap(s);
-    setLoading(false);
+    try {
+      const s = await fetchServiceStatus(estId);
+      if (mounted.current) setSnap(s);
+    } finally {
+      if (mounted.current && isBoot) setBooting(false);
+    }
   }, [estId]);
 
   useEffect(() => {
-    void load();
-    return subscribeServiceDay(() => {
-      void load();
+    mounted.current = true;
+    void load(true);
+    const unsub = subscribeServiceDay(() => {
+      // refresh sans passer par "Chargement…"
+      if (!estId) return;
+      setSnap({
+        status: isServiceOpenLocal(estId) ? 'open' : 'closed',
+        source: 'local',
+      });
+      void load(false);
     });
-  }, [load]);
+    return () => {
+      mounted.current = false;
+      unsub();
+    };
+  }, [estId, load]);
 
   async function handleOpen() {
     if (!estId || !canManage || busy) return;
@@ -60,7 +74,9 @@ export default function WorkDayBanner({ compact = false }: { compact?: boolean }
   }
 
   if (!estId) return null;
-  if (loading) {
+
+  // Premier chargement uniquement, et seulement si pas encore de snap local
+  if (booting && !snap) {
     return (
       <div className="mb-3 flex items-center gap-2 rounded-xl border border-stone-300 bg-white px-3 py-2 text-sm text-stone-700">
         <Loader2 size={14} className="animate-spin" /> Chargement du service…
@@ -88,9 +104,7 @@ export default function WorkDayBanner({ compact = false }: { compact?: boolean }
   return (
     <div
       className={`mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3 ${
-        isOpen
-          ? 'border-emerald-500/40 bg-emerald-50'
-          : 'border-orange-400 bg-orange-50'
+        isOpen ? 'border-emerald-500/40 bg-emerald-50' : 'border-orange-400 bg-orange-50'
       }`}
     >
       <div className="flex items-center gap-3">

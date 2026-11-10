@@ -9,7 +9,7 @@ import {
   ORDER_STATUS_CLIENT,
 } from '@/lib/orderAlerts';
 import { triggerOrderPush } from '@/lib/push';
-import { fetchServiceStatus } from '@/lib/serviceDay';
+import { fetchServiceStatus, assertServiceOpen, getActiveSessionId } from '@/lib/serviceDay';
 
 type Est = {
   id: string;
@@ -289,19 +289,24 @@ useEffect(() => {
       ].filter(Boolean);
       const notesCombined = noteParts.join(' · ') || 'Commande QR';
 
-      const { data: order, error: oErr } = await supabase
-        .from('orders')
-        .insert({
+      const sessionId = await getActiveSessionId(estId);
+      const orderPayload: Record<string, unknown> = {
           establishment_id: estId,
           table_id: tableId,
           table_number: tableNum || null,
           status: 'pending',
           order_type: 'dine_in',
           total,
-          notes: notesCombined,
+          notes: sessionId ? `${notesCombined} · session:${sessionId}` : notesCombined,
           source: 'qr_table',
           customer_name: name,
-        })
+        };
+      // P4 — si colonne présente
+      if (sessionId) orderPayload.cash_session_id = sessionId;
+
+      const { data: order, error: oErr } = await supabase
+        .from('orders')
+        .insert(orderPayload)
         .select('id')
         .maybeSingle();
 

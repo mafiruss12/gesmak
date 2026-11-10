@@ -1,4 +1,4 @@
-import { fetchServiceStatus, isServiceOpenLocal, subscribeServiceDay } from '@/lib/serviceDay';
+import { fetchServiceStatus, isServiceOpenLocal, subscribeServiceDay, getActiveSessionId, assertServiceOpen } from '@/lib/serviceDay';
 import WorkDayBanner from '@/components/WorkDayBanner';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -59,7 +59,9 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
   const [readyOrders, setReadyOrders] = useState<ReadyOrder[]>([]);
   const [linkedOrderId, setLinkedOrderId] = useState<string | null>(null);
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
-  const [serviceOpen, setServiceOpen] = useState(false);
+  const [serviceOpen, setServiceOpen] = useState(() =>
+    estId ? isServiceOpenLocal(estId) : false,
+  );
 
   const [linkedOrderIds, setLinkedOrderIds] = useState<string[]>([]);
 
@@ -253,10 +255,13 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
 
   async function processSale() {
     if (!estId || !member || !cart.length) return;
-    if (!isServiceOpenLocal(estId)) {
-      alert('Service fermé. Ouvrez la journée dans Vente journalière pour encaisser.');
+    const gate = await assertServiceOpen(estId);
+    if (!gate.ok) {
+      alert(gate.message || 'Service fermé.');
       return;
     }
+    const sessionId = await getActiveSessionId(estId);
+
     setProcessing(true);
     const online = isOnline();
     const updatedProducts = [...products];
@@ -279,6 +284,7 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
           created_by: member.user_id || user?.id,
         };
         if (validPid) salePayload.product_id = item.product.id;
+        if (sessionId) salePayload.cash_session_id = sessionId;
         const newStock = Math.max(0, Number(item.product.stock) - item.qty);
 
         if (online) {
@@ -491,12 +497,15 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
 
       <WorkDayBanner />
       {!serviceOpen && (
-        <div className="rounded-xl border border-stone-300 bg-stone-50 px-3 py-3 text-sm text-stone-800">
-          <strong>Service fermé.</strong> Stock et ventes disponibles après <strong>Ouvrir la caisse</strong>.
+        <div className="rounded-xl border-2 border-orange-400 bg-orange-50 px-4 py-4 text-sm text-stone-900 space-y-1">
+          <p className="font-bold text-orange-900">Service fermé — stock masqué</p>
+          <p>
+            Les boissons et la caisse s&apos;affichent uniquement après <strong>Ouvrir la journée</strong>.
+          </p>
         </div>
       )}
       {/* Commandes QR — collées en haut, visibles sans scroller */}
-      {readyOrders.length > 0 && (
+      {serviceOpen && readyOrders.length > 0 && (
         <div className="sticky top-0 z-30 rounded-2xl border border-amber-500/40 bg-stone-950/95 backdrop-blur-md p-3 space-y-2 shadow-lg">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs font-bold uppercase text-amber-300 flex items-center gap-1">
@@ -579,6 +588,7 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
         </div>
       )}
 
+      {serviceOpen ? (
       <div className="grid lg:grid-cols-5 gap-3">
         {/* Catalogue */}
         <div className="lg:col-span-3 space-y-3">
@@ -747,7 +757,7 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
       {cart.length > 0 && (
         <div className="fixed bottom-[calc(3.75rem+env(safe-area-inset-bottom))] lg:bottom-5 inset-x-0 z-40 px-3 pointer-events-none">
           <div className="pointer-events-auto max-w-lg mx-auto rounded-2xl border border-stone-200/20 bg-white text-stone-900 shadow-2xl p-3 space-y-2.5 dark:bg-stone-950 dark:text-stone-100 dark:border-amber-500/40">
-            {readyOrders.length > 0 && (
+            {serviceOpen && readyOrders.length > 0 && (
               <div className="flex gap-2 overflow-x-auto no-scrollbar">
                 {readyOrders.slice(0, 6).map((o) => (
                   <button
@@ -823,6 +833,8 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
           </div>
         </div>
       )}
+
+      ) : null}
 
       <Modal open={checkoutOpen} onClose={() => !processing && setCheckoutOpen(false)} title="Encaissement">
         {success ? (
