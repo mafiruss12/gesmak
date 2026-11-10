@@ -56,6 +56,8 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
   } | null>(null);
   const [readyOrders, setReadyOrders] = useState<ReadyOrder[]>([]);
   const [linkedOrderId, setLinkedOrderId] = useState<string | null>(null);
+  const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
+  const [linkedOrderIds, setLinkedOrderIds] = useState<string[]>([]);
 
   const loadProducts = useCallback(async () => {
     if (!estId) {
@@ -154,39 +156,76 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
     });
   }
 
-  async function loadOrderIntoCart(orderId: string) {
-    const { data: items } = await supabase
-      .from('order_items')
-      .select('product_id, product_name, qty, unit_price, name, quantity')
-      .eq('order_id', orderId);
-    if (!items?.length) return;
-    const next: CartItem[] = [];
-    for (const it of items as any[]) {
-      const pid = it.product_id;
-      const qty = Number(it.qty ?? it.quantity) || 1;
-      const prod = products.find((p) => p.id === pid);
-      if (prod) {
-        next.push({ product: prod, qty: Math.min(qty, Math.max(1, prod.stock)) });
-      } else {
-        // produit hors stock local : ligne factice minimale
-        next.push({
-          product: {
-            id: pid || `tmp-${it.product_name}`,
-            establishment_id: estId || '',
-            name: it.product_name || it.name || 'Article',
-            category: null,
-            price: Number(it.unit_price) || 0,
-            cost: 0,
-            stock: 999,
-            min_stock: 0,
-            unit: 'u',
-          } as Product,
-          qty,
+  function toggleSelectOrder(orderId: string) {
+    setSelectedOrderIds((prev) =>
+      prev.includes(orderId) ? prev.filter((id) => id !== orderId) : [...prev, orderId],
+    );
+  }
+
+  async function buildCartFromOrderIds(orderIds: string[]): Promise<CartItem[]> {
+    const merged = new Map<string, CartItem>();
+    for (const orderId of orderIds) {
+      const { data: items } = await supabase
+        .from('order_items')
+        .select('product_id, product_name, qty, unit_price, name, quantity')
+        .eq('order_id', orderId);
+      for (const it of (items as any[]) || []) {
+        const pid = String(it.product_id || `tmp-${it.product_name || it.name}`);
+        const qty = Number(it.qty ?? it.quantity) || 1;
+        const prod = products.find((p) => p.id === pid);
+        const base: Product = prod || ({
+          id: pid,
+          establishment_id: estId || '',
+          name: it.product_name || it.name || 'Article',
+          category: null,
+          price: Number(it.unit_price) || 0,
+          cost: 0,
+          stock: 999,
+          min_stock: 0,
+          unit: 'u',
+        } as Product);
+        const prev = merged.get(pid);
+        const addQty = prod ? Math.min(qty, Math.max(1, prod.stock - (prev?.qty || 0))) : qty;
+        if (addQty <= 0) continue;
+        merged.set(pid, {
+          product: base,
+          qty: (prev?.qty || 0) + addQty,
         });
       }
     }
+    return Array.from(merged.values());
+  }
+
+  async function loadOrderIntoCart(orderId: string) {
+    const next = await buildCartFromOrderIds([orderId]);
+    if (!next.length) return;
     setCart(next);
     setLinkedOrderId(orderId);
+    setLinkedOrderIds([orderId]);
+    setSelectedOrderIds([orderId]);
+  }
+
+  async function loadSelectedOrdersIntoCart() {
+    const ids = selectedOrderIds.length ? selectedOrderIds : readyOrders.map((o) => o.id);
+    if (!ids.length) return;
+    const next = await buildCartFromOrderIds(ids);
+    if (!next.length) {
+      alert('Aucune ligne sur les commandes sélectionnées');
+      return;
+    }
+    setCart(next);
+    setLinkedOrderIds(ids);
+    setLinkedOrderId(ids[0] || null);
+  }
+
+  async function loadAllReadyOrdersIntoCart() {
+    const ids = readyOrders.map((o) => o.id);
+    setSelectedOrderIds(ids);
+    const next = await buildCartFromOrderIds(ids);
+    if (!next.length) return;
+    setCart(next);
+    setLinkedOrderIds(ids);
+    setLinkedOrderId(ids[0] || null);
   }
 
   function openCheckout() {
@@ -294,10 +333,24 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
         /* facture optionnelle */
       }
 
-      if (linkedOrderId && online) {
-        await supabase.from('orders').update({ status: 'served' }).eq('id', linkedOrderId);
-        setLinkedOrderId(null);
-        void loadReadyOrders();
+      {
+        const toServe = linkedOrderIds.length
+          ? linkedOrderIds
+          : linkedOrderId
+            ? [linkedOrderId]
+            : [];
+        if (online && toServe.length) {
+          for (const oid of toServe) {
+            await supabase
+              .from('orders')
+              .update({ status: 'served', stock_deducted: true })
+              .eq('id', oid);
+          }
+          setLinkedOrderId(null);
+          setLinkedOrderIds([]);
+          setSelectedOrderIds([]);
+          void loadReadyOrders();
+        }
       }
 
       setLastTicket({
@@ -332,10 +385,18 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
             qty: i.qty,
           })),
           livePay,
-          linkedOrderId ? `caisse · commande` : 'caisse',
+          linkedOrderIds.length > 1
+            ? `caisse · ${linkedOrderIds.length} commandes`
+            : linkedOrderId
+              ? 'caisse · commande'
+              : 'caisse',
           member.full_name || member.role,
           true,
-          linkedOrderId ? `order:${linkedOrderId}` : undefined,
+          linkedOrderIds.length
+            ? `orders:${linkedOrderIds.join(',')}`
+            : linkedOrderId
+              ? `order:${linkedOrderId}`
+              : undefined,
         );
       } catch {
         /* */
@@ -413,27 +474,83 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
       {/* Commandes QR — collées en haut, visibles sans scroller */}
       {readyOrders.length > 0 && (
         <div className="sticky top-0 z-30 rounded-2xl border border-amber-500/40 bg-stone-950/95 backdrop-blur-md p-3 space-y-2 shadow-lg">
-          <p className="text-xs font-bold uppercase text-amber-300 flex items-center gap-1">
-            <QrCode size={14} /> Commandes à encaisser ({readyOrders.length})
-          </p>
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {readyOrders.map((o) => (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs font-bold uppercase text-amber-300 flex items-center gap-1">
+              <QrCode size={14} /> Commandes à encaisser ({readyOrders.length})
+              {selectedOrderIds.length > 0 && (
+                <span className="ml-1 normal-case font-semibold text-amber-100">
+                  · {selectedOrderIds.length} sélectionnée(s)
+                </span>
+              )}
+            </p>
+            <div className="flex flex-wrap gap-1.5">
               <button
-                key={o.id}
                 type="button"
-                onClick={() => void loadOrderIntoCart(o.id)}
-                className={`shrink-0 rounded-xl border px-3 py-2 text-left text-xs min-w-[140px] ${
-                  linkedOrderId === o.id
-                    ? 'border-amber-400 bg-amber-500/20 text-amber-100'
-                    : 'border-stone-700 bg-stone-900 text-stone-300'
-                }`}
+                onClick={() => setSelectedOrderIds(readyOrders.map((o) => o.id))}
+                className="text-[10px] px-2 py-1 rounded-lg bg-stone-800 text-stone-300 border border-stone-700"
               >
-                <p className="font-bold truncate">
-                  {o.customer_name || 'Client'} · {o.table_number ? `T.${o.table_number}` : o.status}
-                </p>
-                <p className="text-amber-300 font-mono mt-0.5">{formatFCFA(Number(o.total) || 0)}</p>
+                Tout sélectionner
               </button>
-            ))}
+              <button
+                type="button"
+                onClick={() => setSelectedOrderIds([])}
+                className="text-[10px] px-2 py-1 rounded-lg bg-stone-800 text-stone-300 border border-stone-700"
+              >
+                Vider
+              </button>
+              <button
+                type="button"
+                onClick={() => void loadSelectedOrdersIntoCart()}
+                className="text-[10px] px-2 py-1 rounded-lg bg-amber-500 text-stone-950 font-bold"
+              >
+                Ajouter au panier
+              </button>
+              <button
+                type="button"
+                onClick={() => void loadAllReadyOrdersIntoCart()}
+                className="text-[10px] px-2 py-1 rounded-lg bg-orange-500 text-white font-bold"
+              >
+                Toutes les commandes
+              </button>
+            </div>
+          </div>
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {readyOrders.map((o) => {
+              const selected = selectedOrderIds.includes(o.id);
+              const linked = linkedOrderIds.includes(o.id) || linkedOrderId === o.id;
+              return (
+                <div
+                  key={o.id}
+                  className={`shrink-0 rounded-xl border px-2 py-2 text-left text-xs min-w-[150px] ${
+                    linked
+                      ? 'border-amber-400 bg-amber-500/20 text-amber-100'
+                      : selected
+                        ? 'border-sky-400 bg-sky-500/15 text-sky-100'
+                        : 'border-stone-700 bg-stone-900 text-stone-300'
+                  }`}
+                >
+                  <label className="flex items-start gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={selected}
+                      onChange={() => toggleSelectOrder(o.id)}
+                    />
+                    <button
+                      type="button"
+                      className="text-left min-w-0 flex-1"
+                      onClick={() => void loadOrderIntoCart(o.id)}
+                    >
+                      <p className="font-bold truncate">
+                        {o.customer_name || 'Client'} · {o.table_number ? `T.${o.table_number}` : o.status}
+                      </p>
+                      <p className="text-amber-300 font-mono mt-0.5">{formatFCFA(Number(o.total) || 0)}</p>
+                      <p className="text-[10px] text-stone-500 mt-0.5">Toucher = 1 commande · case = multi</p>
+                    </button>
+                  </label>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

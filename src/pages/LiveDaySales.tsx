@@ -14,7 +14,7 @@ import { isOnline, queueAdd, cacheGet, cacheSet } from '@/lib/offline';
 import { notifyOwnerOnReport } from '@/lib/notifyOwner';
 import { buildWhatsAppLink } from '@/lib/businessTypes';
 import {
-  loadLiveDay,
+  openDay, loadLiveDay,
   saveLiveDay,
   addTicket,
   voidTicket,
@@ -237,18 +237,80 @@ export default function LiveDaySales({
     });
   }
 
-  function validateSale() {
-    if (!estId || !day || day.closed_at) return;
-    if (!cartLines.length) {
-      setMsg('Cochez au moins une boisson.');
+  async function validateSale() {
+    if (!estId || !day || !member) return;
+    if (day.closed_at) {
+      setMsg('Journée déjà clôturée — redémarrez la journée pour vendre.');
       return;
     }
-    const next = addTicket(estId, date, cartLines, pay, undefined, member?.full_name || member?.role || 'equipe');
-    setDay({ ...next });
-    setCart({});
-    setMsg(`Vente enregistrée · ${formatFCFA(cartTotal)} (stock inchangé jusqu’à clôture)`);
-    setTimeout(() => setMsg(null), 2500);
+    if (!cartLines.length) {
+      setMsg('Ajoutez au moins un article.');
+      return;
+    }
+    setBusy(true);
+    try {
+      // Décrément stock à CHAQUE vente
+      for (const l of cartLines) {
+        const prod = products.find((p) => p.id === l.product_id);
+        if (!prod) continue;
+        const prev = Math.floor(Number(prod.stock) || 0);
+        const nextStock = Math.max(0, prev - l.qty);
+        if (isOnline()) {
+          await supabase.from('products').update({ stock: nextStock }).eq('id', l.product_id);
+          try {
+            await supabase.from('sales').insert({
+              establishment_id: estId,
+              product_id: l.product_id,
+              qty: l.qty,
+              unit_price: l.price,
+              total: l.qty * l.price,
+              payment_method: pay === 'cash' ? 'cash' : pay === 'mobile' ? 'mobile_money' : 'mixed',
+              created_by: member.user_id,
+            });
+            await supabase.from('stock_movements').insert({
+              establishment_id: estId,
+              product_id: l.product_id,
+              product_name: l.name,
+              qty: -l.qty,
+              movement_type: 'pos_sale',
+              unit_cost: l.cost || 0,
+              unit_price: l.price,
+              reason: 'vente_jour',
+              note: 'Vente journalière',
+              created_by: member.user_id,
+            });
+          } catch { /* */ }
+        } else {
+          await queueAdd('products', 'update', { stock: nextStock, _prev_stock: prev }, { id: l.product_id });
+        }
+      }
+      setProducts((prev) =>
+        prev.map((p) => {
+          const line = cartLines.find((l) => l.product_id === p.id);
+          if (!line) return p;
+          return { ...p, stock: Math.max(0, Math.floor(Number(p.stock) || 0) - line.qty) };
+        }),
+      );
+      const next = addTicket(
+        estId,
+        date,
+        cartLines,
+        pay,
+        undefined,
+        member?.full_name || member?.role || 'equipe',
+        true,
+      );
+      setDay({ ...next });
+      setCart({});
+      setMsg(`Vente validée · stock décrémenté · ${formatFCFA(cartTotal)}`);
+      setTimeout(() => setMsg(null), 2500);
+    } catch (e: any) {
+      setMsg(e?.message || 'Erreur vente');
+    } finally {
+      setBusy(false);
+    }
   }
+
 
   function removeTicket(id: string) {
     if (!estId || !canManageSales) return;
@@ -292,51 +354,8 @@ export default function LiveDaySales({
         total: l.qty * l.price,
       }));
 
-      // 1) Décrément stock seulement si pas déjà fait à la caisse
-      let deducted = Boolean(day.stock_deducted);
-      if (!deducted) {
-        const needStock: Record<string, { product_id: string; name: string; qty: number }> = {};
-        for (const tk of day.tickets) {
-          if (tk.voided || tk.stock_applied) continue;
-          for (const l of tk.lines) {
-            if (!needStock[l.product_id]) {
-              needStock[l.product_id] = { product_id: l.product_id, name: l.name, qty: 0 };
-            }
-            needStock[l.product_id].qty += l.qty;
-          }
-        }
-        for (const line of Object.values(needStock)) {
-          const prod = products.find((p) => p.id === line.product_id);
-          if (!prod) continue;
-          const prev = Math.floor(Number(prod.stock) || 0);
-          const next = Math.max(0, prev - line.qty);
-          if (!isOnline()) {
-            await queueAdd(
-              'products',
-              'update',
-              { stock: next, _prev_stock: prev },
-              { id: line.product_id },
-            );
-          } else {
-            const { error } = await supabase
-              .from('products')
-              .update({ stock: next })
-              .eq('id', line.product_id);
-            if (error) console.warn('stock', error.message);
-          }
-        }
-        deducted = true;
-        setProducts((prev) =>
-          prev.map((p) => {
-            const line = needStock[p.id];
-            if (!line) return p;
-            return {
-              ...p,
-              stock: Math.max(0, Math.floor(Number(p.stock) || 0) - line.qty),
-            };
-          }),
-        );
-      }
+      // Stock déjà décrémenté à chaque vente — clôture = bilan uniquement
+      const deducted = true;
 
       const cash = Math.max(0, Math.round(Number(cashConfirm) || 0));
       const mobile = Math.max(0, Math.round(Number(mobileConfirm) || 0));
@@ -439,6 +458,40 @@ export default function LiveDaySales({
         <div className="rounded-xl border border-stone-700 bg-stone-900/80 px-3 py-2 text-sm text-stone-300">
           <strong className="text-stone-100">Historique</strong> — traces des ventes validées (non modifiables pour l&apos;équipe).
           Nouvelle vente → onglet <strong>Encaisser</strong>.
+        </div>
+      )}
+
+
+      {/* Démarrer / état journée */}
+      {estId && (
+        <div className="flex flex-wrap gap-2 items-center">
+          {day?.closed_at ? (
+            <button
+              type="button"
+              className="btn-primary text-sm min-h-[44px] flex items-center gap-2"
+              onClick={() => {
+                const next = openDay(estId, date, member?.full_name || member?.role || 'equipe');
+                setDay({ ...next });
+                setPhase('sell');
+                setMsg('Journée démarrée — vous pouvez encaisser.');
+              }}
+            >
+              Démarrer la journée
+            </button>
+          ) : (
+            <span className="text-xs px-3 py-1.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-semibold">
+              Journée ouverte
+            </span>
+          )}
+          {!day?.closed_at && mode !== 'close' && (
+            <button
+              type="button"
+              className="btn-secondary text-sm min-h-[44px]"
+              onClick={startClose}
+            >
+              Clôturer la journée
+            </button>
+          )}
         </div>
       )}
 
@@ -806,7 +859,7 @@ export default function LiveDaySales({
               onClick={() => void finalizeClose()}
             >
               {busy ? <Loader2 className="animate-spin" size={18} /> : <Send size={18} />}
-              Confirmer · décrémenter stock · envoyer
+              Confirmer la clôture · bilan du jour
             </button>
           </div>
         </div>
@@ -823,7 +876,7 @@ export default function LiveDaySales({
           <p className="text-stone-300">
             {agg.ticketCount} ventes · {formatFCFA(agg.total)}
           </p>
-          <p className="text-sm text-stone-400">Stock mis à jour · rapport enregistré</p>
+          <p className="text-sm text-stone-400">Journée clôturée · rapport enregistré (stock déjà à jour à chaque vente)</p>
           <div className="flex flex-col sm:flex-row gap-2 justify-center">
             <Link to="/daily-report" className="btn-secondary">
               Voir rapports

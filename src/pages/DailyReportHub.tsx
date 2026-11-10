@@ -54,7 +54,7 @@ export default function DailyReportHub() {
           Vente journalière
         </h1>
         <p className="text-sm text-stone-400 mt-1">
-          Encaisser · Historique détaillé · Clôturer · Rapports (jour / semaine / mois / année / PDF)
+          Multi-commandes · stock à chaque vente · démarrer / clôturer la journée · historique · rapports
         </p>
       </div>
 

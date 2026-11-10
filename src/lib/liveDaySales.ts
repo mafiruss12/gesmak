@@ -1,5 +1,5 @@
 /**
- * Ventes « au fil de l’eau » — pas de décrément stock avant clôture du soir.
+ * Ventes au fil de l’eau — décrément stock à CHAQUE vente. Clôture = bilan uniquement.
  * Les tickets enregistrés sont verrouillés pour l’équipe ; seul le propriétaire peut annuler/modifier.
  */
 export type LivePayMethod = 'cash' | 'mobile' | 'mixed';
@@ -246,10 +246,21 @@ export function aggregateDay(state: LiveDayState): {
   };
 }
 
+export function openDay(estId: string, date: string, by?: string): LiveDayState {
+  const state = loadLiveDay(estId, date);
+  state.closed_at = null;
+  state.stock_deducted = false;
+  pushActivity(state, 'open' as any, 'Journée démarrée', by);
+  saveLiveDay(state);
+  return state;
+}
+
 export function markClosed(estId: string, date: string, by?: string): LiveDayState {
   const state = loadLiveDay(estId, date);
   state.closed_at = new Date().toISOString();
-  pushActivity(state, 'close', 'Journée clôturée', by);
+  // Stock déjà décrémenté à chaque vente — clôture = bilan / rapport uniquement
+  state.stock_deducted = true;
+  pushActivity(state, 'close', 'Journée clôturée (bilan)', by);
   saveLiveDay(state);
   return state;
 }
