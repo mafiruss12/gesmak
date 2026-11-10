@@ -154,7 +154,7 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
 
   function addToCart(p: Product) {
     if (!serviceOpen) return;
-    if (p.stock <= 0) return;
+    if (Number((p as any).stock ?? (p as any).quantity ?? 0) <= 0) return;
     setCart((prev) => {
       const ex = prev.find((i) => i.product.id === p.id);
       if (ex) {
@@ -621,13 +621,14 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
               {filtered.map((p) => {
                 const q = cart.find((c) => c.product.id === p.id)?.qty ?? 0;
-                const out = Number(p.stock) <= 0;
+                const stockQty = Number((p as any).stock ?? (p as any).quantity ?? 0);
+                const out = !Number.isFinite(stockQty) || stockQty <= 0;
                 return (
                   <div
                     key={p.id}
                     className={`card text-left p-2.5 transition ${
                       q > 0 ? 'border-orange-400/70 bg-orange-500/5 ring-1 ring-orange-400/30' : 'hover:border-amber-500/40'
-                    } ${out ? 'opacity-40' : ''}`}
+                    } ${out ? 'opacity-45 grayscale pointer-events-none border-red-300 dark:border-red-800' : ''}`}
                   >
                     <button
                       type="button"
@@ -637,7 +638,14 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
                     >
                       <div className="aspect-square rounded-xl bg-stone-950 flex items-center justify-center mb-1.5 overflow-hidden relative">
                         <ProductThumb name={p.name} category={p.category} imageUrl={(p as any).image_url} size={88} />
-                        {q > 0 && (
+                        {out && (
+                          <span className="absolute inset-0 flex items-center justify-center bg-black/55">
+                            <span className="rounded-lg bg-red-600 px-2 py-1 text-[10px] font-black uppercase text-white tracking-wide">
+                              Rupture
+                            </span>
+                          </span>
+                        )}
+                        {q > 0 && !out && (
                           <span className="absolute top-1 right-1 min-w-[22px] h-[22px] px-1 rounded-full bg-orange-500 text-white text-[11px] font-black flex items-center justify-center shadow">
                             {q}
                           </span>
@@ -645,8 +653,8 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
                       </div>
                       <p className="text-xs font-semibold text-stone-100 truncate">{p.name}</p>
                       <p className="text-sm font-bold text-orange-400 dark:text-amber-300">{formatFCFA(Number(p.price) || 0)}</p>
-                      <p className={`text-[10px] ${Number(p.stock) <= Number(p.min_stock) ? 'text-warning-400' : 'text-stone-500'}`}>
-                        Stock {p.stock}
+                      <p className={`text-[10px] font-semibold ${out ? 'text-red-500' : stockQty <= Number(p.min_stock || 0) ? 'text-amber-500' : 'text-stone-500'}`}>
+                        {out ? 'Stock épuisé' : `Stock ${stockQty}`}
                       </p>
                     </button>
                     {/* + / − sous chaque bouteille */}

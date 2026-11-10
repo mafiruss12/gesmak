@@ -723,7 +723,7 @@ useEffect(() => {
         <div className="grid grid-cols-2 gap-3">
           {visible.map((p) => {
             const q = cart[p.id] || 0;
-            const soldOut = Number(p.stock) <= 0;
+            const soldOut = Number((p as any).stock ?? (p as any).quantity ?? 0) <= 0;
             return (
               <button
                 key={p.id}

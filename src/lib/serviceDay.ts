@@ -109,8 +109,10 @@ export function isServiceOpenLocal(estId: string, date = todayISO()): boolean {
   return readLocalService(estId, date).status === 'open';
 }
 
-/** Lecture serveur — ne déclenche JAMAIS d'event (évite les boucles) */
+/** Lecture serveur — ne passe JAMAIS open→closed (évite le clignotement après « Ouvrir ») */
 export async function fetchServiceStatus(estId: string, date = todayISO()): Promise<ServiceSnapshot> {
+  const local = readLocalService(estId, date);
+
   try {
     const { data, error } = await supabase
       .from('cash_sessions')
@@ -129,30 +131,20 @@ export async function fetchServiceStatus(estId: string, date = todayISO()): Prom
         closed_at: null,
         source: 'cash_sessions',
       };
-      // Met à jour cache sans event
-      persistLocal(estId, snap, date);
-      return snap;
-    }
-
-    // Pas de session open → fermé côté serveur
-    if (!error) {
-      const local = readLocalService(estId, date);
-      // Si local dit open mais serveur dit non, on croit le serveur (sauf hors-ligne)
-      if (local.status === 'open' && typeof navigator !== 'undefined' && !navigator.onLine) {
-        return local;
-      }
-      const snap: ServiceSnapshot = {
-        status: 'closed',
-        closed_at: local.closed_at || null,
-        source: 'cash_sessions',
-      };
       persistLocal(estId, snap, date);
       return snap;
     }
   } catch {
-    /* */
+    /* offline / RLS */
   }
-  return readLocalService(estId, date);
+
+  // Important : si le local dit OPEN, on garde OPEN tant que closeService n'a pas été appelé.
+  // Sinon le fetch juste après « Ouvrir la journée » force CLOSED → clignotement.
+  if (local.status === 'open') {
+    return local;
+  }
+
+  return { status: 'closed', closed_at: local.closed_at || null, source: local.source || 'none' };
 }
 
 export async function openService(opts: {

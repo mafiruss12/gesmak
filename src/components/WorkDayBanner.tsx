@@ -1,18 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Unlock, Lock, Loader2, Sun, Moon } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import {
-  fetchServiceStatus,
   openService,
-  isServiceOpenLocal,
   readLocalService,
   type ServiceSnapshot,
   subscribeServiceDay,
 } from '@/lib/serviceDay';
 
 /**
- * Bandeau service — affiche toujours un statut stable (jamais "Chargement…" en boucle).
+ * Bandeau service stable.
+ * Après « Ouvrir la journée », le statut OPEN est verrouillé localement (pas de bascule CLOSED).
  */
 export default function WorkDayBanner({ compact = false }: { compact?: boolean }) {
   const { member, activeEstablishment, user } = useAuth();
@@ -22,34 +21,37 @@ export default function WorkDayBanner({ compact = false }: { compact?: boolean }
     estId ? readLocalService(estId) : { status: 'closed', source: 'none' },
   );
   const [busy, setBusy] = useState(false);
+  const snapRef = useRef(snap);
+  snapRef.current = snap;
 
-  const canManage = ['super_admin', 'admin', 'owner', 'manager', 'cashier'].includes(
-    String(member?.role || ''),
+  const canManage = ['super_admin', 'admin', 'owner', 'manager', 'cashier', 'gerant', 'caissier'].includes(
+    String(member?.role || '').toLowerCase(),
   );
 
-  // Sync estId change + abonnement (sans loading)
   useEffect(() => {
     if (!estId) {
       setSnap({ status: 'closed', source: 'none' });
       return;
     }
+    // Lecture locale uniquement — pas de fetch qui écrase OPEN
     setSnap(readLocalService(estId));
-    let cancelled = false;
-    void fetchServiceStatus(estId).then((s) => {
-      if (!cancelled) setSnap(s);
+    return subscribeServiceDay(() => {
+      const next = readLocalService(estId);
+      setSnap(next);
     });
-    const unsub = subscribeServiceDay(() => {
-      if (!cancelled && estId) setSnap(readLocalService(estId));
-    });
-    return () => {
-      cancelled = true;
-      unsub();
-    };
   }, [estId]);
 
   async function handleOpen() {
     if (!estId || !canManage || busy) return;
     setBusy(true);
+    // Optimistic UI immédiat
+    const optimistic: ServiceSnapshot = {
+      status: 'open',
+      opened_at: new Date().toISOString(),
+      closed_at: null,
+      source: 'local',
+    };
+    setSnap(optimistic);
     try {
       const res = await openService({
         estId,
@@ -57,6 +59,9 @@ export default function WorkDayBanner({ compact = false }: { compact?: boolean }
         by: member?.full_name || member?.role || 'equipe',
       });
       setSnap(res.snap);
+    } catch {
+      // garde optimistic si erreur réseau
+      setSnap(optimistic);
     } finally {
       setBusy(false);
     }
