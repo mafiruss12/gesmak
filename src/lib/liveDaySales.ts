@@ -7,7 +7,10 @@ export type LivePayMethod = 'cash' | 'mobile' | 'mixed';
 export type LiveSaleLine = {
   product_id: string;
   name: string;
+  /** Type / catégorie (ex. bière, eau, soda) */
+  category?: string;
   price: number;
+  /** Prix d'achat unitaire */
   cost: number;
   qty: number;
 };
@@ -21,6 +24,8 @@ export type LiveSaleTicket = {
   note?: string;
   /** Verrouillé dès l’enregistrement — non modifiable sauf propriétaire */
   locked?: boolean;
+  /** Stock déjà décrémenté à la vente (ex. caisse POS) */
+  stock_applied?: boolean;
   voided?: boolean;
   voided_at?: string;
   voided_by?: string;
@@ -104,6 +109,7 @@ export function addTicket(
   pay: LivePayMethod,
   note?: string,
   by?: string,
+  stockApplied = false,
 ): LiveDayState {
   const state = loadLiveDay(estId, date);
   if (state.closed_at) return state;
@@ -118,6 +124,7 @@ export function addTicket(
     pay,
     note,
     locked: true,
+    stock_applied: stockApplied,
   };
   state.tickets = [ticket, ...state.tickets];
   pushActivity(
@@ -235,4 +242,42 @@ export function verifyDayHeuristics(state: LiveDayState): string[] {
   if (agg.ticketCount === 0) warnings.push('Aucune vente enregistrée.');
   if (agg.total <= 0 && agg.ticketCount > 0) warnings.push('Total à zéro malgré des tickets.');
   return warnings;
+}
+
+
+/** Dates YYYY-MM-DD avec au moins un ticket pour un établissement */
+export function listLiveDayDates(estId: string): string[] {
+  const prefix = `mm_live_sales:${estId}:`;
+  const out: string[] = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k || !k.startsWith(prefix)) continue;
+      const date = k.slice(prefix.length);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+      const day = loadLiveDay(estId, date);
+      if (day.tickets.some((tk) => !tk.voided)) out.push(date);
+    }
+  } catch {
+    /* */
+  }
+  return out.sort();
+}
+
+export function loadTicketsInRange(estId: string, from: string, to: string): LiveSaleTicket[] {
+  const tickets: LiveSaleTicket[] = [];
+  const start = new Date(from + 'T00:00:00');
+  const end = new Date(to + 'T23:59:59');
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return tickets;
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const keyDate = `${y}-${m}-${day}`;
+    const state = loadLiveDay(estId, keyDate);
+    for (const tk of state.tickets) {
+      if (!tk.voided) tickets.push(tk);
+    }
+  }
+  return tickets.sort((a, b) => (a.at < b.at ? 1 : -1));
 }

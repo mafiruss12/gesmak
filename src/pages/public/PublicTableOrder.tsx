@@ -447,12 +447,7 @@ export default function PublicTableOrder() {
             Passer →
           </button>
         </div>
-        <style>{`
-          @keyframes qrIntroIn {
-            from { opacity: 0; transform: scale(.88) translateY(12px); }
-            to { opacity: 1; transform: scale(1) translateY(0); }
-          }
-        `}</style>
+        <style dangerouslySetInnerHTML={{ __html: "\n          @keyframes qrIntroIn {\n            from { opacity: 0; transform: scale(.88) translateY(12px); }\n            to { opacity: 1; transform: scale(1) translateY(0); }\n          }\n        " }} />
       </div>
     );
   }
@@ -569,111 +564,7 @@ export default function PublicTableOrder() {
 
   return (
     <div className="min-h-screen text-stone-900 pb-40 relative overflow-x-hidden overflow-y-auto qr-order-page bg-white">
-      <style>{`
-        .qr-order-page {
-          background: #ffffff !important;
-        }
-        .qr-order-page::before {
-          content: '';
-          position: fixed;
-          inset: 0;
-          pointer-events: none;
-          z-index: 0;
-          background:
-            radial-gradient(circle at 15% 10%, rgba(251,146,60,0.18), transparent 42%),
-            radial-gradient(circle at 85% 5%, rgba(250,204,21,0.2), transparent 40%),
-            radial-gradient(circle at 50% 90%, rgba(249,115,22,0.12), transparent 45%),
-            #ffffff;
-          animation: bgShift 10s ease-in-out infinite alternate;
-        }
-        @keyframes bgShift {
-          0% { filter: hue-rotate(0deg); }
-          100% { filter: hue-rotate(12deg); }
-        }
-        @keyframes floaty {
-          0%,100% { transform: translateY(0) rotate(0deg); }
-          50% { transform: translateY(-12px) rotate(6deg); }
-        }
-        @keyframes drift {
-          0% { transform: translate(0,0) scale(1); }
-          50% { transform: translate(24px,-28px) scale(1.08); }
-          100% { transform: translate(0,0) scale(1); }
-        }
-        @keyframes bubbleUp {
-          0% { transform: translateY(110vh) scale(0.3); opacity: 0; }
-          15% { opacity: 0.55; }
-          85% { opacity: 0.4; }
-          100% { transform: translateY(-15vh) scale(1.1); opacity: 0; }
-        }
-        @keyframes shimmer {
-          0% { background-position: 0% 50%; }
-          100% { background-position: 200% 50%; }
-        }
-        @keyframes popin {
-          from { opacity: 0; transform: translateY(16px) scale(0.92); }
-          to { opacity: 1; transform: translateY(0) scale(1); }
-        }
-        @keyframes neonPulse {
-          0%,100% { box-shadow: 0 0 0 0 rgba(249,115,22,0.55), 0 8px 28px rgba(249,115,22,0.45); }
-          50% { box-shadow: 0 0 0 10px rgba(249,115,22,0), 0 12px 36px rgba(234,88,12,0.55); }
-        }
-        @keyframes cardShine {
-          0% { background-position: -120% 0; }
-          100% { background-position: 220% 0; }
-        }
-        .gesmak-float { animation: floaty 3s ease-in-out infinite; }
-        .gesmak-pop { animation: popin 0.55s cubic-bezier(0.22,1,0.36,1) both; }
-        .gesmak-shimmer {
-          background: linear-gradient(105deg, #ea580c, #f59e0b, #fbbf24, #f97316, #ea580c);
-          background-size: 280% 100%;
-          animation: shimmer 2.2s linear infinite;
-          color: #fff !important;
-        }
-        .qr-orb {
-          position: absolute;
-          border-radius: 50%;
-          pointer-events: none;
-          z-index: 0;
-          animation: drift 11s ease-in-out infinite;
-          filter: blur(0.5px);
-        }
-        .qr-bubble {
-          position: absolute;
-          border-radius: 50%;
-          pointer-events: none;
-          z-index: 0;
-          background: radial-gradient(circle at 30% 28%, #fff, rgba(251,191,36,0.55));
-          animation: bubbleUp linear infinite;
-          box-shadow: 0 0 12px rgba(251,146,60,0.35);
-        }
-        .qr-send-btn {
-          background: linear-gradient(90deg, #ea580c, #f59e0b, #fb923c, #ea580c) !important;
-          background-size: 250% 100% !important;
-          animation: shimmer 2s linear infinite, neonPulse 1.8s ease-in-out infinite !important;
-          color: #fff !important;
-          font-weight: 900 !important;
-          letter-spacing: 0.02em;
-          border: none !important;
-        }
-        .qr-send-btn:disabled {
-          animation: none !important;
-          background: #fdba74 !important;
-          color: #fff !important;
-          opacity: 0.85 !important;
-        }
-        .qr-product-card {
-          background: #fff;
-          border: 2px solid #ffedd5;
-          box-shadow: 0 10px 28px rgba(251,146,60,0.12);
-          transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
-        }
-        .qr-product-card:active { transform: scale(0.97); }
-        .qr-product-card.is-in-cart {
-          border-color: #f97316;
-          box-shadow: 0 0 0 3px rgba(249,115,22,0.25), 0 12px 32px rgba(249,115,22,0.2);
-        }
-        .qr-content { position: relative; z-index: 1; }
-      `}</style>
+      <style dangerouslySetInnerHTML={{ __html: "\n        .qr-order-page {\n          background: #ffffff !important;\n        }\n        .qr-order-page::before {\n          content: '';\n          position: fixed;\n          inset: 0;\n          pointer-events: none;\n          z-index: 0;\n          background:\n            radial-gradient(circle at 15% 10%, rgba(251,146,60,0.18), transparent 42%),\n            radial-gradient(circle at 85% 5%, rgba(250,204,21,0.2), transparent 40%),\n            radial-gradient(circle at 50% 90%, rgba(249,115,22,0.12), transparent 45%),\n            #ffffff;\n          animation: bgShift 10s ease-in-out infinite alternate;\n        }\n        @keyframes bgShift {\n          0% { filter: hue-rotate(0deg); }\n          100% { filter: hue-rotate(12deg); }\n        }\n        @keyframes floaty {\n          0%,100% { transform: translateY(0) rotate(0deg); }\n          50% { transform: translateY(-12px) rotate(6deg); }\n        }\n        @keyframes drift {\n          0% { transform: translate(0,0) scale(1); }\n          50% { transform: translate(24px,-28px) scale(1.08); }\n          100% { transform: translate(0,0) scale(1); }\n        }\n        @keyframes bubbleUp {\n          0% { transform: translateY(110vh) scale(0.3); opacity: 0; }\n          15% { opacity: 0.55; }\n          85% { opacity: 0.4; }\n          100% { transform: translateY(-15vh) scale(1.1); opacity: 0; }\n        }\n        @keyframes shimmer {\n          0% { background-position: 0% 50%; }\n          100% { background-position: 200% 50%; }\n        }\n        @keyframes popin {\n          from { opacity: 0; transform: translateY(16px) scale(0.92); }\n          to { opacity: 1; transform: translateY(0) scale(1); }\n        }\n        @keyframes neonPulse {\n          0%,100% { box-shadow: 0 0 0 0 rgba(249,115,22,0.55), 0 8px 28px rgba(249,115,22,0.45); }\n          50% { box-shadow: 0 0 0 10px rgba(249,115,22,0), 0 12px 36px rgba(234,88,12,0.55); }\n        }\n        @keyframes cardShine {\n          0% { background-position: -120% 0; }\n          100% { background-position: 220% 0; }\n        }\n        .gesmak-float { animation: floaty 3s ease-in-out infinite; }\n        .gesmak-pop { animation: popin 0.55s cubic-bezier(0.22,1,0.36,1) both; }\n        .gesmak-shimmer {\n          background: linear-gradient(105deg, #ea580c, #f59e0b, #fbbf24, #f97316, #ea580c);\n          background-size: 280% 100%;\n          animation: shimmer 2.2s linear infinite;\n          color: #fff !important;\n        }\n        .qr-orb {\n          position: absolute;\n          border-radius: 50%;\n          pointer-events: none;\n          z-index: 0;\n          animation: drift 11s ease-in-out infinite;\n          filter: blur(0.5px);\n        }\n        .qr-bubble {\n          position: absolute;\n          border-radius: 50%;\n          pointer-events: none;\n          z-index: 0;\n          background: radial-gradient(circle at 30% 28%, #fff, rgba(251,191,36,0.55));\n          animation: bubbleUp linear infinite;\n          box-shadow: 0 0 12px rgba(251,146,60,0.35);\n        }\n        .qr-send-btn {\n          background: linear-gradient(90deg, #ea580c, #f59e0b, #fb923c, #ea580c) !important;\n          background-size: 250% 100% !important;\n          animation: shimmer 2s linear infinite, neonPulse 1.8s ease-in-out infinite !important;\n          color: #fff !important;\n          font-weight: 900 !important;\n          letter-spacing: 0.02em;\n          border: none !important;\n        }\n        .qr-send-btn:disabled {\n          animation: none !important;\n          background: #fdba74 !important;\n          color: #fff !important;\n          opacity: 0.85 !important;\n        }\n        .qr-product-card {\n          background: #fff;\n          border: 2px solid #ffedd5;\n          box-shadow: 0 10px 28px rgba(251,146,60,0.12);\n          transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;\n        }\n        .qr-product-card:active { transform: scale(0.97); }\n        .qr-product-card.is-in-cart {\n          border-color: #f97316;\n          box-shadow: 0 0 0 3px rgba(249,115,22,0.25), 0 12px 32px rgba(249,115,22,0.2);\n        }\n        .qr-content { position: relative; z-index: 1; }\n      " }} />
 
       {/* Décors animés */}
       <div className="qr-orb w-72 h-72 bg-orange-400/30 -top-16 -right-20" style={{ animationDuration: '14s' }} />

@@ -56,9 +56,9 @@ const NAV_SECTIONS: NavSection[] = [
       { to: '/hotel/settings', label: 'Paramètres hôtel', icon: <Settings size={20} />, roles: ['super_admin', 'admin', 'owner'] },
       { to: '/patron', label: 'Mode patron', icon: <Crown size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager'] },
       { to: '/mon-service', label: 'Mon service', icon: <Users size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'cashier', 'employee'] },
-      { to: '/live-sales', label: 'Ventes journée', icon: <ShoppingCart size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'cashier', 'employee'] },
-      { to: '/daily-report', label: 'Point avancé', icon: <ClipboardCheck size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager'] },
-      { to: '/live-sales', label: 'Ventes journée', icon: <ShoppingCart size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'cashier', 'employee'] },
+      { to: '/daily-report?tab=historique', label: 'Historique ventes', icon: <ClipboardList size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'cashier', 'employee'] },
+      { to: '/daily-report', label: 'Vente journalière', icon: <ShoppingCart size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'cashier', 'employee'] },
+      { to: '/daily-report?tab=terminer', label: 'Terminer la journée', icon: <ClipboardCheck size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'cashier', 'employee'] },
       { to: '/point-manuel', label: 'Point manuel', icon: <ClipboardList size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'cashier', 'employee'] },
       { to: '/orders', label: 'Commandes', icon: <Receipt size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'cashier', 'employee'] },
       { to: '/menu-carte', label: 'Carte', icon: <Receipt size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager'] },
@@ -837,7 +837,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 { to: '/hotel', label: 'Hôtel', icon: <Building2 size={22} /> },
                 { to: '/hotel/rooms', label: 'Chambres', icon: <Building2 size={22} /> },
                 { to: '/hotel/reservations', label: 'Résa', icon: <Calendar size={22} /> },
-                { to: '/pos', label: 'Caisse', icon: <ShoppingCart size={22} /> },
+                { to: '/daily-report', label: 'Vente jour', icon: <ShoppingCart size={22} /> },
                 { to: '/hotel/housekeeping', label: 'Ménage', icon: <Sparkles size={22} /> },
               ]
             : bizType === 'complexe'
@@ -849,8 +849,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                       { to: '/tables', label: 'Tables', icon: <UtensilsCrossed size={22} /> },
                     ]
                   : [
-                      { to: '/live-sales', label: 'Ventes', icon: <ShoppingCart size={20} /> },
-                      { to: '/pos', label: 'Caisse', icon: <ShoppingCart size={22} /> },
+                      { to: '/daily-report?tab=historique', label: 'Historique', icon: <ClipboardList size={20} /> },
+                      { to: '/daily-report', label: 'Vente jour', icon: <ShoppingCart size={22} /> },
                     ]),
                 { to: '/inventory', label: inventoryLabelForServices(estServices), icon: <Package size={22} /> },
                 { to: '/orders', label: 'Commandes', icon: <Receipt size={22} /> },
@@ -858,7 +858,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             : false
             ? [
                 { to: '/dashboard', label: 'Accueil', icon: <LayoutDashboard size={22} /> },
-                { to: '/pos', label: 'Caisse', icon: <ShoppingCart size={22} /> },
+                { to: '/daily-report', label: 'Vente jour', icon: <ShoppingCart size={22} /> },
                 { to: '/inventory', label: 'Stock', icon: <Package size={22} /> },
                 { to: '/customers', label: 'Clients', icon: <Users size={22} /> },
                 { to: '/orders', label: 'Commandes', icon: <Receipt size={22} /> },
@@ -866,14 +866,14 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             : bizType === 'maquis'
             ? [
                 { to: '/dashboard', label: 'Accueil', icon: <LayoutDashboard size={22} /> },
-                { to: '/live-sales', label: 'Ventes journée', icon: <ShoppingCart size={20} /> },
-                { to: '/pos', label: 'Caisse', icon: <ShoppingCart size={22} /> },
-                { to: '/inventory', label: 'Boissons', icon: <Package size={22} /> },
+                { to: '/daily-report', label: 'Vente jour', icon: <ShoppingCart size={22} /> },
                 { to: '/orders', label: 'Commandes', icon: <Receipt size={22} /> },
+                { to: '/daily-report?tab=terminer', label: 'Clôturer', icon: <ClipboardCheck size={22} /> },
+                { to: '/inventory', label: 'Stock', icon: <Package size={22} /> },
               ]
             : [
                 { to: '/dashboard', label: 'Accueil', icon: <LayoutDashboard size={22} /> },
-                { to: '/pos', label: 'Caisse', icon: <ShoppingCart size={22} /> },
+                { to: '/daily-report', label: 'Vente jour', icon: <ShoppingCart size={22} /> },
                 { to: '/inventory', label: 'Stock', icon: <Package size={22} /> },
                 { to: '/orders', label: 'Commandes', icon: <Receipt size={22} /> },
                 { to: '/settings', label: 'Réglages', icon: <Settings size={22} /> },
@@ -911,14 +911,15 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         </button>
       )}
 
+      {/* Actualiser en haut à droite — ne masque jamais le panier / Valider */}
       <button
         type="button"
-        className="fixed bottom-20 right-3 z-[70] inline-flex items-center gap-2 rounded-full border border-amber-500/50 bg-stone-900/95 px-4 py-2.5 text-sm font-bold text-amber-300 shadow-lg backdrop-blur hover:bg-stone-800 sm:bottom-6"
+        className="fixed top-[max(4.5rem,env(safe-area-inset-top)+3.5rem)] right-3 z-30 inline-flex items-center gap-1.5 rounded-full border border-stone-300 bg-white/95 px-3 py-2 text-xs font-semibold text-stone-700 shadow-md backdrop-blur hover:bg-stone-50 dark:border-stone-600 dark:bg-stone-900/95 dark:text-stone-200"
         title="Actualiser la page"
         aria-label="Actualiser la page"
         onClick={() => window.location.reload()}
       >
-        <RefreshCw size={18} />
+        <RefreshCw size={14} />
         Actualiser
       </button>
     </div>

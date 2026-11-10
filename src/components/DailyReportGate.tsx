@@ -106,7 +106,7 @@ export default function DailyReportGate() {
               type: 'report_reminder',
               link: '/daily-report',
               read: false,
-              action_label: 'Faire le rapport',
+              action_label: 'Terminer la journée',
             });
           } catch {
             /* */
@@ -155,11 +155,11 @@ export default function DailyReportGate() {
         <AlertTriangle className="text-amber-400 shrink-0 mt-0.5" size={18} />
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-amber-100 flex items-center gap-2">
-            <ClipboardList size={16} /> Rapport journalier (après 22h)
+            <ClipboardList size={16} /> Clôture de journée (après 22h)
           </p>
           {todayMissing ? (
             <p className="text-amber-100/90 mt-1">
-              Le point d&apos;aujourd&apos;hui ({formatDateFr(today)}) n&apos;est pas encore fait.
+              La journée n&apos;est pas encore clôturée ({formatDateFr(today)}).
               Rappel affiché une seule fois par jour à partir de 22h.
             </p>
           ) : (
@@ -175,11 +175,11 @@ export default function DailyReportGate() {
       </div>
       <div className="flex flex-wrap gap-2">
         <Link
-          to="/daily-report"
+          to="/daily-report?tab=terminer"
           className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-amber-500 text-stone-900 text-xs font-semibold"
           onClick={handleDismiss}
         >
-          Faire le rapport
+          Terminer la journée
         </Link>
         {ownerPhone ? (
           <a

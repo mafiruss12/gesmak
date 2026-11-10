@@ -326,15 +326,7 @@ export default function TypePicker({ mode, onDone, defaultName = '' }: Props) {
           Se déconnecter
         </button>
       </div>
+      <style dangerouslySetInnerHTML={{ __html: "\n        .tp-enter { animation: tpEnter .55s ease both; }\n        @keyframes tpEnter {\n          from { opacity: 0; transform: translateY(12px); }\n          to { opacity: 1; transform: translateY(0); }\n        }\n        @media (prefers-reduced-motion: reduce) { .tp-enter { animation: none; } }\n      " }} />
     </div>
-
-      <style>{`
-        .tp-enter { animation: tpEnter .55s ease both; }
-        @keyframes tpEnter {
-          from { opacity: 0; transform: translateY(12px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        @media (prefers-reduced-motion: reduce) { .tp-enter { animation: none; } }
-      `}</style>
   );
 }

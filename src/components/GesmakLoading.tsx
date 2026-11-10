@@ -119,18 +119,7 @@ export function GesmakLoading({
         <p className="text-xs text-stone-500">{label}</p>
       )}
 
-      <style>{`
-        @keyframes gesmakLoadIndeterminate {
-          0% { transform: translateX(-120%); }
-          100% { transform: translateX(320%); }
-        }
-        .gesmak-load-indeterminate {
-          animation: gesmakLoadIndeterminate 1.15s ease-in-out infinite;
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .gesmak-load-indeterminate { animation: none; width: 100% !important; }
-        }
-      `}</style>
+      <style dangerouslySetInnerHTML={{ __html: "\n        @keyframes gesmakLoadIndeterminate {\n          0% { transform: translateX(-120%); }\n          100% { transform: translateX(320%); }\n        }\n        .gesmak-load-indeterminate {\n          animation: gesmakLoadIndeterminate 1.15s ease-in-out infinite;\n        }\n        @media (prefers-reduced-motion: reduce) {\n          .gesmak-load-indeterminate { animation: none; width: 100% !important; }\n        }\n      " }} />
     </div>
   );
 }

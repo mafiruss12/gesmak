@@ -134,18 +134,7 @@ export default function OfflineBanner() {
         Détail
       </Link>
 
-      <style>{`
-        .offline-banner-motion {
-          animation: offlineBannerIn .4s cubic-bezier(.22,1,.36,1) both;
-        }
-        @keyframes offlineBannerIn {
-          from { opacity: 0; transform: translateY(12px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .offline-banner-motion { animation: none; }
-        }
-      `}</style>
+      <style dangerouslySetInnerHTML={{ __html: "\n        .offline-banner-motion {\n          animation: offlineBannerIn .4s cubic-bezier(.22,1,.36,1) both;\n        }\n        @keyframes offlineBannerIn {\n          from { opacity: 0; transform: translateY(12px); }\n          to { opacity: 1; transform: translateY(0); }\n        }\n        @media (prefers-reduced-motion: reduce) {\n          .offline-banner-motion { animation: none; }\n        }\n      " }} />
     </div>
   );
 }

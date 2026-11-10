@@ -621,13 +621,7 @@ export default function BtpDocuments() {
           </footer>
         </div>
         </div>
-        <style>{`
-          .animate-in { animation: btpIn 0.45s ease-out; }
-          @keyframes btpIn {
-            from { opacity: 0; transform: translateY(12px) scale(0.98); }
-            to { opacity: 1; transform: none; }
-          }
-        `}</style>
+        <style dangerouslySetInnerHTML={{ __html: "\n          .animate-in { animation: btpIn 0.45s ease-out; }\n          @keyframes btpIn {\n            from { opacity: 0; transform: translateY(12px) scale(0.98); }\n            to { opacity: 1; transform: none; }\n          }\n        " }} />
       </div>
     );
   }
@@ -1309,13 +1303,7 @@ export default function BtpDocuments() {
           ))}
         </ul>
       )}
-      <style>{`
-        .btp-doc-card, .btp-line-card { animation: btpCardIn 0.4s ease-out both; }
-        @keyframes btpCardIn {
-          from { opacity: 0; transform: translateY(10px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-      `}</style>
+      <style dangerouslySetInnerHTML={{ __html: "\n        .btp-doc-card, .btp-line-card { animation: btpCardIn 0.4s ease-out both; }\n        @keyframes btpCardIn {\n          from { opacity: 0; transform: translateY(10px); }\n          to { opacity: 1; transform: translateY(0); }\n        }\n      " }} />
       <p className="text-xs text-stone-600">
         <Link to="/btp/clients" className="text-sky-400 underline">Clients</Link>
         {' · '}

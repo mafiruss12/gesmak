@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Search, Plus, Minus, Trash2, ShoppingCart, CreditCard, Smartphone, Loader2,
-  CheckCircle2, QrCode, Printer,
+  CheckCircle2, QrCode, Printer, Wallet,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { MOBILE_MONEY_PROVIDERS, MOBILE_MONEY_LABELS, type MobileMoneyProvider } from '@/lib/integrations';
@@ -15,6 +15,7 @@ import { useEstId } from '@/lib/useEstId';
 import { formatFCFA } from '@/lib/format';
 import { Link } from 'react-router-dom';
 import ProductThumb from '@/components/ProductThumb';
+import { addTicket } from '@/lib/liveDaySales';
 
 interface CartItem {
   product: Product;
@@ -306,6 +307,38 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
         method: MOBILE_MONEY_LABELS[method as MobileMoneyProvider] || method,
         at: new Date().toLocaleString('fr-FR'),
       });
+      try {
+        const payMap: Record<string, 'cash' | 'mobile' | 'mixed'> = {
+          cash: 'cash',
+          mobile_money: 'mobile',
+          wave: 'mobile',
+          orange_money: 'mobile',
+          mtn_money: 'mobile',
+          moov_money: 'mobile',
+          card: 'mobile',
+          mixed: 'mixed',
+        };
+        const livePay = payMap[String(method)] || 'cash';
+        const today = new Date().toISOString().split('T')[0];
+        addTicket(
+          estId,
+          today,
+          cart.map((i) => ({
+            product_id: i.product.id,
+            name: i.product.name,
+            category: i.product.category || undefined,
+            price: Number(i.product.price) || 0,
+            cost: Number((i.product as { cost?: number }).cost) || 0,
+            qty: i.qty,
+          })),
+          livePay,
+          'caisse',
+          member.full_name || member.role,
+          true,
+        );
+      } catch {
+        /* */
+      }
       setCart([]);
       setDiscount('');
       setSuccess(true);
@@ -337,11 +370,24 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
   }
 
   if (loading) {
-    return <div className="p-8 text-center text-stone-400">Chargement caisse…</div>;
+    return <div className="p-8 text-center text-stone-400">Chargement vente journalière…</div>;
   }
 
   return (
-    <div className={`max-w-5xl mx-auto space-y-3 pb-8 ${embedded ? '' : 'px-1'}`}>
+    <div className={`max-w-5xl mx-auto space-y-3 pb-40 ${embedded ? '' : 'px-1'}`}>
+      <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2.5 text-sm text-stone-200">
+        <p className="font-semibold text-amber-200">Vente journalière — clients sans QR</p>
+        <p className="text-xs text-stone-400 mt-0.5">
+          Panier → paiement → valider après l&apos;argent : le <strong className="text-stone-300">stock diminue tout de suite</strong>,
+          la vente reste dans l&apos;{' '}
+          <Link to="/daily-report?tab=historique" className="text-amber-400 underline">historique</Link>.
+          Le soir :{' '}
+          <Link to="/daily-report?tab=terminer" className="text-amber-400 underline">
+            Terminer la journée
+          </Link>
+          .
+        </p>
+      </div>
       {!embedded && (
         <div className="flex flex-wrap items-end justify-between gap-2">
           <div>
@@ -363,11 +409,11 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
         </div>
       )}
 
-      {/* Commandes à encaisser (QR / salle) */}
+      {/* Commandes QR — collées en haut, visibles sans scroller */}
       {readyOrders.length > 0 && (
-        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-3 space-y-2">
+        <div className="sticky top-0 z-30 rounded-2xl border border-amber-500/40 bg-stone-950/95 backdrop-blur-md p-3 space-y-2 shadow-lg">
           <p className="text-xs font-bold uppercase text-amber-300 flex items-center gap-1">
-            <QrCode size={14} /> Commandes à encaisser
+            <QrCode size={14} /> Commandes à encaisser ({readyOrders.length})
           </p>
           <div className="flex gap-2 overflow-x-auto pb-1">
             {readyOrders.map((o) => (
@@ -422,30 +468,69 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
             <EmptyState icon={<ShoppingCart size={48} />} title={ui.productPlural} message={ui.emptyProducts} />
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-              {filtered.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => addToCart(p)}
-                  disabled={Number(p.stock) <= 0}
-                  className="card text-left p-2 transition hover:border-amber-500/50 disabled:opacity-40 active:scale-95"
-                >
-                  <div className="aspect-square rounded-xl bg-stone-950 flex items-center justify-center mb-1.5 overflow-hidden">
-                    <ProductThumb name={p.name} category={p.category} imageUrl={(p as any).image_url} size={88} />
+              {filtered.map((p) => {
+                const q = cart.find((c) => c.product.id === p.id)?.qty ?? 0;
+                const out = Number(p.stock) <= 0;
+                return (
+                  <div
+                    key={p.id}
+                    className={`card text-left p-2.5 transition ${
+                      q > 0 ? 'border-orange-400/70 bg-orange-500/5 ring-1 ring-orange-400/30' : 'hover:border-amber-500/40'
+                    } ${out ? 'opacity-40' : ''}`}
+                  >
+                    <button
+                      type="button"
+                      disabled={out}
+                      onClick={() => addToCart(p)}
+                      className="w-full text-left disabled:pointer-events-none"
+                    >
+                      <div className="aspect-square rounded-xl bg-stone-950 flex items-center justify-center mb-1.5 overflow-hidden relative">
+                        <ProductThumb name={p.name} category={p.category} imageUrl={(p as any).image_url} size={88} />
+                        {q > 0 && (
+                          <span className="absolute top-1 right-1 min-w-[22px] h-[22px] px-1 rounded-full bg-orange-500 text-white text-[11px] font-black flex items-center justify-center shadow">
+                            {q}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs font-semibold text-stone-100 truncate">{p.name}</p>
+                      <p className="text-sm font-bold text-orange-400 dark:text-amber-300">{formatFCFA(Number(p.price) || 0)}</p>
+                      <p className={`text-[10px] ${Number(p.stock) <= Number(p.min_stock) ? 'text-warning-400' : 'text-stone-500'}`}>
+                        Stock {p.stock}
+                      </p>
+                    </button>
+                    {/* + / − sous chaque bouteille */}
+                    <div className="mt-2 flex items-center justify-between gap-1">
+                      <button
+                        type="button"
+                        disabled={q <= 0}
+                        onClick={() => setQty(p.id, q - 1)}
+                        className="flex-1 min-h-[40px] rounded-xl bg-stone-800 text-stone-100 flex items-center justify-center disabled:opacity-30 active:scale-95"
+                        aria-label="Retirer"
+                      >
+                        <Minus size={18} />
+                      </button>
+                      <span className={`w-9 text-center text-base font-black ${q > 0 ? 'text-orange-400' : 'text-stone-500'}`}>
+                        {q}
+                      </span>
+                      <button
+                        type="button"
+                        disabled={out || q >= Number(p.stock)}
+                        onClick={() => (q === 0 ? addToCart(p) : setQty(p.id, q + 1))}
+                        className="flex-1 min-h-[40px] rounded-xl bg-orange-500 text-white flex items-center justify-center disabled:opacity-30 active:scale-95 shadow-sm"
+                        aria-label="Ajouter"
+                      >
+                        <Plus size={18} />
+                      </button>
+                    </div>
                   </div>
-                  <p className="text-xs font-semibold text-stone-100 truncate">{p.name}</p>
-                  <p className="text-sm font-bold text-amber-300">{formatFCFA(Number(p.price) || 0)}</p>
-                  <p className={`text-[10px] ${Number(p.stock) <= Number(p.min_stock) ? 'text-warning-400' : 'text-stone-500'}`}>
-                    Stock {p.stock}
-                  </p>
-                </button>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
 
-        {/* Panier */}
-        <div className="lg:col-span-2 card flex flex-col min-h-[320px]">
+        {/* Panier desktop */}
+        <div className="hidden lg:flex lg:col-span-2 card flex-col min-h-[320px]">
           <h2 className="text-lg font-semibold text-stone-100 mb-2 flex items-center gap-2">
             <ShoppingCart size={18} /> Panier
             {linkedOrderId && (
@@ -515,6 +600,88 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
         </div>
       </div>
 
+
+      {/* Barre panier type « Ventes du jour » : Espèces / Mobile / Mixte + Valider */}
+      {cart.length > 0 && (
+        <div className="fixed bottom-[calc(3.75rem+env(safe-area-inset-bottom))] lg:bottom-5 inset-x-0 z-40 px-3 pointer-events-none">
+          <div className="pointer-events-auto max-w-lg mx-auto rounded-2xl border border-stone-200/20 bg-white text-stone-900 shadow-2xl p-3 space-y-2.5 dark:bg-stone-950 dark:text-stone-100 dark:border-amber-500/40">
+            {readyOrders.length > 0 && (
+              <div className="flex gap-2 overflow-x-auto no-scrollbar">
+                {readyOrders.slice(0, 6).map((o) => (
+                  <button
+                    key={`bar-${o.id}`}
+                    type="button"
+                    onClick={() => void loadOrderIntoCart(o.id)}
+                    className={`shrink-0 rounded-lg border px-2.5 py-1.5 text-[10px] font-semibold ${
+                      linkedOrderId === o.id
+                        ? 'border-orange-400 bg-orange-50 text-orange-800'
+                        : 'border-stone-200 bg-stone-50 text-stone-600'
+                    }`}
+                  >
+                    {(o.customer_name || 'Client').slice(0, 10)}
+                    {o.table_number ? ` · T${o.table_number}` : ''}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm font-semibold text-stone-700 dark:text-stone-200 flex items-center gap-1.5">
+                <ShoppingCart size={16} className="text-orange-500" /> Panier
+              </span>
+              <span className="text-base font-black text-orange-600 dark:text-amber-300">{formatFCFA(netTotal)}</span>
+            </div>
+            <p className="text-[11px] text-stone-500 truncate -mt-1">
+              {cart.map((i) => `${i.product.name}×${i.qty}`).join(' · ')}
+            </p>
+            <div className="flex gap-1.5">
+              {(
+                [
+                  ['cash', 'Espèces', Wallet],
+                  ['mobile_money', 'Mobile', Smartphone],
+                  ['card', 'Mixte', CreditCard],
+                ] as const
+              ).map(([id, label, Icon]) => {
+                const active =
+                  paymentMethod === id ||
+                  (id === 'mobile_money' &&
+                    ['wave', 'orange_money', 'mtn_money', 'moov_money', 'mobile_money'].includes(
+                      String(paymentMethod),
+                    ));
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setPaymentMethod(id as PaymentMethod)}
+                    className={`flex-1 flex items-center justify-center gap-1 text-xs py-2.5 rounded-xl font-semibold transition ${
+                      active
+                        ? 'bg-orange-500 text-white shadow-md'
+                        : 'bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300'
+                    }`}
+                  >
+                    <Icon size={14} /> {label}
+                  </button>
+                );
+              })}
+            </div>
+            <button
+              type="button"
+              disabled={processing || cart.length === 0}
+              onClick={() => {
+                if (paymentMethod === 'card') {
+                  openCheckout();
+                  return;
+                }
+                void processSale();
+              }}
+              className="w-full min-h-[52px] rounded-2xl bg-orange-500 hover:bg-orange-600 text-white text-base font-bold shadow-lg disabled:opacity-40 flex items-center justify-center gap-2"
+            >
+              {processing ? <Loader2 className="animate-spin" size={20} /> : null}
+              Valider la vente
+            </button>
+          </div>
+        </div>
+      )}
+
       <Modal open={checkoutOpen} onClose={() => !processing && setCheckoutOpen(false)} title="Encaissement">
         {success ? (
           <div className="flex flex-col items-center py-6 space-y-3 caisse-success-motion">
@@ -524,13 +691,7 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
             </div>
             <p className="text-lg font-semibold text-stone-100">Vente enregistrée</p>
             <p className="text-2xl font-black text-amber-300">{formatFCFA(lastTicket?.total || netTotal)}</p>
-            <style>{`
-              .caisse-success-motion { animation: caisseOk .5s cubic-bezier(.22,1,.36,1) both; }
-              @keyframes caisseOk {
-                from { opacity: 0; transform: scale(.9); }
-                to { opacity: 1; transform: scale(1); }
-              }
-            `}</style>
+            <style dangerouslySetInnerHTML={{ __html: "\n              .caisse-success-motion { animation: caisseOk .5s cubic-bezier(.22,1,.36,1) both; }\n              @keyframes caisseOk {\n                from { opacity: 0; transform: scale(.9); }\n                to { opacity: 1; transform: scale(1); }\n              }\n            " }} />
             <div className="flex gap-2 w-full">
               <button type="button" className="btn-primary flex-1 flex items-center justify-center gap-2" onClick={printTicket}>
                 <Printer size={18} /> Ticket

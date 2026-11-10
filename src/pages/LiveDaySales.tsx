@@ -33,7 +33,13 @@ function todayISO() {
 
 type Phase = 'sell' | 'close' | 'done';
 
-export default function LiveDaySales() {
+export default function LiveDaySales({
+  embedded = false,
+  mode = 'full',
+}: {
+  embedded?: boolean;
+  mode?: 'full' | 'history' | 'close';
+} = {}) {
   const { member, activeEstablishment, effectiveRole } = useAuth();
   const estId = useEstId();
   const role = String(effectiveRole || member?.role || '');
@@ -43,7 +49,7 @@ export default function LiveDaySales() {
   const [day, setDay] = useState<LiveDayState | null>(null);
   const [cart, setCart] = useState<Record<string, number>>({});
   const [pay, setPay] = useState<LivePayMethod>('cash');
-  const [phase, setPhase] = useState<Phase>('sell');
+  const [phase, setPhase] = useState<Phase>(() => (mode === 'close' ? 'close' : 'sell'));
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [aiTips, setAiTips] = useState<string[]>([]);
@@ -99,7 +105,19 @@ export default function LiveDaySales() {
 
   useEffect(() => {
     if (day?.closed_at) setPhase(day.stock_deducted ? 'done' : 'close');
-  }, [day?.closed_at, day?.stock_deducted]);
+    else if (mode === 'close') setPhase('close');
+    else if (mode === 'history') setPhase('sell');
+  }, [day?.closed_at, day?.stock_deducted, mode]);
+
+  useEffect(() => {
+    if (mode !== 'close' || !day || day.closed_at) return;
+    const tips = verifyDayHeuristics(day, products);
+    setAiTips(tips);
+    const a = aggregateDay(day);
+    setCashConfirm(String(a.cash));
+    setMobileConfirm(String(a.mobile));
+    setPhase('close');
+  }, [mode, day, products]);
 
   const cartLines: LiveSaleLine[] = useMemo(() => {
     return products
@@ -107,6 +125,7 @@ export default function LiveDaySales() {
       .map((p) => ({
         product_id: p.id,
         name: p.name,
+        category: p.category || undefined,
         price: Math.round(Number(p.price) || 0),
         cost: Math.round(Number(p.cost) || 0),
         qty: cart[p.id] || 0,
@@ -182,10 +201,20 @@ export default function LiveDaySales() {
         total: l.qty * l.price,
       }));
 
-      // 1) Décrément stock UNE seule fois à la clôture
+      // 1) Décrément stock seulement si pas déjà fait à la caisse
       let deducted = Boolean(day.stock_deducted);
       if (!deducted) {
-        for (const line of items) {
+        const needStock: Record<string, { product_id: string; name: string; qty: number }> = {};
+        for (const tk of day.tickets) {
+          if (tk.voided || tk.stock_applied) continue;
+          for (const l of tk.lines) {
+            if (!needStock[l.product_id]) {
+              needStock[l.product_id] = { product_id: l.product_id, name: l.name, qty: 0 };
+            }
+            needStock[l.product_id].qty += l.qty;
+          }
+        }
+        for (const line of Object.values(needStock)) {
           const prod = products.find((p) => p.id === line.product_id);
           if (!prod) continue;
           const prev = Math.floor(Number(prod.stock) || 0);
@@ -208,7 +237,7 @@ export default function LiveDaySales() {
         deducted = true;
         setProducts((prev) =>
           prev.map((p) => {
-            const line = items.find((i) => i.product_id === p.id);
+            const line = needStock[p.id];
             if (!line) return p;
             return {
               ...p,
@@ -291,20 +320,36 @@ export default function LiveDaySales() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto space-y-4 pb-28">
+    <div className="max-w-3xl mx-auto space-y-4 pb-40">
+      {!embedded && (
       <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-stone-100 flex items-center gap-2">
-            <Beer className="text-amber-400" size={24} /> Ventes du jour
+            <Beer className="text-amber-400" size={24} />
+            {mode === 'close' ? 'Terminer la journée' : 'Ventes du jour'}
           </h1>
           <p className="text-sm text-stone-400 mt-1">
-            Cochez chaque client · le stock ne bouge qu’à la <strong className="text-stone-300">clôture du soir</strong>
+            {mode === 'close'
+              ? 'Récap automatique · envoi au propriétaire'
+              : 'Traces des ventes du jour · stock déjà décrémenté à chaque validation'}
           </p>
         </div>
         <Link to="/daily-report" className="text-xs text-amber-400 hover:underline shrink-0">
-          Point classique
+          Vente journalière
         </Link>
       </div>
+      )}
+      {embedded && mode === 'close' && (
+        <div className="rounded-xl border border-orange-500/30 bg-orange-500/10 px-3 py-2 text-sm text-orange-100">
+          Vérifiez les totaux puis validez <strong>Terminer la journée</strong> — rapport au propriétaire.
+        </div>
+      )}
+      {embedded && mode === 'history' && (
+        <div className="rounded-xl border border-stone-700 bg-stone-900/80 px-3 py-2 text-sm text-stone-300">
+          <strong className="text-stone-100">Historique</strong> — traces des ventes validées (non modifiables pour l&apos;équipe).
+          Nouvelle vente → onglet <strong>Encaisser</strong>.
+        </div>
+      )}
 
       {agg && (
         <div className="grid grid-cols-3 gap-2">
@@ -331,7 +376,7 @@ export default function LiveDaySales() {
         </p>
       )}
 
-      {phase === 'sell' && !day?.closed_at && (
+      {phase === 'sell' && !day?.closed_at && mode === 'full' && (
         <>
           <div className="rounded-2xl border border-stone-800 bg-stone-900/50 p-3">
             <p className="text-xs text-stone-400 mb-2">Appuyez pour ajouter · stock non décrémenté</p>
@@ -386,7 +431,7 @@ export default function LiveDaySales() {
           </div>
 
           {cartLines.length > 0 && (
-            <div className="fixed bottom-16 inset-x-0 z-30 px-3 lg:bottom-4">
+            <div className="fixed bottom-[calc(3.5rem+env(safe-area-inset-bottom))] lg:bottom-4 inset-x-0 z-40 px-3">
               <div className="max-w-3xl mx-auto rounded-2xl border border-amber-500/40 bg-stone-950 shadow-xl p-3 space-y-2">
                 <div className="flex justify-between text-sm">
                   <span className="text-stone-300 flex items-center gap-1">
@@ -423,7 +468,7 @@ export default function LiveDaySales() {
 
           <section className="space-y-2">
             <div className="flex items-center justify-between gap-2">
-              <h2 className="text-sm font-semibold text-stone-300">Ventes enregistrées</h2>
+              <h2 className="text-sm font-semibold text-stone-300">Historique des ventes</h2>
               {!canManageSales && (
                 <span className="text-[10px] text-stone-500 flex items-center gap-1">
                   <Lock size={12} /> Verrouillées
@@ -435,60 +480,121 @@ export default function LiveDaySales() {
                 </span>
               )}
             </div>
-            <p className="text-[11px] text-stone-500">
-              Une fois validée, une vente n’est plus modifiable par l’équipe. Seul le propriétaire peut l’annuler.
-            </p>
             {!day?.tickets.length ? (
-              <p className="text-sm text-stone-500">Aucune vente pour l’instant.</p>
+              <p className="text-sm text-stone-500 text-center py-6">Aucune vente pour l&apos;instant.</p>
             ) : (
-              <ul className="space-y-2">
-                {day.tickets.slice(0, 40).map((ticket) => {
-                  const locked = ticket.locked !== false || Boolean(ticket.at);
+              <ul className="space-y-3 max-h-[70vh] overflow-y-auto pr-0.5">
+                {day.tickets.map((ticket) => {
                   const voided = Boolean(ticket.voided);
+                  const d = new Date(ticket.at);
+                  const valid = !Number.isNaN(d.getTime());
+                  const dateStr = valid
+                    ? d.toLocaleDateString('fr-FR', {
+                        weekday: 'short',
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                      })
+                    : 'Date inconnue';
+                  const timeStr = valid
+                    ? `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`
+                    : '--:--:--';
+                  const payLabel =
+                    ticket.pay === 'cash' ? 'Espèces' : ticket.pay === 'mobile' ? 'Mobile Money' : 'Mixte';
+                  const costSum = ticket.lines.reduce(
+                    (s, l) => s + (Number(l.cost) || 0) * (Number(l.qty) || 0),
+                    0,
+                  );
+                  const margin = (Number(ticket.total) || 0) - costSum;
                   return (
                     <li
                       key={ticket.id}
-                      className={`rounded-xl border px-3 py-2 flex justify-between gap-2 ${
+                      className={`rounded-2xl border overflow-hidden ${
                         voided
-                          ? 'border-stone-800 bg-stone-950/80 opacity-50'
-                          : locked && !canManageSales
-                            ? 'border-stone-800 bg-stone-900/40 opacity-75'
-                            : 'border-stone-700 bg-stone-900/60'
+                          ? 'border-stone-800 bg-stone-900/30 opacity-60'
+                          : 'border-stone-700 bg-stone-900/70'
                       }`}
                     >
-                      <div className="min-w-0">
-                        <p className="text-xs text-stone-500">
-                          {new Date(ticket.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} ·{' '}
-                          {ticket.pay === 'cash' ? 'Espèces' : ticket.pay === 'mobile' ? 'Mobile' : 'Mixte'}
-                          {voided ? ' · Annulée' : locked ? ' · Enregistrée' : ''}
-                        </p>
-                        <p className={`text-sm truncate ${voided ? 'line-through text-stone-500' : 'text-stone-200'}`}>
-                          {ticket.lines.map((l) => `${l.name}×${l.qty}`).join(', ')}
-                        </p>
+                      <div className="px-3 py-2 border-b border-stone-800/80 flex flex-wrap items-center justify-between gap-2 bg-stone-950/50">
+                        <div>
+                          <p className="text-xs font-bold text-stone-200">
+                            {dateStr}
+                          </p>
+                          <p className="text-sm font-black text-amber-300 font-mono tracking-wide mt-0.5">
+                            ⏱ {timeStr}
+                          </p>
+                          <p className="text-[10px] text-stone-500 mt-0.5">
+                            {payLabel}
+                            {ticket.note ? ` · ${ticket.note}` : ''}
+                            {ticket.stock_applied ? ' · stock décrémenté' : ''}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className={`font-black text-base ${voided ? 'line-through text-stone-500' : 'text-amber-300'}`}>
+                            {formatFCFA(ticket.total)}
+                          </p>
+                          <p className="text-[10px] text-stone-500">
+                            Achat {formatFCFA(costSum)} · Marge {formatFCFA(margin)}
+                          </p>
+                        </div>
                       </div>
-                      <div className="text-right shrink-0">
-                        <p className={`font-mono text-sm ${voided ? 'text-stone-500 line-through' : 'text-amber-300'}`}>
-                          {formatFCFA(ticket.total)}
-                        </p>
-                        {canManageSales && !voided && (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs">
+                          <thead>
+                            <tr className="text-[10px] uppercase tracking-wide text-stone-500 border-b border-stone-800">
+                              <th className="px-3 py-1.5 font-semibold">Boisson</th>
+                              <th className="px-1 py-1.5 font-semibold">Type</th>
+                              <th className="px-1 py-1.5 font-semibold text-center">Qté</th>
+                              <th className="px-1 py-1.5 font-semibold text-right">P. vente</th>
+                              <th className="px-1 py-1.5 font-semibold text-right">P. achat</th>
+                              <th className="px-3 py-1.5 font-semibold text-right">Total</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {ticket.lines.map((l, i) => {
+                              const lineTotal = (Number(l.price) || 0) * (Number(l.qty) || 0);
+                              return (
+                                <tr
+                                  key={`${ticket.id}-${l.product_id}-${i}`}
+                                  className={`border-b border-stone-800/60 ${voided ? 'line-through text-stone-500' : 'text-stone-200'}`}
+                                >
+                                  <td className="px-3 py-2 font-medium">{l.name}</td>
+                                  <td className="px-1 py-2 text-stone-400">{l.category || '—'}</td>
+                                  <td className="px-1 py-2 text-center font-bold text-amber-200">{l.qty}</td>
+                                  <td className="px-1 py-2 text-right font-mono">{formatFCFA(l.price)}</td>
+                                  <td className="px-1 py-2 text-right font-mono text-stone-400">
+                                    {formatFCFA(Number(l.cost) || 0)}
+                                  </td>
+                                  <td className="px-3 py-2 text-right font-mono font-semibold text-amber-300">
+                                    {formatFCFA(lineTotal)}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                      {canManageSales && !voided && (
+                        <div className="px-3 py-2 flex justify-end">
                           <button
                             type="button"
-                            className="text-[10px] text-red-400 mt-1"
+                            className="text-[11px] text-red-400 flex items-center gap-1"
                             onClick={() => removeTicket(ticket.id)}
                           >
-                            <Trash2 size={12} className="inline" /> Annuler
+                            <Trash2 size={12} /> Annuler cette vente
                           </button>
-                        )}
-                        {!canManageSales && (
-                          <p className="text-[10px] text-stone-600 mt-1">Lecture seule</p>
-                        )}
-                      </div>
+                        </div>
+                      )}
+                      {!canManageSales && (
+                        <p className="px-3 py-1.5 text-[10px] text-stone-600">Lecture seule</p>
+                      )}
                     </li>
                   );
                 })}
               </ul>
             )}
           </section>
+
 
           <section className="space-y-2 rounded-2xl border border-stone-800 bg-stone-900/40 p-3">
             <h2 className="text-sm font-semibold text-stone-300 flex items-center gap-2">
@@ -501,8 +607,14 @@ export default function LiveDaySales() {
               <ul className="space-y-1.5 max-h-48 overflow-y-auto">
                 {(day.activity || []).slice(0, 50).map((a) => (
                   <li key={a.id} className="text-xs text-stone-400 border-b border-stone-800/80 pb-1.5">
-                    <span className="text-stone-500">
-                      {new Date(a.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                    <span className="text-stone-500 font-mono">
+                      {new Date(a.at).toLocaleString('fr-FR', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit',
+                      })}
                     </span>
                     {' · '}
                     <span className={
@@ -527,7 +639,7 @@ export default function LiveDaySales() {
         </>
       )}
 
-      {phase === 'close' && day && agg && (
+      {(phase === 'close' || (mode === 'close' && !day?.closed_at)) && day && agg && (
         <div className="space-y-4">
           <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4 space-y-2">
             <h2 className="font-bold text-stone-100 flex items-center gap-2">
@@ -605,13 +717,7 @@ export default function LiveDaySales() {
             <CheckCircle2 className="relative z-[1] mx-auto text-emerald-400" size={44} />
           </div>
           <h2 className="text-xl font-bold text-stone-100">Journée clôturée</h2>
-          <style>{`
-            .live-done-motion { animation: liveDoneIn .5s cubic-bezier(.22,1,.36,1) both; }
-            @keyframes liveDoneIn {
-              from { opacity: 0; transform: translateY(10px) scale(.96); }
-              to { opacity: 1; transform: translateY(0) scale(1); }
-            }
-          `}</style>
+          <style dangerouslySetInnerHTML={{ __html: "\n            .live-done-motion { animation: liveDoneIn .5s cubic-bezier(.22,1,.36,1) both; }\n            @keyframes liveDoneIn {\n              from { opacity: 0; transform: translateY(10px) scale(.96); }\n              to { opacity: 1; transform: translateY(0) scale(1); }\n            }\n          " }} />
           <p className="text-stone-300">
             {agg.ticketCount} ventes · {formatFCFA(agg.total)}
           </p>

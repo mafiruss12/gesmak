@@ -581,13 +581,7 @@ export default function ScanInventaire() {
               <Check className="text-emerald-400" size={28} />
             </div>
           </div>
-          <style>{`
-            .scan-done-motion { animation: scanDoneIn .45s cubic-bezier(.22,1,.36,1) both; }
-            @keyframes scanDoneIn {
-              from { opacity: 0; transform: scale(.92); }
-              to { opacity: 1; transform: scale(1); }
-            }
-          `}</style>
+          <style dangerouslySetInnerHTML={{ __html: "\n            .scan-done-motion { animation: scanDoneIn .45s cubic-bezier(.22,1,.36,1) both; }\n            @keyframes scanDoneIn {\n              from { opacity: 0; transform: scale(.92); }\n              to { opacity: 1; transform: scale(1); }\n            }\n          " }} />
           <h2 className="text-xl font-bold text-stone-100">Inventaire mis à jour</h2>
           <p className="text-sm text-stone-400">
             {stats.updated} mis à jour · {stats.created} créés · {stats.skipped} ignorés
