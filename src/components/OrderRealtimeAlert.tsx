@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell, X, Volume2, VolumeX } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -23,18 +23,31 @@ type IncomingOrder = {
   itemsSummary?: string;
 };
 
+const ALERT_ROLES = new Set([
+  'owner',
+  'manager',
+  'gerant',
+  'gérant',
+  'cashier',
+  'caissier',
+  'admin',
+  'super_admin',
+  'employee',
+  'employé',
+]);
+
 async function fetchItemsSummary(orderId: string): Promise<string> {
-  for (let attempt = 0; attempt < 5; attempt++) {
-    if (attempt > 0) await new Promise((r) => setTimeout(r, 350 * attempt));
+  for (let attempt = 0; attempt < 4; attempt++) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, 300 * attempt));
     const { data: items } = await supabase
       .from('order_items')
       .select('product_name, name, qty, quantity')
       .eq('order_id', orderId);
     if (items?.length) {
       return items
-        .map((i: any) => {
-          const label = i.product_name || i.name || '?';
-          const q = i.qty ?? i.quantity ?? 1;
+        .map((i: Record<string, unknown>) => {
+          const label = String(i.product_name || i.name || '?');
+          const q = Number(i.qty ?? i.quantity ?? 1);
           return `${label} × ${q}`;
         })
         .join(', ');
@@ -43,12 +56,14 @@ async function fetchItemsSummary(orderId: string): Promise<string> {
   return '';
 }
 
-/** Son plus long / distinct (3 tons) */
 function playStrongOrderSound() {
   try {
     if (localStorage.getItem('mm_order_sound_ok') === '0') return;
-    const Ctx = window.AudioContext || (window as any).webkitAudioContext;
-    if (!Ctx) return;
+    const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctx) {
+      playOrderAlertSound();
+      return;
+    }
     const ctx = new Ctx();
     const beep = (t0: number, freq: number, dur = 0.22) => {
       const o = ctx.createOscillator();
@@ -80,22 +95,14 @@ function playStrongOrderSound() {
 }
 
 /**
- * Alertes temps réel propriétaire / gérant / caissier :
- * INSERT sur orders de l'établissement actif (QR + salle).
+ * Popup + son + notif navigateur pour chaque nouvelle commande (Realtime + polling secours).
  */
 export default function OrderRealtimeAlert() {
-  const { member, activeEstablishment, user } = useAuth();
+  const { member, activeEstablishment, user, effectiveRole } = useAuth();
   const navigate = useNavigate();
   const estId = activeEstablishment?.id || member?.establishment_id || null;
-  const role = member?.role;
-  const canReceive =
-    !!estId &&
-    !!user &&
-    (role === 'owner' ||
-      role === 'manager' ||
-      role === 'cashier' ||
-      role === 'admin' ||
-      role === 'super_admin');
+  const role = String(effectiveRole || member?.role || '').toLowerCase();
+  const canReceive = !!estId && !!user && ALERT_ROLES.has(role);
 
   const [popup, setPopup] = useState<IncomingOrder | null>(null);
   const [soundOn, setSoundOn] = useState(() => {
@@ -105,9 +112,53 @@ export default function OrderRealtimeAlert() {
       return true;
     }
   });
+  const [liveOk, setLiveOk] = useState(false);
   const seen = useRef<Set<string>>(new Set());
   const armed = useRef(false);
+  const bootstrapDone = useRef(false);
 
+  const handleOrder = useCallback(
+    async (row: IncomingOrder, opts?: { silent?: boolean }) => {
+      if (!row?.id || seen.current.has(row.id)) return;
+      if (row.status && !['pending', 'preparing', 'ready'].includes(String(row.status))) return;
+      seen.current.add(row.id);
+
+      const itemsSummary = await fetchItemsSummary(row.id);
+      const order: IncomingOrder = { ...row, itemsSummary };
+      if (!opts?.silent) {
+        setPopup(order);
+        if (localStorage.getItem('mm_order_sound_ok') !== '0') {
+          playStrongOrderSound();
+        }
+        const body = [
+          order.customer_name || order.notes || 'Commande',
+          order.table_number ? `Table ${order.table_number}` : null,
+          itemsSummary || null,
+          order.total != null ? `${Math.round(Number(order.total))} F` : null,
+        ]
+          .filter(Boolean)
+          .join(' · ');
+        showOrderBrowserNotification('🚨 Nouvelle commande GESMAK', body);
+        try {
+          if (user?.id) {
+            await supabase.from('notifications').insert({
+              user_id: user.id,
+              title: '🚨 Nouvelle commande',
+              message: body,
+              type: 'qr_order',
+              link: '/orders',
+              read: false,
+            });
+          }
+        } catch {
+          /* */
+        }
+      }
+    },
+    [user?.id],
+  );
+
+  // Premier clic = activer audio (politique navigateur)
   useEffect(() => {
     if (!canReceive) return;
     const arm = () => {
@@ -128,54 +179,12 @@ export default function OrderRealtimeAlert() {
     };
   }, [canReceive]);
 
+  // Realtime INSERT
   useEffect(() => {
     if (!canReceive || !estId) return;
 
-    const handleOrder = async (row: IncomingOrder) => {
-      if (!row?.id || seen.current.has(row.id)) return;
-      // ignorer commandes déjà traitées si UPDATE arrive
-      if (row.status && !['pending', 'preparing'].includes(row.status) && row.status !== undefined) {
-        // INSERT is always pending usually
-      }
-      seen.current.add(row.id);
-
-      const itemsSummary = await fetchItemsSummary(row.id);
-      const order: IncomingOrder = { ...row, itemsSummary };
-      setPopup(order);
-
-      if (localStorage.getItem('mm_order_sound_ok') !== '0') {
-        playStrongOrderSound();
-      }
-
-      const body = [
-        order.customer_name || order.notes || 'Commande',
-        order.table_number ? `Table ${order.table_number}` : null,
-        itemsSummary || null,
-        order.total != null ? `${Math.round(Number(order.total))} F` : null,
-      ]
-        .filter(Boolean)
-        .join(' · ');
-
-      showOrderBrowserNotification('🚨 Nouvelle commande', body);
-
-      try {
-        if (user?.id) {
-          await supabase.from('notifications').insert({
-            user_id: user.id,
-            title: '🚨 Nouvelle commande',
-            message: body,
-            type: 'qr_order',
-            link: '/kitchen',
-            read: false,
-          });
-        }
-      } catch {
-        /* */
-      }
-    };
-
     const channel = supabase
-      .channel(`order-alert-${estId}-${user?.id || 'x'}`)
+      .channel(`order-alert-${estId}-${user?.id || 'anon'}-${Date.now()}`)
       .on(
         'postgres_changes',
         {
@@ -188,12 +197,57 @@ export default function OrderRealtimeAlert() {
           void handleOrder(payload.new as IncomingOrder);
         },
       )
-      .subscribe();
+      .subscribe((status) => {
+        setLiveOk(status === 'SUBSCRIBED');
+      });
 
     return () => {
       void supabase.removeChannel(channel);
+      setLiveOk(false);
     };
-  }, [canReceive, estId, user?.id]);
+  }, [canReceive, estId, user?.id, handleOrder]);
+
+  // Polling de secours (Realtime parfois silencieux) — toutes les 12 s
+  useEffect(() => {
+    if (!canReceive || !estId) return;
+
+    const tick = async () => {
+      try {
+        const since = new Date(Date.now() - 3 * 60 * 1000).toISOString();
+        const { data } = await supabase
+          .from('orders')
+          .select(
+            'id, establishment_id, table_number, customer_name, notes, total, source, status, created_at',
+          )
+          .eq('establishment_id', estId)
+          .in('status', ['pending', 'preparing', 'ready'])
+          .gte('created_at', since)
+          .order('created_at', { ascending: false })
+          .limit(8);
+
+        if (!data?.length) return;
+
+        // Premier cycle : mémoriser sans popup (évite alerte sur anciennes commandes)
+        if (!bootstrapDone.current) {
+          data.forEach((o) => seen.current.add(o.id));
+          bootstrapDone.current = true;
+          return;
+        }
+
+        for (const o of data) {
+          if (!seen.current.has(o.id)) {
+            await handleOrder(o as IncomingOrder);
+          }
+        }
+      } catch {
+        /* */
+      }
+    };
+
+    void tick();
+    const id = window.setInterval(() => void tick(), 12000);
+    return () => window.clearInterval(id);
+  }, [canReceive, estId, handleOrder]);
 
   function toggleSound() {
     const next = !soundOn;
@@ -206,50 +260,42 @@ export default function OrderRealtimeAlert() {
   return (
     <>
       {popup && (
-        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-3 bg-black/60 backdrop-blur-[2px]">
+        <div
+          className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-3 bg-black/65 backdrop-blur-[2px]"
+          role="alertdialog"
+          aria-modal="true"
+          aria-label="Nouvelle commande"
+        >
           <div className="w-full max-w-md rounded-2xl border-2 border-red-500 bg-stone-900 shadow-2xl shadow-red-900/50 overflow-hidden order-alert-motion">
-            <div className="bg-gradient-to-r from-red-700 via-red-600 to-orange-600 px-4 py-3 flex items-center justify-between gap-2 relative overflow-hidden">
-              <span className="absolute inset-0 bg-white/10 animate-pulse pointer-events-none" aria-hidden />
-              <div className="relative flex items-center gap-2 font-bold text-white text-lg">
-                <Bell className="animate-bounce" size={24} />
-                🚨 Nouvelle commande
+            <div className="bg-gradient-to-r from-red-700 via-red-600 to-orange-600 px-4 py-3 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-white font-bold">
+                <Bell className="animate-bounce" size={22} />
+                Nouvelle commande
               </div>
-              <button type="button" className="text-white/90 p-1" onClick={() => setPopup(null)} aria-label="Fermer">
-                <X size={22} />
+              <button
+                type="button"
+                className="text-white/90 p-1 rounded-lg hover:bg-white/10"
+                onClick={() => setPopup(null)}
+                aria-label="Fermer"
+              >
+                <X size={20} />
               </button>
             </div>
             <div className="p-4 space-y-2 text-stone-100">
-              {popup.customer_name && (
-                <p className="text-sm">
-                  <span className="text-stone-400">Client :</span> <strong>{popup.customer_name}</strong>
-                </p>
+              <p className="text-lg font-bold">
+                {popup.customer_name || 'Client'}
+                {popup.table_number ? ` · Table ${popup.table_number}` : ''}
+              </p>
+              {popup.itemsSummary && (
+                <p className="text-sm text-amber-200">{popup.itemsSummary}</p>
               )}
-              {popup.table_number && (
-                <p className="text-sm">
-                  <span className="text-stone-400">Table :</span> <strong>{popup.table_number}</strong>
-                </p>
-              )}
-              {popup.itemsSummary ? (
-                <p className="text-sm font-medium leading-relaxed">{popup.itemsSummary}</p>
-              ) : (
-                <p className="text-sm text-stone-400">{popup.notes || 'Détail des articles en cours…'}</p>
-              )}
+              {popup.notes && <p className="text-xs text-stone-400">{popup.notes}</p>}
               {popup.total != null && (
-                <p className="text-xl font-bold text-amber-400">
+                <p className="text-xl font-black text-amber-300">
                   {Math.round(Number(popup.total)).toLocaleString('fr-FR')} F
                 </p>
               )}
-              <p className="text-xs text-stone-500">
-                {popup.created_at
-                  ? new Date(popup.created_at).toLocaleTimeString('fr-FR', {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                      second: '2-digit',
-                    })
-                  : 'À l’instant'}
-                {popup.source === 'qr_table' ? ' · Commande QR' : ' · Commande'}
-              </p>
-              <div className="flex gap-2 pt-2">
+              <div className="flex flex-wrap gap-2 pt-2">
                 <button
                   type="button"
                   className="btn-primary flex-1 min-h-[44px]"
@@ -272,11 +318,34 @@ export default function OrderRealtimeAlert() {
                   Fermer
                 </button>
               </div>
+              <p className="text-[10px] text-stone-500">
+                Alertes {liveOk ? 'temps réel actives' : 'par contrôle périodique'}
+              </p>
             </div>
           </div>
         </div>
       )}
-      <style dangerouslySetInnerHTML={{ __html: "\n        .order-alert-motion {\n          animation: orderAlertIn .45s cubic-bezier(.22,1,.36,1) both,\n                     orderAlertPulse 1.6s ease-in-out .45s infinite;\n        }\n        @keyframes orderAlertIn {\n          from { opacity: 0; transform: translateY(24px) scale(.94); }\n          to { opacity: 1; transform: translateY(0) scale(1); }\n        }\n        @keyframes orderAlertPulse {\n          0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,.45); }\n          50% { box-shadow: 0 0 0 10px rgba(239,68,68,0); }\n        }\n        @media (prefers-reduced-motion: reduce) {\n          .order-alert-motion { animation: orderAlertIn .3s ease both; }\n        }\n      " }} />
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
+        .order-alert-motion {
+          animation: orderAlertIn .45s cubic-bezier(.22,1,.36,1) both,
+                     orderAlertPulse 1.6s ease-in-out .45s infinite;
+        }
+        @keyframes orderAlertIn {
+          from { opacity: 0; transform: translateY(24px) scale(.94); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes orderAlertPulse {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,.45); }
+          50% { box-shadow: 0 0 0 10px rgba(239,68,68,0); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .order-alert-motion { animation: orderAlertIn .3s ease both; }
+        }
+      `,
+        }}
+      />
     </>
   );
 }
