@@ -6,6 +6,7 @@ import {
 import Caisse from '@/pages/Caisse';
 import LiveDaySales from '@/pages/LiveDaySales';
 import VenteRapports from '@/pages/VenteRapports';
+import WorkDayBanner from '@/components/WorkDayBanner';
 
 type TabId = 'encaisser' | 'historique' | 'terminer' | 'rapport';
 
@@ -48,6 +49,7 @@ export default function DailyReportHub() {
 
   return (
     <div className="max-w-5xl mx-auto space-y-4">
+      <WorkDayBanner />
       <div>
         <h1 className="text-2xl font-bold font-display text-stone-100 flex items-center gap-2">
           <ShoppingCart className="text-amber-400" size={26} />

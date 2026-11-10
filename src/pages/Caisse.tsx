@@ -1,3 +1,5 @@
+import { fetchServiceStatus, isServiceOpenLocal, subscribeServiceDay } from '@/lib/serviceDay';
+import WorkDayBanner from '@/components/WorkDayBanner';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Search, Plus, Minus, Trash2, ShoppingCart, CreditCard, Smartphone, Loader2,
@@ -57,6 +59,8 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
   const [readyOrders, setReadyOrders] = useState<ReadyOrder[]>([]);
   const [linkedOrderId, setLinkedOrderId] = useState<string | null>(null);
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
+  const [serviceOpen, setServiceOpen] = useState(false);
+
   const [linkedOrderIds, setLinkedOrderIds] = useState<string[]>([]);
 
   const loadProducts = useCallback(async () => {
@@ -107,6 +111,15 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
 
   useEffect(() => {
     if (!estId) return;
+    void fetchServiceStatus(estId).then((s) => setServiceOpen(s.status === 'open'));
+    return subscribeServiceDay(() => {
+      setServiceOpen(isServiceOpenLocal(estId));
+    });
+  }, [estId]);
+
+
+  useEffect(() => {
+    if (!estId) return;
     const ch = supabase
       .channel(`caisse-orders-${estId}`)
       .on(
@@ -138,6 +151,7 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
   const netTotal = Math.max(0, cartTotal - discountNum);
 
   function addToCart(p: Product) {
+    if (!serviceOpen) return;
     if (p.stock <= 0) return;
     setCart((prev) => {
       const ex = prev.find((i) => i.product.id === p.id);
@@ -239,6 +253,10 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
 
   async function processSale() {
     if (!estId || !member || !cart.length) return;
+    if (!isServiceOpenLocal(estId)) {
+      alert('Service fermé. Ouvrez la caisse dans Vente journalière pour encaisser.');
+      return;
+    }
     setProcessing(true);
     const online = isOnline();
     const updatedProducts = [...products];
@@ -471,6 +489,12 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
         </div>
       )}
 
+      <WorkDayBanner />
+      {!serviceOpen && (
+        <div className="rounded-xl border border-stone-300 bg-stone-50 px-3 py-3 text-sm text-stone-800">
+          <strong>Service fermé.</strong> Stock et ventes disponibles après <strong>Ouvrir la caisse</strong>.
+        </div>
+      )}
       {/* Commandes QR — collées en haut, visibles sans scroller */}
       {readyOrders.length > 0 && (
         <div className="sticky top-0 z-30 rounded-2xl border border-amber-500/40 bg-stone-950/95 backdrop-blur-md p-3 space-y-2 shadow-lg">

@@ -26,6 +26,13 @@ import {
   type LiveDayState,
   type LiveSaleLine,
 } from '@/lib/liveDaySales';
+import {
+  fetchServiceStatus,
+  openService,
+  closeService,
+  isServiceOpenLocal,
+  subscribeServiceDay,
+} from '@/lib/serviceDay';
 
 function todayISO() {
   return new Date().toISOString().split('T')[0];
@@ -59,6 +66,28 @@ export default function LiveDaySales({
   useEffect(() => {
     document.title = 'Ventes journée · GESMAK';
   }, []);
+
+  useEffect(() => {
+    if (!estId) return;
+    void fetchServiceStatus(estId, date).then((s) => {
+      if (s.status === 'closed') {
+        setDay((d) => {
+          const live = loadLiveDay(estId, date);
+          if (!live.closed_at) {
+            // mirror closed for UI without wiping tickets
+            return { ...live, closed_at: s.closed_at || new Date().toISOString() };
+          }
+          return { ...live };
+        });
+      } else {
+        setDay({ ...loadLiveDay(estId, date) });
+      }
+    });
+    return subscribeServiceDay(() => {
+      setDay({ ...loadLiveDay(estId, date) });
+    });
+  }, [estId, date]);
+
 
   useEffect(() => {
     if (!estId) return;
@@ -239,8 +268,8 @@ export default function LiveDaySales({
 
   async function validateSale() {
     if (!estId || !day || !member) return;
-    if (day.closed_at) {
-      setMsg('Journée déjà clôturée — redémarrez la journée pour vendre.');
+    if (day.closed_at || !isServiceOpenLocal(estId, date)) {
+      setMsg('Service fermé — ouvrez la caisse pour vendre.');
       return;
     }
     if (!cartLines.length) {
@@ -400,8 +429,8 @@ export default function LiveDaySales({
         await queueAdd('daily_reports', 'insert', { ...row, _local_id: `live-${estId}-${date}` });
       }
 
-      const closed = markClosed(estId, date, true);
-      setDay({ ...closed });
+      const res = await closeService({ estId, userId: member.user_id, by: member.full_name || member.role, date });
+      setDay({ ...loadLiveDay(estId, date) });
 
       // Notification propriétaire
       try {
@@ -461,39 +490,34 @@ export default function LiveDaySales({
         </div>
       )}
 
-
-      {/* Démarrer / état journée */}
-      {estId && (
-        <div className="flex flex-wrap gap-2 items-center">
-          {day?.closed_at ? (
-            <button
-              type="button"
-              className="btn-primary text-sm min-h-[44px] flex items-center gap-2"
-              onClick={() => {
-                const next = openDay(estId, date, member?.full_name || member?.role || 'equipe');
-                setDay({ ...next });
+      {/* Un seul endroit : ouvrir la caisse si service fermé */}
+      {mode === 'close' && estId && day?.closed_at && (
+        <div className="rounded-2xl border-2 border-orange-500 bg-orange-50 p-4 space-y-3">
+          <p className="text-sm font-bold text-stone-900">Service fermé</p>
+          <p className="text-xs text-stone-700">
+            Ouvrez la caisse pour afficher le stock, activer les commandes QR et enregistrer les ventes.
+          </p>
+          <button
+            type="button"
+            className="btn-primary min-h-[48px] w-full sm:w-auto"
+            onClick={() => {
+              void openService({
+                estId,
+                userId: member?.user_id,
+                by: member?.full_name || member?.role || 'equipe',
+                date,
+              }).then((res) => {
+                setDay({ ...loadLiveDay(estId, date) });
                 setPhase('sell');
-                setMsg('Journée démarrée — vous pouvez encaisser.');
-              }}
-            >
-              Démarrer la journée
-            </button>
-          ) : (
-            <span className="text-xs px-3 py-1.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-semibold">
-              Journée ouverte
-            </span>
-          )}
-          {!day?.closed_at && mode !== 'close' && (
-            <button
-              type="button"
-              className="btn-secondary text-sm min-h-[44px]"
-              onClick={startClose}
-            >
-              Clôturer la journée
-            </button>
-          )}
+                setMsg('Caisse ouverte — service démarré.');
+              });
+            }}
+          >
+            Ouvrir la caisse
+          </button>
         </div>
       )}
+
 
       {agg && (
         <div className="grid grid-cols-3 gap-2">
