@@ -450,14 +450,14 @@ export default function LiveDaySales({
       </div>
       )}
       {embedded && mode === 'close' && (
-        <div className="rounded-xl border border-orange-500/30 bg-orange-500/10 px-3 py-2 text-sm text-orange-100">
-          Vérifiez les totaux puis validez <strong>Terminer la journée</strong> — rapport au propriétaire.
+        <div className="rounded-xl border-2 border-orange-500 bg-orange-50 px-3 py-3 text-sm text-orange-950 font-medium shadow-sm">
+          Vérifiez les totaux puis validez <strong className="text-orange-700">Terminer la journée</strong> — rapport au propriétaire.
         </div>
       )}
       {embedded && mode === 'history' && (
-        <div className="rounded-xl border border-stone-700 bg-stone-900/80 px-3 py-2 text-sm text-stone-300">
-          <strong className="text-stone-100">Historique</strong> — traces des ventes validées (non modifiables pour l&apos;équipe).
-          Nouvelle vente → onglet <strong>Encaisser</strong>.
+        <div className="rounded-xl border border-stone-300 bg-white px-3 py-3 text-sm text-stone-800 shadow-sm">
+          <strong className="text-stone-900">Historique</strong> — traces des ventes validées (non modifiables pour l&apos;équipe).
+          Nouvelle vente → onglet <strong className="text-orange-700">Encaisser</strong>.
         </div>
       )}
 
