@@ -102,7 +102,16 @@ export async function closeTableOrders(opts: {
         qty: l.qty,
       }));
     if (liveLines.length) {
-      addTicket(establishmentId, date, liveLines, payment as LivePayMethod, 'Clôture table QR');
+      addTicket(
+        establishmentId,
+        date,
+        liveLines,
+        payment as LivePayMethod,
+        'Clôture table QR',
+        undefined,
+        true,
+        orderIds.length === 1 ? `order:${orderIds[0]}` : `orders:${orderIds.join(',')}`,
+      );
     }
   }
 
@@ -211,7 +220,7 @@ export async function closeOrderLinesPartial(opts: {
         qty: l.qty,
       }));
     if (liveLines.length) {
-      addTicket(establishmentId, date, liveLines, payment as LivePayMethod, 'Scission addition');
+      addTicket(establishmentId, date, liveLines, payment as LivePayMethod, 'Scission addition', undefined, true, `order-partial:${orderId}:${itemIds.join(',')}`);
     }
   }
 

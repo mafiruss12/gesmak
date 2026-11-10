@@ -332,9 +332,10 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
             qty: i.qty,
           })),
           livePay,
-          'caisse',
+          linkedOrderId ? `caisse · commande` : 'caisse',
           member.full_name || member.role,
           true,
+          linkedOrderId ? `order:${linkedOrderId}` : undefined,
         );
       } catch {
         /* */

@@ -113,6 +113,94 @@ export default function LiveDaySales({
   }, [day?.closed_at, day?.stock_deducted, mode]);
 
   useEffect(() => {
+    if (!estId) return;
+    const reload = () => {
+      try {
+        setDay({ ...loadLiveDay(estId, date) });
+      } catch {
+        /* */
+      }
+    };
+    reload();
+    const onCustom = (ev: Event) => {
+      const d = (ev as CustomEvent).detail as { establishment_id?: string; date?: string } | undefined;
+      if (d?.establishment_id && d.establishment_id !== estId) return;
+      if (d?.date && d.date !== date) return;
+      reload();
+    };
+    const onStorage = (ev: StorageEvent) => {
+      if (ev.key && ev.key.startsWith(`mm_live_sales:${estId}:`)) reload();
+    };
+    window.addEventListener('gesmak-live-sales', onCustom as EventListener);
+    window.addEventListener('storage', onStorage);
+    const poll = window.setInterval(reload, 2500);
+
+    // Commandes serveur → historique en direct
+    const channel = supabase
+      .channel(`live-hist-orders-${estId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'orders', filter: `establishment_id=eq.${estId}` },
+        async (payload) => {
+          try {
+            const row = (payload.new || payload.old) as Record<string, unknown> | undefined;
+            const st = String(row?.status || '');
+            if (!row?.id) {
+              reload();
+              return;
+            }
+            if (['served', 'completed', 'delivered'].includes(st)) {
+              const oid = String(row.id);
+              const { data: items } = await supabase
+                .from('order_items')
+                .select('product_id, product_name, name, qty, quantity, unit_price')
+                .eq('order_id', oid);
+              let lines = (items || []).map((i: any) => ({
+                product_id: String(i.product_id || i.product_name || 'x'),
+                name: String(i.product_name || i.name || 'Article'),
+                category: 'Commande',
+                price: Math.round(Number(i.unit_price) || 0),
+                cost: 0,
+                qty: Math.max(0, Number(i.qty ?? i.quantity) || 0),
+              })).filter((l) => l.qty > 0);
+              if (!lines.length && Number(row.total) > 0) {
+                lines = [{
+                  product_id: oid,
+                  name: `Commande ${row.table_number ? 'T.' + row.table_number : oid.slice(0, 6)}`,
+                  category: 'Commande',
+                  price: Math.round(Number(row.total) || 0),
+                  cost: 0,
+                  qty: 1,
+                }];
+              }
+              if (lines.length) {
+                const note = `commande${row.table_number ? ` · T.${row.table_number}` : ''}${row.customer_name ? ` · ${row.customer_name}` : ''} · ${st}`;
+                addTicket(estId, date, lines, 'cash', note, 'temps réel', false, `order:${oid}`);
+              }
+            }
+          } catch (e) {
+            console.warn('realtime order→history', e);
+          }
+          reload();
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'sales', filter: `establishment_id=eq.${estId}` },
+        () => reload(),
+      )
+      .subscribe();
+
+    return () => {
+      window.removeEventListener('gesmak-live-sales', onCustom as EventListener);
+      window.removeEventListener('storage', onStorage);
+      window.clearInterval(poll);
+      void supabase.removeChannel(channel);
+    };
+  }, [estId, date]);
+
+
+  useEffect(() => {
     if (mode !== 'close' || !day || day.closed_at) return;
     const tips = verifyDayHeuristics(day, products);
     setAiTips(tips);

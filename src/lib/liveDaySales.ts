@@ -22,6 +22,8 @@ export type LiveSaleTicket = {
   total: number;
   pay: LivePayMethod;
   note?: string;
+  /** id commande / source externe pour éviter les doublons */
+  external_id?: string;
   /** Verrouillé dès l’enregistrement — non modifiable sauf propriétaire */
   locked?: boolean;
   /** Stock déjà décrémenté à la vente (ex. caisse POS) */
@@ -97,6 +99,17 @@ export function loadLiveDay(estId: string, date: string): LiveDayState {
 export function saveLiveDay(state: LiveDayState) {
   try {
     localStorage.setItem(key(state.establishment_id, state.date), JSON.stringify(state));
+    if (typeof window !== 'undefined') {
+      try {
+        window.dispatchEvent(
+          new CustomEvent('gesmak-live-sales', {
+            detail: { establishment_id: state.establishment_id, date: state.date },
+          }),
+        );
+      } catch {
+        /* */
+      }
+    }
   } catch {
     /* */
   }
@@ -110,11 +123,15 @@ export function addTicket(
   note?: string,
   by?: string,
   stockApplied = false,
+  externalId?: string,
 ): LiveDayState {
   const state = loadLiveDay(estId, date);
-  if (state.closed_at) return state;
+  // On continue d'enregistrer les traces même après clôture (historique temps réel)
   const clean = lines.filter((l) => l.qty > 0);
   if (!clean.length) return state;
+  if (externalId && state.tickets.some((tk) => tk.external_id === externalId && !tk.voided)) {
+    return state;
+  }
   const total = clean.reduce((s, l) => s + l.qty * l.price, 0);
   const ticket: LiveSaleTicket = {
     id: `t-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -125,6 +142,7 @@ export function addTicket(
     note,
     locked: true,
     stock_applied: stockApplied,
+    external_id: externalId,
   };
   state.tickets = [ticket, ...state.tickets];
   pushActivity(
