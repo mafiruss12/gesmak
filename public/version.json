@@ -1,5 +1,6 @@
 {
-  "version": "1.2.3",
-  "notes": "Domaine unique https://maquis-mananger.vercel.app pour web et APK.",
-  "url": "https://maquis-mananger.vercel.app"
+  "version": "1.1.0",
+  "git": "b9af325861eb",
+  "build": "phase2-loading-root-cause",
+  "notes": "Si tu vois encore « Chargement exploitation/service/vente journalière », le navigateur sert un vieux bundle."
 }

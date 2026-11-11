@@ -1,5 +1,5 @@
 /* GESMAK — Service Worker v8 (network-first assets) */
-const CACHE_NAME = 'gesmak-shell-v8';
+const CACHE_NAME = 'gesmak-shell-v9-phase2';
 const PRECACHE = [
   '/',
   '/index.html',
@@ -17,9 +17,17 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
+      Promise.all(
+        keys
+          .filter((k) => k !== CACHE_NAME)
+          .map((k) => caches.delete(k))
+      )
     ).then(() => self.clients.claim())
   );
+  // Notifier les onglets qu'une nouvelle version SW est active
+  self.clients.matchAll({ type: 'window' }).then((list) => {
+    for (const c of list) c.postMessage({ type: 'GESMAK_SW_UPDATED', cache: CACHE_NAME });
+  });
 });
 
 self.addEventListener('fetch', (event) => {
