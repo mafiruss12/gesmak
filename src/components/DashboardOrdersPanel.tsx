@@ -29,22 +29,28 @@ export default function DashboardOrdersPanel() {
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (silent = false) => {
     if (!estId) {
       setOrders([]);
       setLoading(false);
       return;
     }
-    setLoading(true);
-    const { data } = await supabase
-      .from('orders')
-      .select('id, status, total, created_at, customer_name, table_number, source')
-      .eq('establishment_id', estId)
-      .in('status', ['pending', 'preparing', 'ready'])
-      .order('created_at', { ascending: false })
-      .limit(12);
-    setOrders((data as OrderRow[]) || []);
-    setLoading(false);
+    // silent = realtime/refresh : ne pas afficher "Chargement…"
+    if (!silent) {
+      setLoading(true);
+    }
+    try {
+      const { data } = await supabase
+        .from('orders')
+        .select('id, status, total, created_at, customer_name, table_number, source')
+        .eq('establishment_id', estId)
+        .in('status', ['pending', 'preparing', 'ready'])
+        .order('created_at', { ascending: false })
+        .limit(12);
+      setOrders((data as OrderRow[]) || []);
+    } finally {
+      setLoading(false);
+    }
   }, [estId]);
 
   useEffect(() => {
@@ -55,7 +61,7 @@ export default function DashboardOrdersPanel() {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'orders', filter: `establishment_id=eq.${estId}` },
-        () => void load(),
+        () => void load(true),
       )
       .subscribe();
     return () => {

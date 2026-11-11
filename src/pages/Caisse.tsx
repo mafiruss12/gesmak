@@ -41,7 +41,7 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
   const [search, setSearch] = useState('');
   const [cat, setCat] = useState('Tous');
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
   const [cashPart, setCashPart] = useState('');
@@ -65,10 +65,10 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
 
   const loadProducts = useCallback(async () => {
     if (!estId) {
-      setLoading(false);
+      setInitialLoading(false);
       return;
     }
-    setLoading(true);
+    // Ne pas masquer l'UI si on a déjà des produits (refresh silencieux)
     const cacheKey = `products:${estId}`;
     try {
       const { data } = await fetchWithCache<Product[]>(cacheKey, async () => {
@@ -88,8 +88,9 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
       setProducts(data ?? []);
     } catch {
       setProducts([]);
+    } finally {
+      setInitialLoading(false);
     }
-    setLoading(false);
   }, [estId]);
 
   const loadReadyOrders = useCallback(async () => {
@@ -446,7 +447,9 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
     w.document.close();
   }
 
-  if (loading) {
+  // Uniquement tout premier chargement (service ouvert + aucun produit encore).
+  // Si service fermé : afficher tout de suite le message « stock masqué », sans écran de chargement.
+  if (initialLoading && serviceOpen && products.length === 0) {
     return <div className="p-8 text-center text-stone-400">Chargement vente journalière…</div>;
   }
 
