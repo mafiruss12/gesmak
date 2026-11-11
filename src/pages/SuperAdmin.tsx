@@ -858,10 +858,10 @@ function SuperAdminInner() {
       </p>
 
       {error && (
-        <div className="mb-4 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-2 text-sm text-red-200">{error}</div>
+        <div className="mb-4 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-2 text-sm text-red-200 animate-[admin-fade-up_0.25s_ease_both]">{error}</div>
       )}
       {success && (
-        <div className="mb-4 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-200">{success}</div>
+        <div className="mb-4 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-200 animate-[admin-fade-up_0.25s_ease_both]">{success}</div>
       )}
 
       <div className="flex gap-2 mb-6 overflow-x-auto">
@@ -880,11 +880,14 @@ function SuperAdminInner() {
           <button
             key={id}
             onClick={() => goTab(id as Tab)}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-2 whitespace-nowrap ${
+            className={`relative px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-2 whitespace-nowrap active:scale-[0.97] ${
               tab === id ? 'bg-indigo-500/20 text-indigo-200 border border-indigo-500/40' : 'text-stone-400 hover:bg-stone-800 border border-transparent'
             }`}
           >
             {icon} {label}
+            {tab === id && (
+              <span className="absolute left-3 right-3 -bottom-0.5 h-0.5 rounded-full bg-gradient-to-r from-indigo-400 to-cyan-400" />
+            )}
             {id === 'requests' && pendingCount > 0 && <Badge color="warning">{pendingCount}</Badge>}
             {id === 'subscriptions' && adminStats.expired > 0 && <Badge color="error">{adminStats.expired}</Badge>}
           </button>
