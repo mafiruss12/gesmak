@@ -6,6 +6,7 @@ import {
 import Caisse from '@/pages/Caisse';
 import LiveDaySales from '@/pages/LiveDaySales';
 import VenteRapports from '@/pages/VenteRapports';
+import WorkDayBanner from '@/components/WorkDayBanner';
 
 type TabId = 'encaisser' | 'historique' | 'terminer' | 'rapport';
 
@@ -48,13 +49,14 @@ export default function DailyReportHub() {
 
   return (
     <div className="max-w-5xl mx-auto space-y-4">
+      <WorkDayBanner />
       <div>
         <h1 className="text-2xl font-bold font-display text-stone-100 flex items-center gap-2">
           <ShoppingCart className="text-amber-400" size={26} />
           Vente journalière
         </h1>
         <p className="text-sm text-stone-400 mt-1">
-          Encaisser · Historique détaillé · Clôturer · Rapports (jour / semaine / mois / année / PDF)
+          Multi-commandes · stock à chaque vente · démarrer / clôturer la journée · historique · rapports
         </p>
       </div>
 

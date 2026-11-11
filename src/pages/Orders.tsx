@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import {
   Receipt, Plus, Trash2, ShoppingBag, CheckCircle2, Clock, UtensilsCrossed, X, UserCog, RefreshCw, Wine, ChefHat,
 } from 'lucide-react';
+import { addTicket } from '@/lib/liveDaySales';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import type { Product, RestaurantTable, Order } from '@/lib/types';
@@ -341,10 +342,65 @@ export default function Orders() {
 
   async function updateStatus(id: string, status: string) {
     await supabase.from('orders').update({ status }).eq('id', id);
+    // Trace temps réel dans Vente journalière → Historique
+    if (status === 'served' || status === 'completed' || status === 'delivered') {
+      try {
+        const order = orders.find((o) => o.id === id);
+        let items: any[] = [];
+        const r1 = await supabase
+          .from('order_items')
+          .select('product_id, product_name, name, qty, quantity, unit_price')
+          .eq('order_id', id);
+        if (!r1.error) items = r1.data || [];
+        else {
+          const r2 = await supabase.from('order_items').select('*').eq('order_id', id);
+          items = r2.data || [];
+        }
+        const lines = (items || [])
+          .map((i: any) => ({
+            product_id: String(i.product_id || i.id || i.product_name || i.name || 'x'),
+            name: String(i.product_name || i.name || 'Article'),
+            category: 'Commande',
+            price: Math.round(Number(i.unit_price) || 0),
+            cost: 0,
+            qty: Math.max(0, Number(i.qty ?? i.quantity) || 0),
+          }))
+          .filter((l) => l.qty > 0);
+        // Si aucun item, au moins une ligne total commande
+        if (!lines.length && order && Number(order.total) > 0) {
+          lines.push({
+            product_id: id,
+            name: `Commande ${order.table_number ? 'T.' + order.table_number : id.slice(0, 6)}`,
+            category: 'Commande',
+            price: Math.round(Number(order.total) || 0),
+            cost: 0,
+            qty: 1,
+          });
+        }
+        if (estId && lines.length) {
+          const today = new Date().toISOString().split('T')[0];
+          const note = order
+            ? `commande${order.table_number ? ` · T.${order.table_number}` : ''}${order.customer_name ? ` · ${order.customer_name}` : ''} · ${status}`
+            : `commande · ${status}`;
+          addTicket(
+            String(estId),
+            today,
+            lines,
+            'cash',
+            note,
+            member?.full_name || member?.role || 'equipe',
+            false,
+            `order:${id}`,
+          );
+        }
+      } catch (e) {
+        console.warn('trace historique commande', e);
+      }
+    }
     void load();
   }
 
-  async function sendToKitchen(id: string) {
+async function sendToKitchen(id: string) {
     await supabase.from('orders').update({ status: 'preparing' }).eq('id', id);
     await supabase
       .from('order_items')

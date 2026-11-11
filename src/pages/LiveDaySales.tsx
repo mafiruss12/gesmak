@@ -14,7 +14,7 @@ import { isOnline, queueAdd, cacheGet, cacheSet } from '@/lib/offline';
 import { notifyOwnerOnReport } from '@/lib/notifyOwner';
 import { buildWhatsAppLink } from '@/lib/businessTypes';
 import {
-  loadLiveDay,
+  openDay, loadLiveDay,
   saveLiveDay,
   addTicket,
   voidTicket,
@@ -26,6 +26,13 @@ import {
   type LiveDayState,
   type LiveSaleLine,
 } from '@/lib/liveDaySales';
+import {
+  fetchServiceStatus,
+  openService,
+  closeService,
+  isServiceOpenLocal,
+  subscribeServiceDay,
+} from '@/lib/serviceDay';
 
 function todayISO() {
   return new Date().toISOString().split('T')[0];
@@ -55,10 +62,27 @@ export default function LiveDaySales({
   const [aiTips, setAiTips] = useState<string[]>([]);
   const [cashConfirm, setCashConfirm] = useState('');
   const [mobileConfirm, setMobileConfirm] = useState('');
+  const [closeChecks, setCloseChecks] = useState<{
+    pendingOrders: number;
+    readyOrders: number;
+    preparingOrders: number;
+    loading: boolean;
+  }>({ pendingOrders: 0, readyOrders: 0, preparingOrders: 0, loading: false });
+  const [forceClose, setForceClose] = useState(false);
+
 
   useEffect(() => {
     document.title = 'Ventes journée · GESMAK';
   }, []);
+
+  useEffect(() => {
+    if (!estId) return;
+    setDay({ ...loadLiveDay(estId, date) });
+    return subscribeServiceDay(() => {
+      setDay({ ...loadLiveDay(estId, date) });
+    });
+  }, [estId, date]);
+
 
   useEffect(() => {
     if (!estId) return;
@@ -104,14 +128,105 @@ export default function LiveDaySales({
   }, [estId, date]);
 
   useEffect(() => {
+    if (mode === 'history') {
+      setPhase('sell');
+      return;
+    }
     if (day?.closed_at) setPhase(day.stock_deducted ? 'done' : 'close');
     else if (mode === 'close') setPhase('close');
-    else if (mode === 'history') setPhase('sell');
   }, [day?.closed_at, day?.stock_deducted, mode]);
 
   useEffect(() => {
+    if (!estId) return;
+    const reload = () => {
+      try {
+        setDay({ ...loadLiveDay(estId, date) });
+      } catch {
+        /* */
+      }
+    };
+    reload();
+    const onCustom = (ev: Event) => {
+      const d = (ev as CustomEvent).detail as { establishment_id?: string; date?: string } | undefined;
+      if (d?.establishment_id && d.establishment_id !== estId) return;
+      if (d?.date && d.date !== date) return;
+      reload();
+    };
+    const onStorage = (ev: StorageEvent) => {
+      if (ev.key && ev.key.startsWith(`mm_live_sales:${estId}:`)) reload();
+    };
+    window.addEventListener('gesmak-live-sales', onCustom as EventListener);
+    window.addEventListener('storage', onStorage);
+    const poll = window.setInterval(reload, 2500);
+
+    // Commandes serveur → historique en direct
+    const channel = supabase
+      .channel(`live-hist-orders-${estId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'orders', filter: `establishment_id=eq.${estId}` },
+        async (payload) => {
+          try {
+            const row = (payload.new || payload.old) as Record<string, unknown> | undefined;
+            const st = String(row?.status || '');
+            if (!row?.id) {
+              reload();
+              return;
+            }
+            if (['served', 'completed', 'delivered'].includes(st)) {
+              const oid = String(row.id);
+              const { data: items } = await supabase
+                .from('order_items')
+                .select('product_id, product_name, name, qty, quantity, unit_price')
+                .eq('order_id', oid);
+              let lines = (items || []).map((i: any) => ({
+                product_id: String(i.product_id || i.product_name || 'x'),
+                name: String(i.product_name || i.name || 'Article'),
+                category: 'Commande',
+                price: Math.round(Number(i.unit_price) || 0),
+                cost: 0,
+                qty: Math.max(0, Number(i.qty ?? i.quantity) || 0),
+              })).filter((l) => l.qty > 0);
+              if (!lines.length && Number(row.total) > 0) {
+                lines = [{
+                  product_id: oid,
+                  name: `Commande ${row.table_number ? 'T.' + row.table_number : oid.slice(0, 6)}`,
+                  category: 'Commande',
+                  price: Math.round(Number(row.total) || 0),
+                  cost: 0,
+                  qty: 1,
+                }];
+              }
+              if (lines.length) {
+                const note = `commande${row.table_number ? ` · T.${row.table_number}` : ''}${row.customer_name ? ` · ${row.customer_name}` : ''} · ${st}`;
+                addTicket(estId, date, lines, 'cash', note, 'temps réel', false, `order:${oid}`);
+              }
+            }
+          } catch (e) {
+            console.warn('realtime order→history', e);
+          }
+          reload();
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'sales', filter: `establishment_id=eq.${estId}` },
+        () => reload(),
+      )
+      .subscribe();
+
+    return () => {
+      window.removeEventListener('gesmak-live-sales', onCustom as EventListener);
+      window.removeEventListener('storage', onStorage);
+      window.clearInterval(poll);
+      void supabase.removeChannel(channel);
+    };
+  }, [estId, date]);
+
+
+  useEffect(() => {
     if (mode !== 'close' || !day || day.closed_at) return;
-    const tips = verifyDayHeuristics(day, products);
+    const tips = verifyDayHeuristics(day);
     setAiTips(tips);
     const a = aggregateDay(day);
     setCashConfirm(String(a.cash));
@@ -146,18 +261,80 @@ export default function LiveDaySales({
     });
   }
 
-  function validateSale() {
-    if (!estId || !day || day.closed_at) return;
-    if (!cartLines.length) {
-      setMsg('Cochez au moins une boisson.');
+  async function validateSale() {
+    if (!estId || !day || !member) return;
+    if (day.closed_at || !isServiceOpenLocal(estId, date)) {
+      setMsg('Service fermé — ouvrez la caisse pour vendre.');
       return;
     }
-    const next = addTicket(estId, date, cartLines, pay, undefined, member?.full_name || member?.role || 'equipe');
-    setDay({ ...next });
-    setCart({});
-    setMsg(`Vente enregistrée · ${formatFCFA(cartTotal)} (stock inchangé jusqu’à clôture)`);
-    setTimeout(() => setMsg(null), 2500);
+    if (!cartLines.length) {
+      setMsg('Ajoutez au moins un article.');
+      return;
+    }
+    setBusy(true);
+    try {
+      // Décrément stock à CHAQUE vente
+      for (const l of cartLines) {
+        const prod = products.find((p) => p.id === l.product_id);
+        if (!prod) continue;
+        const prev = Math.floor(Number(prod.stock) || 0);
+        const nextStock = Math.max(0, prev - l.qty);
+        if (isOnline()) {
+          await supabase.from('products').update({ stock: nextStock }).eq('id', l.product_id);
+          try {
+            await supabase.from('sales').insert({
+              establishment_id: estId,
+              product_id: l.product_id,
+              qty: l.qty,
+              unit_price: l.price,
+              total: l.qty * l.price,
+              payment_method: pay === 'cash' ? 'cash' : pay === 'mobile' ? 'mobile_money' : 'mixed',
+              created_by: member.user_id,
+            });
+            await supabase.from('stock_movements').insert({
+              establishment_id: estId,
+              product_id: l.product_id,
+              product_name: l.name,
+              qty: -l.qty,
+              movement_type: 'pos_sale',
+              unit_cost: l.cost || 0,
+              unit_price: l.price,
+              reason: 'vente_jour',
+              note: 'Vente journalière',
+              created_by: member.user_id,
+            });
+          } catch { /* */ }
+        } else {
+          await queueAdd('products', 'update', { stock: nextStock, _prev_stock: prev }, { id: l.product_id });
+        }
+      }
+      setProducts((prev) =>
+        prev.map((p) => {
+          const line = cartLines.find((l) => l.product_id === p.id);
+          if (!line) return p;
+          return { ...p, stock: Math.max(0, Math.floor(Number(p.stock) || 0) - line.qty) };
+        }),
+      );
+      const next = addTicket(
+        estId,
+        date,
+        cartLines,
+        pay,
+        undefined,
+        member?.full_name || member?.role || 'equipe',
+        true,
+      );
+      setDay({ ...next });
+      setCart({});
+      setMsg(`Vente validée · stock décrémenté · ${formatFCFA(cartTotal)}`);
+      setTimeout(() => setMsg(null), 2500);
+    } catch (e: any) {
+      setMsg(e?.message || 'Erreur vente');
+    } finally {
+      setBusy(false);
+    }
   }
+
 
   function removeTicket(id: string) {
     if (!estId || !canManageSales) return;
@@ -172,22 +349,47 @@ export default function LiveDaySales({
     setDay({ ...next });
   }
 
-  function startClose() {
+  async function startClose() {
     if (!day || !estId) return;
-    if (!day.tickets.length) {
-      setMsg('Aucune vente à clôturer.');
-      return;
-    }
-    const tips = verifyDayHeuristics(day, products);
+    const tips = verifyDayHeuristics(day);
     setAiTips(tips);
     const a = aggregateDay(day);
     setCashConfirm(String(a.cash));
     setMobileConfirm(String(a.mobile));
+    setForceClose(false);
+    setCloseChecks((c) => ({ ...c, loading: true }));
     setPhase('close');
+    try {
+      const { data: orders } = await supabase
+        .from('orders')
+        .select('id, status')
+        .eq('establishment_id', estId)
+        .in('status', ['pending', 'preparing', 'ready']);
+      const list = orders || [];
+      setCloseChecks({
+        loading: false,
+        pendingOrders: list.filter((o) => o.status === 'pending').length,
+        preparingOrders: list.filter((o) => o.status === 'preparing').length,
+        readyOrders: list.filter((o) => o.status === 'ready').length,
+      });
+      if (!day.tickets.length && list.length === 0) {
+        setMsg('Aucune vente ni commande — vous pouvez clôturer le service.');
+      }
+    } catch {
+      setCloseChecks({ pendingOrders: 0, readyOrders: 0, preparingOrders: 0, loading: false });
+    }
   }
 
   async function finalizeClose() {
     if (!estId || !day || !member) return;
+    const openOps =
+      closeChecks.pendingOrders + closeChecks.preparingOrders + closeChecks.readyOrders;
+    if (openOps > 0 && !forceClose) {
+      setMsg(
+        `Il reste ${openOps} commande(s) non terminée(s). Cochez « Forcer la clôture » pour confirmer.`,
+      );
+      return;
+    }
     setBusy(true);
     setMsg(null);
     try {
@@ -201,51 +403,8 @@ export default function LiveDaySales({
         total: l.qty * l.price,
       }));
 
-      // 1) Décrément stock seulement si pas déjà fait à la caisse
-      let deducted = Boolean(day.stock_deducted);
-      if (!deducted) {
-        const needStock: Record<string, { product_id: string; name: string; qty: number }> = {};
-        for (const tk of day.tickets) {
-          if (tk.voided || tk.stock_applied) continue;
-          for (const l of tk.lines) {
-            if (!needStock[l.product_id]) {
-              needStock[l.product_id] = { product_id: l.product_id, name: l.name, qty: 0 };
-            }
-            needStock[l.product_id].qty += l.qty;
-          }
-        }
-        for (const line of Object.values(needStock)) {
-          const prod = products.find((p) => p.id === line.product_id);
-          if (!prod) continue;
-          const prev = Math.floor(Number(prod.stock) || 0);
-          const next = Math.max(0, prev - line.qty);
-          if (!isOnline()) {
-            await queueAdd(
-              'products',
-              'update',
-              { stock: next, _prev_stock: prev },
-              { id: line.product_id },
-            );
-          } else {
-            const { error } = await supabase
-              .from('products')
-              .update({ stock: next })
-              .eq('id', line.product_id);
-            if (error) console.warn('stock', error.message);
-          }
-        }
-        deducted = true;
-        setProducts((prev) =>
-          prev.map((p) => {
-            const line = needStock[p.id];
-            if (!line) return p;
-            return {
-              ...p,
-              stock: Math.max(0, Math.floor(Number(p.stock) || 0) - line.qty),
-            };
-          }),
-        );
-      }
+      // Stock déjà décrémenté à chaque vente — clôture = bilan uniquement
+      const deducted = true;
 
       const cash = Math.max(0, Math.round(Number(cashConfirm) || 0));
       const mobile = Math.max(0, Math.round(Number(mobileConfirm) || 0));
@@ -290,8 +449,8 @@ export default function LiveDaySales({
         await queueAdd('daily_reports', 'insert', { ...row, _local_id: `live-${estId}-${date}` });
       }
 
-      const closed = markClosed(estId, date, true);
-      setDay({ ...closed });
+      const res = await closeService({ estId, userId: member.user_id, by: member.full_name || member.role, date });
+      setDay({ ...loadLiveDay(estId, date) });
 
       // Notification propriétaire
       try {
@@ -340,16 +499,45 @@ export default function LiveDaySales({
       </div>
       )}
       {embedded && mode === 'close' && (
-        <div className="rounded-xl border border-orange-500/30 bg-orange-500/10 px-3 py-2 text-sm text-orange-100">
-          Vérifiez les totaux puis validez <strong>Terminer la journée</strong> — rapport au propriétaire.
+        <div className="rounded-xl border-2 border-orange-500 bg-orange-50 px-3 py-3 text-sm text-orange-950 font-medium shadow-sm">
+          Vérifiez les totaux puis validez <strong className="text-orange-700">Terminer la journée</strong> — rapport au propriétaire.
         </div>
       )}
       {embedded && mode === 'history' && (
-        <div className="rounded-xl border border-stone-700 bg-stone-900/80 px-3 py-2 text-sm text-stone-300">
-          <strong className="text-stone-100">Historique</strong> — traces des ventes validées (non modifiables pour l&apos;équipe).
-          Nouvelle vente → onglet <strong>Encaisser</strong>.
+        <div className="rounded-xl border border-stone-300 bg-white px-3 py-3 text-sm text-stone-800 shadow-sm">
+          <strong className="text-stone-900">Historique</strong> — traces des ventes validées (non modifiables pour l&apos;équipe).
+          Nouvelle vente → onglet <strong className="text-orange-700">Encaisser</strong>.
         </div>
       )}
+
+      {/* Un seul endroit : ouvrir la caisse si service fermé */}
+      {mode === 'close' && estId && day?.closed_at && (
+        <div className="rounded-2xl border-2 border-orange-500 bg-orange-50 p-4 space-y-3">
+          <p className="text-sm font-bold text-stone-900">Service fermé</p>
+          <p className="text-xs text-stone-700">
+            Ouvrez la caisse pour afficher le stock, activer les commandes QR et enregistrer les ventes.
+          </p>
+          <button
+            type="button"
+            className="btn-primary min-h-[48px] w-full sm:w-auto"
+            onClick={() => {
+              void openService({
+                estId,
+                userId: member?.user_id,
+                by: member?.full_name || member?.role || 'equipe',
+                date,
+              }).then((res) => {
+                setDay({ ...loadLiveDay(estId, date) });
+                setPhase('sell');
+                setMsg('Caisse ouverte — service démarré.');
+              });
+            }}
+          >
+            Ouvrir la journée
+          </button>
+        </div>
+      )}
+
 
       {agg && (
         <div className="grid grid-cols-3 gap-2">
@@ -466,6 +654,12 @@ export default function LiveDaySales({
             </div>
           )}
 
+        </>
+      )}
+
+      {/* Historique détaillé — onglet Historique (et mode full) */}
+      {(mode === 'history' || mode === 'full') && (
+        <div className="space-y-4">
           <section className="space-y-2">
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-sm font-semibold text-stone-300">Historique des ventes</h2>
@@ -629,6 +823,10 @@ export default function LiveDaySales({
             )}
           </section>
 
+        </div>
+      )}
+
+      {mode === 'full' && phase === 'sell' && !day?.closed_at && (
           <button
             type="button"
             className="btn-primary w-full min-h-[52px] text-base flex items-center justify-center gap-2"
@@ -636,10 +834,9 @@ export default function LiveDaySales({
           >
             <Lock size={18} /> Clôturer la journée
           </button>
-        </>
       )}
 
-      {(phase === 'close' || (mode === 'close' && !day?.closed_at)) && day && agg && (
+      {(mode === 'close' || (mode === 'full' && phase === 'close')) && day && agg && !day.closed_at && (
         <div className="space-y-4">
           <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4 space-y-2">
             <h2 className="font-bold text-stone-100 flex items-center gap-2">
@@ -656,6 +853,44 @@ export default function LiveDaySales({
                 </li>
               ))}
             </ul>
+          </div>
+
+
+          <div className="rounded-2xl border border-stone-300 bg-white p-4 space-y-2 shadow-sm">
+            <h3 className="font-bold text-stone-900 text-sm">Contrôles avant clôture</h3>
+            {closeChecks.loading ? (
+              <p className="text-sm text-stone-600 flex items-center gap-2">
+                <Loader2 className="animate-spin" size={14} /> Vérification des commandes…
+              </p>
+            ) : (
+              <ul className="text-sm text-stone-800 space-y-1">
+                <li className={closeChecks.pendingOrders ? 'text-red-700 font-semibold' : 'text-emerald-700'}>
+                  • Commandes en attente : {closeChecks.pendingOrders}
+                </li>
+                <li className={closeChecks.preparingOrders ? 'text-amber-800 font-semibold' : 'text-emerald-700'}>
+                  • En préparation : {closeChecks.preparingOrders}
+                </li>
+                <li className={closeChecks.readyOrders ? 'text-amber-800 font-semibold' : 'text-emerald-700'}>
+                  • Prêtes non encaissées : {closeChecks.readyOrders}
+                </li>
+                <li className="text-stone-700">
+                  • Tickets vente jour : {agg.ticketCount} · CA {formatFCFA(agg.total)}
+                </li>
+              </ul>
+            )}
+            {(closeChecks.pendingOrders + closeChecks.preparingOrders + closeChecks.readyOrders) > 0 && (
+              <label className="flex items-start gap-2 text-sm text-stone-800 mt-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={forceClose}
+                  onChange={(e) => setForceClose(e.target.checked)}
+                />
+                <span>
+                  Forcer la clôture malgré les commandes ouvertes (elles resteront visibles dans Commandes, mais les QR et nouvelles ventes seront coupés).
+                </span>
+              </label>
+            )}
           </div>
 
           <div className="rounded-2xl border border-sky-500/30 bg-sky-500/5 p-4 space-y-2">
@@ -694,9 +929,11 @@ export default function LiveDaySales({
           </div>
 
           <div className="flex gap-2">
-            <button type="button" className="btn-secondary" onClick={() => setPhase('sell')}>
-              ← Revenir
-            </button>
+            {mode === 'full' ? (
+              <button type="button" className="btn-secondary" onClick={() => setPhase('sell')}>
+                ← Revenir aux ventes
+              </button>
+            ) : null}
             <button
               type="button"
               className="btn-primary flex-1 min-h-[48px] flex items-center justify-center gap-2"
@@ -704,13 +941,13 @@ export default function LiveDaySales({
               onClick={() => void finalizeClose()}
             >
               {busy ? <Loader2 className="animate-spin" size={18} /> : <Send size={18} />}
-              Confirmer · décrémenter stock · envoyer
+              Confirmer la clôture · bilan du jour
             </button>
           </div>
         </div>
       )}
 
-      {phase === 'done' && day && agg && (
+      {phase === 'done' && mode !== 'history' && day && agg && (
         <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-6 text-center space-y-3 live-done-motion">
           <div className="relative mx-auto w-16 h-16 flex items-center justify-center">
             <span className="absolute inset-0 rounded-full bg-emerald-400/20 animate-ping" aria-hidden />
@@ -721,7 +958,7 @@ export default function LiveDaySales({
           <p className="text-stone-300">
             {agg.ticketCount} ventes · {formatFCFA(agg.total)}
           </p>
-          <p className="text-sm text-stone-400">Stock mis à jour · rapport enregistré</p>
+          <p className="text-sm text-stone-400">Journée clôturée · rapport enregistré (stock déjà à jour à chaque vente)</p>
           <div className="flex flex-col sm:flex-row gap-2 justify-center">
             <Link to="/daily-report" className="btn-secondary">
               Voir rapports

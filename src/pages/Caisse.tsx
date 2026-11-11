@@ -1,3 +1,4 @@
+import { fetchServiceStatus, isServiceOpenLocal, subscribeServiceDay, getActiveSessionId, assertServiceOpen } from '@/lib/serviceDay';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Search, Plus, Minus, Trash2, ShoppingCart, CreditCard, Smartphone, Loader2,
@@ -56,6 +57,12 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
   } | null>(null);
   const [readyOrders, setReadyOrders] = useState<ReadyOrder[]>([]);
   const [linkedOrderId, setLinkedOrderId] = useState<string | null>(null);
+  const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
+  const [serviceOpen, setServiceOpen] = useState(() =>
+    estId ? isServiceOpenLocal(estId) : false,
+  );
+
+  const [linkedOrderIds, setLinkedOrderIds] = useState<string[]>([]);
 
   const loadProducts = useCallback(async () => {
     if (!estId) {
@@ -105,6 +112,16 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
 
   useEffect(() => {
     if (!estId) return;
+    setServiceOpen(isServiceOpenLocal(estId));
+    void fetchServiceStatus(estId).then((s) => setServiceOpen(s.status === 'open'));
+    return subscribeServiceDay(() => {
+      setServiceOpen(isServiceOpenLocal(estId));
+    });
+  }, [estId]);
+
+
+  useEffect(() => {
+    if (!estId) return;
     const ch = supabase
       .channel(`caisse-orders-${estId}`)
       .on(
@@ -136,7 +153,8 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
   const netTotal = Math.max(0, cartTotal - discountNum);
 
   function addToCart(p: Product) {
-    if (p.stock <= 0) return;
+    if (!serviceOpen) return;
+    if (Number((p as any).stock ?? (p as any).quantity ?? 0) <= 0) return;
     setCart((prev) => {
       const ex = prev.find((i) => i.product.id === p.id);
       if (ex) {
@@ -154,39 +172,76 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
     });
   }
 
-  async function loadOrderIntoCart(orderId: string) {
-    const { data: items } = await supabase
-      .from('order_items')
-      .select('product_id, product_name, qty, unit_price, name, quantity')
-      .eq('order_id', orderId);
-    if (!items?.length) return;
-    const next: CartItem[] = [];
-    for (const it of items as any[]) {
-      const pid = it.product_id;
-      const qty = Number(it.qty ?? it.quantity) || 1;
-      const prod = products.find((p) => p.id === pid);
-      if (prod) {
-        next.push({ product: prod, qty: Math.min(qty, Math.max(1, prod.stock)) });
-      } else {
-        // produit hors stock local : ligne factice minimale
-        next.push({
-          product: {
-            id: pid || `tmp-${it.product_name}`,
-            establishment_id: estId || '',
-            name: it.product_name || it.name || 'Article',
-            category: null,
-            price: Number(it.unit_price) || 0,
-            cost: 0,
-            stock: 999,
-            min_stock: 0,
-            unit: 'u',
-          } as Product,
-          qty,
+  function toggleSelectOrder(orderId: string) {
+    setSelectedOrderIds((prev) =>
+      prev.includes(orderId) ? prev.filter((id) => id !== orderId) : [...prev, orderId],
+    );
+  }
+
+  async function buildCartFromOrderIds(orderIds: string[]): Promise<CartItem[]> {
+    const merged = new Map<string, CartItem>();
+    for (const orderId of orderIds) {
+      const { data: items } = await supabase
+        .from('order_items')
+        .select('product_id, product_name, qty, unit_price, name, quantity')
+        .eq('order_id', orderId);
+      for (const it of (items as any[]) || []) {
+        const pid = String(it.product_id || `tmp-${it.product_name || it.name}`);
+        const qty = Number(it.qty ?? it.quantity) || 1;
+        const prod = products.find((p) => p.id === pid);
+        const base: Product = prod || ({
+          id: pid,
+          establishment_id: estId || '',
+          name: it.product_name || it.name || 'Article',
+          category: null,
+          price: Number(it.unit_price) || 0,
+          cost: 0,
+          stock: 999,
+          min_stock: 0,
+          unit: 'u',
+        } as Product);
+        const prev = merged.get(pid);
+        const addQty = prod ? Math.min(qty, Math.max(1, prod.stock - (prev?.qty || 0))) : qty;
+        if (addQty <= 0) continue;
+        merged.set(pid, {
+          product: base,
+          qty: (prev?.qty || 0) + addQty,
         });
       }
     }
+    return Array.from(merged.values());
+  }
+
+  async function loadOrderIntoCart(orderId: string) {
+    const next = await buildCartFromOrderIds([orderId]);
+    if (!next.length) return;
     setCart(next);
     setLinkedOrderId(orderId);
+    setLinkedOrderIds([orderId]);
+    setSelectedOrderIds([orderId]);
+  }
+
+  async function loadSelectedOrdersIntoCart() {
+    const ids = selectedOrderIds.length ? selectedOrderIds : readyOrders.map((o) => o.id);
+    if (!ids.length) return;
+    const next = await buildCartFromOrderIds(ids);
+    if (!next.length) {
+      alert('Aucune ligne sur les commandes sélectionnées');
+      return;
+    }
+    setCart(next);
+    setLinkedOrderIds(ids);
+    setLinkedOrderId(ids[0] || null);
+  }
+
+  async function loadAllReadyOrdersIntoCart() {
+    const ids = readyOrders.map((o) => o.id);
+    setSelectedOrderIds(ids);
+    const next = await buildCartFromOrderIds(ids);
+    if (!next.length) return;
+    setCart(next);
+    setLinkedOrderIds(ids);
+    setLinkedOrderId(ids[0] || null);
   }
 
   function openCheckout() {
@@ -200,6 +255,13 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
 
   async function processSale() {
     if (!estId || !member || !cart.length) return;
+    const gate = await assertServiceOpen(estId);
+    if (!gate.ok) {
+      alert(gate.message || 'Service fermé.');
+      return;
+    }
+    const sessionId = await getActiveSessionId(estId);
+
     setProcessing(true);
     const online = isOnline();
     const updatedProducts = [...products];
@@ -222,6 +284,7 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
           created_by: member.user_id || user?.id,
         };
         if (validPid) salePayload.product_id = item.product.id;
+        if (sessionId) salePayload.cash_session_id = sessionId;
         const newStock = Math.max(0, Number(item.product.stock) - item.qty);
 
         if (online) {
@@ -294,10 +357,24 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
         /* facture optionnelle */
       }
 
-      if (linkedOrderId && online) {
-        await supabase.from('orders').update({ status: 'served' }).eq('id', linkedOrderId);
-        setLinkedOrderId(null);
-        void loadReadyOrders();
+      {
+        const toServe = linkedOrderIds.length
+          ? linkedOrderIds
+          : linkedOrderId
+            ? [linkedOrderId]
+            : [];
+        if (online && toServe.length) {
+          for (const oid of toServe) {
+            await supabase
+              .from('orders')
+              .update({ status: 'served', stock_deducted: true })
+              .eq('id', oid);
+          }
+          setLinkedOrderId(null);
+          setLinkedOrderIds([]);
+          setSelectedOrderIds([]);
+          void loadReadyOrders();
+        }
       }
 
       setLastTicket({
@@ -332,9 +409,18 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
             qty: i.qty,
           })),
           livePay,
-          'caisse',
+          linkedOrderIds.length > 1
+            ? `caisse · ${linkedOrderIds.length} commandes`
+            : linkedOrderId
+              ? 'caisse · commande'
+              : 'caisse',
           member.full_name || member.role,
           true,
+          linkedOrderIds.length
+            ? `orders:${linkedOrderIds.join(',')}`
+            : linkedOrderId
+              ? `order:${linkedOrderId}`
+              : undefined,
         );
       } catch {
         /* */
@@ -409,34 +495,99 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
         </div>
       )}
 
-      {/* Commandes QR — collées en haut, visibles sans scroller */}
-      {readyOrders.length > 0 && (
-        <div className="sticky top-0 z-30 rounded-2xl border border-amber-500/40 bg-stone-950/95 backdrop-blur-md p-3 space-y-2 shadow-lg">
-          <p className="text-xs font-bold uppercase text-amber-300 flex items-center gap-1">
-            <QrCode size={14} /> Commandes à encaisser ({readyOrders.length})
+      {!serviceOpen && (
+        <div className="rounded-xl border-2 border-orange-400 bg-orange-50 px-4 py-4 text-sm text-stone-900 space-y-1">
+          <p className="font-bold text-orange-900">Service fermé — stock masqué</p>
+          <p>
+            Les boissons et la caisse s&apos;affichent uniquement après <strong>Ouvrir la journée</strong>.
           </p>
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {readyOrders.map((o) => (
+        </div>
+      )}
+      {/* Commandes QR — collées en haut, visibles sans scroller */}
+      {serviceOpen && readyOrders.length > 0 && (
+        <div className="sticky top-0 z-30 rounded-2xl border border-amber-500/40 bg-stone-950/95 backdrop-blur-md p-3 space-y-2 shadow-lg">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs font-bold uppercase text-amber-300 flex items-center gap-1">
+              <QrCode size={14} /> Commandes à encaisser ({readyOrders.length})
+              {selectedOrderIds.length > 0 && (
+                <span className="ml-1 normal-case font-semibold text-amber-100">
+                  · {selectedOrderIds.length} sélectionnée(s)
+                </span>
+              )}
+            </p>
+            <div className="flex flex-wrap gap-1.5">
               <button
-                key={o.id}
                 type="button"
-                onClick={() => void loadOrderIntoCart(o.id)}
-                className={`shrink-0 rounded-xl border px-3 py-2 text-left text-xs min-w-[140px] ${
-                  linkedOrderId === o.id
-                    ? 'border-amber-400 bg-amber-500/20 text-amber-100'
-                    : 'border-stone-700 bg-stone-900 text-stone-300'
-                }`}
+                onClick={() => setSelectedOrderIds(readyOrders.map((o) => o.id))}
+                className="text-[10px] px-2 py-1 rounded-lg bg-stone-800 text-stone-300 border border-stone-700"
               >
-                <p className="font-bold truncate">
-                  {o.customer_name || 'Client'} · {o.table_number ? `T.${o.table_number}` : o.status}
-                </p>
-                <p className="text-amber-300 font-mono mt-0.5">{formatFCFA(Number(o.total) || 0)}</p>
+                Tout sélectionner
               </button>
-            ))}
+              <button
+                type="button"
+                onClick={() => setSelectedOrderIds([])}
+                className="text-[10px] px-2 py-1 rounded-lg bg-stone-800 text-stone-300 border border-stone-700"
+              >
+                Vider
+              </button>
+              <button
+                type="button"
+                onClick={() => void loadSelectedOrdersIntoCart()}
+                className="text-[10px] px-2 py-1 rounded-lg bg-amber-500 text-stone-950 font-bold"
+              >
+                Ajouter au panier
+              </button>
+              <button
+                type="button"
+                onClick={() => void loadAllReadyOrdersIntoCart()}
+                className="text-[10px] px-2 py-1 rounded-lg bg-orange-500 text-white font-bold"
+              >
+                Toutes les commandes
+              </button>
+            </div>
+          </div>
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {readyOrders.map((o) => {
+              const selected = selectedOrderIds.includes(o.id);
+              const linked = linkedOrderIds.includes(o.id) || linkedOrderId === o.id;
+              return (
+                <div
+                  key={o.id}
+                  className={`shrink-0 rounded-xl border px-2 py-2 text-left text-xs min-w-[150px] ${
+                    linked
+                      ? 'border-amber-400 bg-amber-500/20 text-amber-100'
+                      : selected
+                        ? 'border-sky-400 bg-sky-500/15 text-sky-100'
+                        : 'border-stone-700 bg-stone-900 text-stone-300'
+                  }`}
+                >
+                  <label className="flex items-start gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={selected}
+                      onChange={() => toggleSelectOrder(o.id)}
+                    />
+                    <button
+                      type="button"
+                      className="text-left min-w-0 flex-1"
+                      onClick={() => void loadOrderIntoCart(o.id)}
+                    >
+                      <p className="font-bold truncate">
+                        {o.customer_name || 'Client'} · {o.table_number ? `T.${o.table_number}` : o.status}
+                      </p>
+                      <p className="text-amber-300 font-mono mt-0.5">{formatFCFA(Number(o.total) || 0)}</p>
+                      <p className="text-[10px] text-stone-500 mt-0.5">Toucher = 1 commande · case = multi</p>
+                    </button>
+                  </label>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
 
+      {serviceOpen ? (
       <div className="grid lg:grid-cols-5 gap-3">
         {/* Catalogue */}
         <div className="lg:col-span-3 space-y-3">
@@ -470,13 +621,14 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
               {filtered.map((p) => {
                 const q = cart.find((c) => c.product.id === p.id)?.qty ?? 0;
-                const out = Number(p.stock) <= 0;
+                const stockQty = Number((p as any).stock ?? (p as any).quantity ?? 0);
+                const out = !Number.isFinite(stockQty) || stockQty <= 0;
                 return (
                   <div
                     key={p.id}
                     className={`card text-left p-2.5 transition ${
                       q > 0 ? 'border-orange-400/70 bg-orange-500/5 ring-1 ring-orange-400/30' : 'hover:border-amber-500/40'
-                    } ${out ? 'opacity-40' : ''}`}
+                    } ${out ? 'opacity-45 grayscale pointer-events-none border-red-300 dark:border-red-800' : ''}`}
                   >
                     <button
                       type="button"
@@ -486,7 +638,14 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
                     >
                       <div className="aspect-square rounded-xl bg-stone-950 flex items-center justify-center mb-1.5 overflow-hidden relative">
                         <ProductThumb name={p.name} category={p.category} imageUrl={(p as any).image_url} size={88} />
-                        {q > 0 && (
+                        {out && (
+                          <span className="absolute inset-0 flex items-center justify-center bg-black/55">
+                            <span className="rounded-lg bg-red-600 px-2 py-1 text-[10px] font-black uppercase text-white tracking-wide">
+                              Rupture
+                            </span>
+                          </span>
+                        )}
+                        {q > 0 && !out && (
                           <span className="absolute top-1 right-1 min-w-[22px] h-[22px] px-1 rounded-full bg-orange-500 text-white text-[11px] font-black flex items-center justify-center shadow">
                             {q}
                           </span>
@@ -494,8 +653,8 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
                       </div>
                       <p className="text-xs font-semibold text-stone-100 truncate">{p.name}</p>
                       <p className="text-sm font-bold text-orange-400 dark:text-amber-300">{formatFCFA(Number(p.price) || 0)}</p>
-                      <p className={`text-[10px] ${Number(p.stock) <= Number(p.min_stock) ? 'text-warning-400' : 'text-stone-500'}`}>
-                        Stock {p.stock}
+                      <p className={`text-[10px] font-semibold ${out ? 'text-red-500' : stockQty <= Number(p.min_stock || 0) ? 'text-amber-500' : 'text-stone-500'}`}>
+                        {out ? 'Stock épuisé' : `Stock ${stockQty}`}
                       </p>
                     </button>
                     {/* + / − sous chaque bouteille */}
@@ -605,7 +764,7 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
       {cart.length > 0 && (
         <div className="fixed bottom-[calc(3.75rem+env(safe-area-inset-bottom))] lg:bottom-5 inset-x-0 z-40 px-3 pointer-events-none">
           <div className="pointer-events-auto max-w-lg mx-auto rounded-2xl border border-stone-200/20 bg-white text-stone-900 shadow-2xl p-3 space-y-2.5 dark:bg-stone-950 dark:text-stone-100 dark:border-amber-500/40">
-            {readyOrders.length > 0 && (
+            {serviceOpen && readyOrders.length > 0 && (
               <div className="flex gap-2 overflow-x-auto no-scrollbar">
                 {readyOrders.slice(0, 6).map((o) => (
                   <button
@@ -681,6 +840,8 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
           </div>
         </div>
       )}
+
+      ) : null}
 
       <Modal open={checkoutOpen} onClose={() => !processing && setCheckoutOpen(false)} title="Encaissement">
         {success ? (

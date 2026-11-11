@@ -9,6 +9,7 @@ import {
   ORDER_STATUS_CLIENT,
 } from '@/lib/orderAlerts';
 import { triggerOrderPush } from '@/lib/push';
+import { fetchServiceStatus, assertServiceOpen, getActiveSessionId } from '@/lib/serviceDay';
 
 type Est = {
   id: string;
@@ -43,6 +44,7 @@ export default function PublicTableOrder() {
   const [customerName, setCustomerName] = useState('');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [serviceOpen, setServiceOpen] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [showIntro, setShowIntro] = useState(true);
@@ -59,7 +61,17 @@ export default function PublicTableOrder() {
   const [cat, setCat] = useState('Tous');
   const [section, setSection] = useState<'boissons' | 'nourriture'>('boissons');
 
+  
   useEffect(() => {
+    if (!estId) return;
+    void fetchServiceStatus(estId).then((s) => setServiceOpen(s.status === 'open'));
+    const tmr = window.setInterval(() => {
+      void fetchServiceStatus(estId).then((s) => setServiceOpen(s.status === 'open'));
+    }, 20000);
+    return () => window.clearInterval(tmr);
+  }, [estId]);
+
+useEffect(() => {
     document.title = tableNum
       ? `Commander · Table ${tableNum}`
       : 'Commander · GESMAK';
@@ -255,6 +267,12 @@ export default function PublicTableOrder() {
 
   async function submit() {
     if (!estId || lines.length === 0) return;
+    const st = await fetchServiceStatus(estId);
+    if (st.status !== 'open') {
+      setServiceOpen(false);
+      setError('Le service est terminé pour aujourd’hui. Les commandes reprendront à la prochaine ouverture de caisse.');
+      return;
+    }
     const name = customerName.trim();
     if (name.length < 2) {
       setError('Indiquez votre prénom ou nom (min. 2 caractères) pour que le serveur vous identifie.');
@@ -271,19 +289,24 @@ export default function PublicTableOrder() {
       ].filter(Boolean);
       const notesCombined = noteParts.join(' · ') || 'Commande QR';
 
-      const { data: order, error: oErr } = await supabase
-        .from('orders')
-        .insert({
+      const sessionId = await getActiveSessionId(estId);
+      const orderPayload: Record<string, unknown> = {
           establishment_id: estId,
           table_id: tableId,
           table_number: tableNum || null,
           status: 'pending',
           order_type: 'dine_in',
           total,
-          notes: notesCombined,
+          notes: sessionId ? `${notesCombined} · session:${sessionId}` : notesCombined,
           source: 'qr_table',
           customer_name: name,
-        })
+        };
+      // P4 — si colonne présente
+      if (sessionId) orderPayload.cash_session_id = sessionId;
+
+      const { data: order, error: oErr } = await supabase
+        .from('orders')
+        .insert(orderPayload)
         .select('id')
         .maybeSingle();
 
@@ -377,6 +400,18 @@ export default function PublicTableOrder() {
           <p className="font-bold text-lg">Scannez le QR de votre table</p>
           <p className="text-sm text-stone-400 mt-2">Le lien doit contenir le numéro de table.</p>
         </div>
+      </div>
+    );
+  }
+
+  if (!loading && estId && !serviceOpen) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-stone-50 text-center">
+        <p className="text-xl font-bold text-stone-900 mb-2">Service terminé</p>
+        <p className="text-sm text-stone-600 max-w-sm">
+          L&apos;établissement a clôturé le service. Les commandes QR seront de nouveau disponibles
+          après l&apos;ouverture de caisse.
+        </p>
       </div>
     );
   }
@@ -688,7 +723,7 @@ export default function PublicTableOrder() {
         <div className="grid grid-cols-2 gap-3">
           {visible.map((p) => {
             const q = cart[p.id] || 0;
-            const soldOut = Number(p.stock) <= 0;
+            const soldOut = Number((p as any).stock ?? (p as any).quantity ?? 0) <= 0;
             return (
               <button
                 key={p.id}

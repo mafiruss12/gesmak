@@ -918,3 +918,219 @@ html.theme-light main .opacity-80 {
   0% { transform: translateX(0); }
   100% { transform: translateX(-50%); }
 }
+
+
+/* ========== Lisibilité mode clair — forcer contrastes (textes invisibles) ========== */
+html.theme-light,
+html[data-theme='light'] {
+  /* Base */
+  color: #1A1A1A;
+}
+
+/* Textes clairs pensés pour fond sombre → foncés en mode jour */
+html.theme-light .text-stone-50,
+html.theme-light .text-stone-100,
+html.theme-light .text-stone-200,
+html.theme-light .text-white,
+html[data-theme='light'] .text-stone-50,
+html[data-theme='light'] .text-stone-100,
+html[data-theme='light'] .text-stone-200,
+html[data-theme='light'] .text-white {
+  color: #1A1A1A !important;
+}
+
+html.theme-light .text-stone-300,
+html[data-theme='light'] .text-stone-300 {
+  color: #292524 !important;
+}
+
+html.theme-light .text-stone-400,
+html.theme-light .text-stone-500,
+html[data-theme='light'] .text-stone-400,
+html[data-theme='light'] .text-stone-500 {
+  color: #44403C !important;
+}
+
+html.theme-light .text-stone-600,
+html[data-theme='light'] .text-stone-600 {
+  color: #57534E !important;
+}
+
+/* Ambre / orange / jaune pâles */
+html.theme-light .text-amber-50,
+html.theme-light .text-amber-100,
+html.theme-light .text-amber-200,
+html.theme-light .text-amber-300,
+html.theme-light .text-orange-50,
+html.theme-light .text-orange-100,
+html.theme-light .text-orange-200,
+html.theme-light .text-orange-300,
+html.theme-light .text-yellow-100,
+html.theme-light .text-yellow-200,
+html.theme-light .text-yellow-300,
+html[data-theme='light'] .text-amber-50,
+html[data-theme='light'] .text-amber-100,
+html[data-theme='light'] .text-amber-200,
+html[data-theme='light'] .text-amber-300,
+html[data-theme='light'] .text-orange-100,
+html[data-theme='light'] .text-orange-200,
+html[data-theme='light'] .text-orange-300 {
+  color: #C2410C !important;
+  opacity: 1 !important;
+}
+
+html.theme-light .text-amber-400,
+html.theme-light .text-amber-500,
+html.theme-light .text-orange-400,
+html.theme-light .text-orange-500,
+html[data-theme='light'] .text-amber-400,
+html[data-theme='light'] .text-orange-400 {
+  color: #EA580C !important;
+  opacity: 1 !important;
+}
+
+/* Vert / bleu / violet / rose pâles */
+html.theme-light .text-emerald-100,
+html.theme-light .text-emerald-200,
+html.theme-light .text-emerald-300,
+html.theme-light .text-green-200,
+html.theme-light .text-green-300,
+html.theme-light .text-sky-100,
+html.theme-light .text-sky-200,
+html.theme-light .text-sky-300,
+html.theme-light .text-blue-200,
+html.theme-light .text-blue-300,
+html.theme-light .text-indigo-200,
+html.theme-light .text-violet-200,
+html.theme-light .text-purple-200,
+html.theme-light .text-pink-200,
+html.theme-light .text-rose-200,
+html.theme-light .text-cyan-200,
+html.theme-light .text-teal-100,
+html.theme-light .text-teal-200 {
+  color: #0F766E !important;
+  opacity: 1 !important;
+}
+
+html.theme-light .text-emerald-400,
+html.theme-light .text-green-400 {
+  color: #047857 !important;
+}
+
+html.theme-light .text-sky-400,
+html.theme-light .text-blue-400 {
+  color: #0369A1 !important;
+}
+
+html.theme-light .text-red-200,
+html.theme-light .text-red-300,
+html.theme-light .text-rose-300 {
+  color: #B91C1C !important;
+}
+
+/* Bandeaux / alertes très pâles → fond + texte lisibles */
+html.theme-light [class*="bg-amber-500/5"],
+html.theme-light [class*="bg-amber-500/10"],
+html.theme-light [class*="bg-amber-500/15"],
+html.theme-light [class*="bg-orange-500/5"],
+html.theme-light [class*="bg-orange-500/10"],
+html.theme-light [class*="bg-orange-500/15"],
+html.theme-light .bg-amber-500\/5,
+html.theme-light .bg-amber-500\/10,
+html.theme-light .bg-orange-500\/10 {
+  background-color: #FFF7ED !important;
+  border-color: #FDBA74 !important;
+  color: #9A3412 !important;
+}
+
+html.theme-light [class*="bg-emerald-500/5"],
+html.theme-light [class*="bg-emerald-500/10"],
+html.theme-light [class*="bg-sky-500/5"],
+html.theme-light [class*="bg-sky-500/10"] {
+  background-color: #ECFDF5 !important;
+  color: #065F46 !important;
+}
+
+html.theme-light [class*="border-amber-500/30"],
+html.theme-light [class*="border-amber-500/40"],
+html.theme-light [class*="border-orange-500/30"],
+html.theme-light [class*="border-orange-500/40"] {
+  border-color: #FB923C !important;
+}
+
+/* Placeholder inputs */
+html.theme-light input::placeholder,
+html.theme-light textarea::placeholder,
+html.theme-light .placeholder-stone-500,
+html.theme-light .placeholder-stone-400 {
+  color: #78716C !important;
+  opacity: 1 !important;
+}
+
+/* Opacités qui rendent le texte fantôme */
+html.theme-light main .opacity-40,
+html.theme-light main .opacity-50,
+html.theme-light main .opacity-60,
+html.theme-light main .opacity-70,
+html.theme-light main .opacity-80,
+html.theme-light main .text-opacity-50,
+html.theme-light main .text-opacity-60,
+html.theme-light main .text-opacity-70,
+html.theme-light main .text-opacity-80 {
+  opacity: 1 !important;
+}
+
+/* Titres / labels toujours lisibles */
+html.theme-light h1,
+html.theme-light h2,
+html.theme-light h3,
+html.theme-light h4,
+html.theme-light .font-bold,
+html.theme-light .font-semibold,
+html.theme-light .font-black {
+  opacity: 1 !important;
+}
+
+html.theme-light .label {
+  color: #292524 !important;
+}
+
+html.theme-light .input-field {
+  background-color: #ffffff !important;
+  border-color: #D6D3D1 !important;
+  color: #1C1917 !important;
+}
+
+/* Boutons onglets actifs en mode clair */
+html.theme-light .bg-amber-500\/20,
+html.theme-light .bg-orange-500\/25,
+html.theme-light [class*="bg-amber-500/20"],
+html.theme-light [class*="bg-orange-500/25"] {
+  background-color: #FFEDD5 !important;
+  color: #9A3412 !important;
+  border-color: #FB923C !important;
+}
+
+/* Cartes stats */
+html.theme-light .rounded-xl.border,
+html.theme-light .rounded-2xl.border {
+  opacity: 1 !important;
+}
+
+/* Liens */
+html.theme-light a {
+  opacity: 1;
+}
+
+/* Sticky bars caisse / commandes */
+html.theme-light .sticky {
+  opacity: 1 !important;
+}
+
+/* Messages d'aide / empty states */
+html.theme-light .text-center.text-sm,
+html.theme-light p.text-sm,
+html.theme-light p.text-xs {
+  opacity: 1 !important;
+}
+
