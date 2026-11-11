@@ -79,6 +79,13 @@ function SuperAdminInner() {
     role: 'employee' as Role,
     establishment_id: '',
     status: 'active' as 'active' | 'suspended' });
+  /** Liens multi-établissements du membre en cours d'édition (member_establishments) */
+  const [memberLinks, setMemberLinks] = useState<
+    { establishment_id: string; role: string; status: string }[]
+  >([]);
+  const [memberLinksLoading, setMemberLinksLoading] = useState(false);
+  const [addEstId, setAddEstId] = useState('');
+  const [addEstBusy, setAddEstBusy] = useState(false);
   /** Mot de passe temporaire défini par l’admin (oublié par l’utilisateur) */
   const [tempPassword, setTempPassword] = useState('');
   const [pwdResetLoading, setPwdResetLoading] = useState(false);
@@ -505,7 +512,16 @@ function SuperAdminInner() {
   async function removeMemberFromEst(m: Member) {
     if (!editEst) return;
     if (!confirm(`Retirer ${m.full_name || m.email} de ${editEst.name} ?`)) return;
-    await supabase.from('members').update({ establishment_id: null }).eq('id', m.id);
+    if (m.user_id) {
+      await supabase
+        .from('member_establishments')
+        .delete()
+        .eq('user_id', m.user_id)
+        .eq('establishment_id', editEst.id);
+    }
+    if (m.establishment_id === editEst.id) {
+      await supabase.from('members').update({ establishment_id: null }).eq('id', m.id);
+    }
     await loadData();
     flash('Membre retiré de l\'établissement');
   }
@@ -534,14 +550,154 @@ function SuperAdminInner() {
     }
   }
 
+  async function loadMemberLinks(userId: string | null | undefined) {
+    setMemberLinks([]);
+    setAddEstId('');
+    if (!userId) return;
+    setMemberLinksLoading(true);
+    try {
+      const { data, error: err } = await supabase
+        .from('member_establishments')
+        .select('establishment_id, role, status')
+        .eq('user_id', userId);
+      if (err) {
+        console.warn('member_establishments load:', err.message);
+        return;
+      }
+      setMemberLinks(
+        ((data ?? []) as { establishment_id: string; role: string; status: string }[]).filter(
+          (r) => !!r.establishment_id
+        )
+      );
+    } finally {
+      setMemberLinksLoading(false);
+    }
+  }
+
   function openEditMember(m: Member) {
     setError(null);
-    setEditMember(m); setTempPassword(''); setPwdResetDone(null);
+    setEditMember(m);
+    setTempPassword('');
+    setPwdResetDone(null);
+    setAddEstId('');
     setMemberEditForm({
       full_name: m.full_name || '',
       role: m.role,
       establishment_id: m.establishment_id || '',
-      status: m.status === 'suspended' ? 'suspended' : 'active' });
+      status: m.status === 'suspended' ? 'suspended' : 'active',
+    });
+    void loadMemberLinks(m.user_id);
+  }
+
+  /** Ajoute un établissement supplémentaire au membre sans retirer les autres. */
+  async function addEstablishmentToMember() {
+    if (!editMember?.user_id) {
+      setError('Ce membre n’a pas de compte Auth lié (user_id manquant).');
+      return;
+    }
+    if (!addEstId) {
+      setError('Choisissez un établissement à ajouter.');
+      return;
+    }
+    if (memberLinks.some((l) => l.establishment_id === addEstId)) {
+      setError('Cet établissement est déjà rattaché à ce compte.');
+      return;
+    }
+    setAddEstBusy(true);
+    setError(null);
+    try {
+      const roleForLink =
+        memberEditForm.role === 'super_admin' ? 'owner' : memberEditForm.role;
+      const { error: upErr } = await supabase.from('member_establishments').upsert(
+        {
+          user_id: editMember.user_id,
+          establishment_id: addEstId,
+          role: roleForLink,
+          status: 'active',
+        },
+        { onConflict: 'user_id,establishment_id' }
+      );
+      if (upErr) {
+        setError(upErr.message);
+        return;
+      }
+      if (roleForLink === 'owner') {
+        await supabase
+          .from('establishments')
+          .update({ created_by: editMember.user_id, owner_user_id: editMember.user_id })
+          .eq('id', addEstId);
+      }
+      if (!memberEditForm.establishment_id) {
+        await supabase
+          .from('members')
+          .update({ establishment_id: addEstId })
+          .eq('id', editMember.id);
+        setMemberEditForm((f) => ({ ...f, establishment_id: addEstId }));
+      }
+      await loadMemberLinks(editMember.user_id);
+      await loadData();
+      setAddEstId('');
+      flash('Établissement ajouté au compte');
+    } finally {
+      setAddEstBusy(false);
+    }
+  }
+
+  /** Retire un établissement du membre (garde les autres liens). */
+  async function removeEstablishmentFromMember(establishmentId: string) {
+    if (!editMember?.user_id) return;
+    const estName =
+      establishments.find((e) => e.id === establishmentId)?.name || 'cet établissement';
+    if (!confirm(`Retirer « ${estName} » de ce compte ?`)) return;
+    setAddEstBusy(true);
+    setError(null);
+    try {
+      const { error: delErr } = await supabase
+        .from('member_establishments')
+        .delete()
+        .eq('user_id', editMember.user_id)
+        .eq('establishment_id', establishmentId);
+      if (delErr) {
+        setError(delErr.message);
+        return;
+      }
+      if (memberEditForm.establishment_id === establishmentId) {
+        const remaining = memberLinks.filter((l) => l.establishment_id !== establishmentId);
+        const nextId = remaining[0]?.establishment_id || null;
+        await supabase
+          .from('members')
+          .update({ establishment_id: nextId })
+          .eq('id', editMember.id);
+        setMemberEditForm((f) => ({ ...f, establishment_id: nextId || '' }));
+      }
+      await loadMemberLinks(editMember.user_id);
+      await loadData();
+      flash('Établissement retiré du compte');
+    } finally {
+      setAddEstBusy(false);
+    }
+  }
+
+  /** Définit l'établissement principal (courant) du membre. */
+  async function setPrimaryEstablishment(establishmentId: string) {
+    if (!editMember) return;
+    setAddEstBusy(true);
+    setError(null);
+    try {
+      const { error: err } = await supabase
+        .from('members')
+        .update({ establishment_id: establishmentId })
+        .eq('id', editMember.id);
+      if (err) {
+        setError(err.message);
+        return;
+      }
+      setMemberEditForm((f) => ({ ...f, establishment_id: establishmentId }));
+      flash('Établissement principal mis à jour');
+      await loadData();
+    } finally {
+      setAddEstBusy(false);
+    }
   }
 
   function openEditEst(est: Establishment) {
@@ -1595,7 +1751,7 @@ function SuperAdminInner() {
               </select>
             </div>
             <div>
-              <label className="label">Établissement</label>
+              <label className="label">Établissement principal (courant)</label>
               <select
                 value={memberEditForm.establishment_id}
                 onChange={(e) => setMemberEditForm({ ...memberEditForm, establishment_id: e.target.value })}
@@ -1608,7 +1764,104 @@ function SuperAdminInner() {
                   </option>
                 ))}
               </select>
+              <p className="text-[11px] text-stone-500 mt-1">
+                Établissement ouvert par défaut à la connexion. Les autres restent accessibles via le sélecteur.
+              </p>
             </div>
+
+            <div className="rounded-xl border border-stone-700/80 bg-stone-900/60 p-3 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-medium text-stone-200">Établissements rattachés</p>
+                {memberLinksLoading && <Loader2 className="animate-spin text-stone-500" size={14} />}
+              </div>
+              {memberLinks.length === 0 && !memberLinksLoading ? (
+                <p className="text-xs text-stone-500">
+                  Aucun lien multi-établissements. Utilisez « + Ajouter » ci-dessous ou enregistrez un établissement principal.
+                </p>
+              ) : (
+                <ul className="space-y-1.5 max-h-40 overflow-y-auto">
+                  {memberLinks.map((link) => {
+                    const est = establishments.find((e) => e.id === link.establishment_id);
+                    const isPrimary = memberEditForm.establishment_id === link.establishment_id;
+                    return (
+                      <li
+                        key={link.establishment_id}
+                        className="flex items-center justify-between gap-2 rounded-lg bg-stone-800/70 px-2.5 py-1.5 text-sm"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-stone-100 truncate">
+                            {est?.name || link.establishment_id.slice(0, 8)}
+                            {isPrimary && (
+                              <span className="ml-1.5 text-[10px] uppercase tracking-wide text-amber-300">
+                                principal
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-[11px] text-stone-500">
+                            {(ROLE_LABELS as Record<string, string>)[link.role] || link.role}
+                            {link.status !== 'active' ? ` · ${link.status}` : ''}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {!isPrimary && (
+                            <button
+                              type="button"
+                              disabled={addEstBusy}
+                              onClick={() => void setPrimaryEstablishment(link.establishment_id)}
+                              className="text-[11px] text-amber-300 hover:underline px-1"
+                              title="Définir comme principal"
+                            >
+                              Principal
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            disabled={addEstBusy}
+                            onClick={() => void removeEstablishmentFromMember(link.establishment_id)}
+                            className="text-[11px] text-red-400 hover:underline px-1"
+                          >
+                            Retirer
+                          </button>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+
+              <div className="pt-1 border-t border-stone-700/60 space-y-2">
+                <label className="label">+ Ajouter un établissement</label>
+                <div className="flex gap-2">
+                  <select
+                    value={addEstId}
+                    onChange={(e) => setAddEstId(e.target.value)}
+                    className="input-field flex-1"
+                  >
+                    <option value="">— Choisir —</option>
+                    {establishments
+                      .filter((est) => !memberLinks.some((l) => l.establishment_id === est.id))
+                      .map((est) => (
+                        <option key={est.id} value={est.id}>
+                          {est.name}
+                        </option>
+                      ))}
+                  </select>
+                  <button
+                    type="button"
+                    disabled={addEstBusy || !addEstId || !editMember.user_id}
+                    onClick={() => void addEstablishmentToMember()}
+                    className="btn-secondary shrink-0 text-sm px-3 flex items-center gap-1 disabled:opacity-50"
+                  >
+                    {addEstBusy ? <Loader2 className="animate-spin" size={14} /> : <Plus size={14} />}
+                    Ajouter
+                  </button>
+                </div>
+                <p className="text-[11px] text-stone-500">
+                  Le propriétaire conserve tous ses établissements. Ajouter ici ne remplace pas les autres.
+                </p>
+              </div>
+            </div>
+
             <div>
               <label className="label">Statut</label>
               <select
