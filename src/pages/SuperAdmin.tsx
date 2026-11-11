@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { UserCog, Building2, Users, Plus, Check, X, Loader2, Ban, KeyRound, Trash2, Clock, Mail, RefreshCw, Copy, CheckCircle2, Pencil, Activity, Megaphone, MapPin, LayoutDashboard, AlertTriangle, TrendingUp } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
@@ -39,7 +40,26 @@ type Tab = 'overview' | 'requests' | 'members' | 'establishments' | 'map' | 'sub
 function SuperAdminInner() {
   const { member } = useAuth();
 
-  const [tab, setTab] = useState<Tab>('overview');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabFromUrl = (searchParams.get('tab') as Tab | null) || 'overview';
+  const [tab, setTab] = useState<Tab>(
+    ['overview','requests','members','establishments','map','subscriptions','activity','pubs'].includes(tabFromUrl)
+      ? tabFromUrl
+      : 'overview'
+  );
+
+  useEffect(() => {
+    const t = (searchParams.get('tab') as Tab | null) || 'overview';
+    if (['overview','requests','members','establishments','map','subscriptions','activity','pubs'].includes(t) && t !== tab) {
+      setTab(t);
+    }
+  }, [searchParams]);
+
+  function goTab(id: Tab) {
+    setTab(id);
+    if (id === 'overview') setSearchParams({}, { replace: true });
+    else setSearchParams({ tab: id }, { replace: true });
+  }
   const [reportsToday, setReportsToday] = useState(0);
   const [requests, setRequests] = useState<AccessRequest[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
@@ -831,8 +851,8 @@ function SuperAdminInner() {
 
 
   return (
-    <div>
-      <h1 className="text-2xl font-bold font-display text-stone-100 mb-2">Tableau de bord</h1>
+    <div className="pb-24 min-h-full">
+      <h1 className="text-2xl font-bold font-display text-stone-100 mb-1">Tableau de bord</h1>
       <p className="text-stone-400 text-sm mb-4">
         Cliquez sur un membre ou un établissement pour le modifier
       </p>
@@ -859,9 +879,9 @@ function SuperAdminInner() {
         ).map(([id, icon, label]) => (
           <button
             key={id}
-            onClick={() => setTab(id as Tab)}
+            onClick={() => goTab(id as Tab)}
             className={`px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-2 whitespace-nowrap ${
-              tab === id ? 'bg-primary-500/15 text-primary-300' : 'text-stone-400 hover:bg-stone-800'
+              tab === id ? 'bg-indigo-500/20 text-indigo-200 border border-indigo-500/40' : 'text-stone-400 hover:bg-stone-800 border border-transparent'
             }`}
           >
             {icon} {label}
@@ -882,20 +902,21 @@ function SuperAdminInner() {
           {/* CARTES KPI */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {[
-              { label: 'Établissements', value: adminStats.estTotal, sub: `${adminStats.trial} essai · ${adminStats.activeSub} payés · ${adminStats.expired} expirés`, color: 'text-cyan-300', go: 'establishments' as Tab },
-              { label: 'Membres actifs', value: adminStats.activeMembers, sub: `${adminStats.owners} propriétaires · ${adminStats.staff} équipe`, color: 'text-emerald-300', go: 'members' as Tab },
-              { label: 'Demandes en attente', value: adminStats.pending, sub: 'À approuver', color: 'text-sky-300', go: 'requests' as Tab },
-              { label: 'Points du jour', value: adminStats.reportsToday, sub: "Rapports envoyés aujourd'hui", color: 'text-violet-300', go: 'activity' as Tab },
-            ].map((k) => (
+              { label: 'Établissements', value: adminStats.estTotal, sub: `${adminStats.trial} essai · ${adminStats.activeSub} payés · ${adminStats.expired} expirés`, color: 'text-cyan-300', ring: 'hover:border-cyan-500/50', go: 'establishments' as Tab },
+              { label: 'Membres actifs', value: adminStats.activeMembers, sub: `${adminStats.owners} propriétaires · ${adminStats.staff} équipe`, color: 'text-emerald-300', ring: 'hover:border-emerald-500/50', go: 'members' as Tab },
+              { label: 'Demandes en attente', value: adminStats.pending, sub: 'À approuver', color: 'text-sky-300', ring: 'hover:border-sky-500/50', go: 'requests' as Tab },
+              { label: 'Points du jour', value: adminStats.reportsToday, sub: "Rapports envoyés aujourd'hui", color: 'text-violet-300', ring: 'hover:border-violet-500/50', go: 'activity' as Tab },
+            ].map((k, idx) => (
               <button
                 key={k.label}
                 type="button"
-                onClick={() => setTab(k.go)}
-                className="text-left rounded-2xl border border-stone-700 bg-stone-900/70 p-4 hover:border-indigo-500/40 transition"
+                onClick={() => goTab(k.go)}
+                className={`admin-kpi text-left rounded-2xl border border-stone-700/90 bg-gradient-to-br from-stone-900/90 to-stone-950/80 p-4 ${k.ring} transition shadow-sm`}
+                style={{ animationDelay: `${idx * 50}ms` }}
               >
-                <p className="text-[11px] uppercase tracking-wide text-stone-500">{k.label}</p>
-                <p className={`text-3xl font-bold mt-1 ${k.color}`}>{k.value}</p>
-                <p className="text-[11px] text-stone-500 mt-1">{k.sub}</p>
+                <p className="text-[11px] uppercase tracking-wide text-stone-500 font-semibold">{k.label}</p>
+                <p className={`text-3xl font-black mt-1 tabular-nums ${k.color}`}>{k.value}</p>
+                <p className="text-[11px] text-stone-500 mt-1 leading-snug">{k.sub}</p>
               </button>
             ))}
           </div>
@@ -922,10 +943,15 @@ function SuperAdminInner() {
           {/* TABLEAU alertes abonnements */}
           <div className="rounded-2xl border border-indigo-500/30 bg-stone-900/60 overflow-hidden">
             <div className="px-4 py-3 border-b border-stone-800 flex items-center justify-between gap-2">
-              <p className="font-semibold text-stone-100 flex items-center gap-2">
-                <AlertTriangle size={16} className="text-indigo-300" /> À relancer (≤ 7 jours)
+              <p className={`text-sm font-semibold text-stone-200 flex items-center gap-2 ${adminStats.expiring.length > 0 ? 'admin-alert-pulse text-amber-200' : ''}`}>
+                <AlertTriangle size={16} className={adminStats.expiring.length > 0 ? 'text-amber-400' : 'text-indigo-300'} /> À relancer (≤ 7 jours)
+                {adminStats.expiring.length > 0 && (
+                  <span className="ml-1 text-[10px] font-bold uppercase tracking-wide bg-red-500/20 text-red-300 border border-red-500/40 px-1.5 py-0.5 rounded-full">
+                    {adminStats.expiring.length}
+                  </span>
+                )}
               </p>
-              <button type="button" className="text-xs text-cyan-300" onClick={() => setTab('subscriptions')}>
+              <button type="button" className="text-xs text-cyan-300" onClick={() => goTab('subscriptions')}>
                 Voir abonnements →
               </button>
             </div>
@@ -951,7 +977,7 @@ function SuperAdminInner() {
                           <span className={days <= 2 ? 'text-red-300 font-semibold' : 'text-amber-200'}>{days} j</span>
                         </td>
                         <td className="px-4 py-2.5">
-                          <button type="button" className="text-xs text-emerald-400 hover:underline" onClick={() => setTab('subscriptions')}>
+                          <button type="button" className="text-xs text-emerald-400 hover:underline" onClick={() => goTab('subscriptions')}>
                             Gérer
                           </button>
                         </td>
@@ -969,7 +995,7 @@ function SuperAdminInner() {
               <p className="font-semibold text-stone-100 flex items-center gap-2">
                 <Users size={16} /> Derniers membres
               </p>
-              <button type="button" className="text-xs text-cyan-300" onClick={() => setTab('members')}>
+              <button type="button" className="text-xs text-cyan-300" onClick={() => goTab('members')}>
                 Tous les membres →
               </button>
             </div>
@@ -1003,14 +1029,16 @@ function SuperAdminInner() {
             )}
           </div>
 
-          {/* Raccourcis */}
-          <div className="flex flex-wrap gap-2">
-            <button type="button" className="btn-primary text-sm" onClick={() => setTab('subscriptions')}>Abonnements</button>
-            <button type="button" className="btn-secondary text-sm" onClick={() => setTab('establishments')}>Établissements</button>
-            <button type="button" className="btn-secondary text-sm" onClick={() => setMemberModal(true)}>Créer un accès</button>
-            <button type="button" className="btn-secondary text-sm" onClick={() => void loadData()}>
-              <RefreshCw size={14} className="inline mr-1" /> Actualiser
-            </button>
+          {/* Raccourcis — barre sticky bas (P1) */}
+          <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-slate-800/90 bg-slate-950/95 backdrop-blur-md">
+            <div className="max-w-6xl mx-auto px-4 py-3 flex flex-wrap gap-2 justify-center lg:justify-end">
+              <button type="button" className="btn-primary text-sm shadow-lg shadow-orange-500/20" onClick={() => goTab('subscriptions')}>Abonnements</button>
+              <button type="button" className="btn-secondary text-sm" onClick={() => goTab('establishments')}>Établissements</button>
+              <button type="button" className="btn-secondary text-sm" onClick={() => setMemberModal(true)}>Créer un accès</button>
+              <button type="button" className="btn-secondary text-sm" onClick={() => void loadData()}>
+                <RefreshCw size={14} className="inline mr-1" /> Actualiser
+              </button>
+            </div>
           </div>
         </div>
       )}
