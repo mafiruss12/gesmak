@@ -8,6 +8,7 @@ import OwnerReportReminder from '@/components/OwnerReportReminder';
 import ReportDelayNotifier from '@/components/ReportDelayNotifier';
 import PermissionsOnboarding from '@/components/PermissionsOnboarding';
 import SubscriptionGate from '@/components/SubscriptionGate';
+import { ServiceDayProvider } from '@/lib/ServiceDayContext';
 import { useAuth } from '@/lib/auth';
 import { usePlanAccess } from '@/lib/usePlanAccess';
 import { getStoredTheme, applyTheme, type ThemeMode } from '@/lib/theme';
@@ -568,6 +569,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   return (
     <BiometricGate>
+    <ServiceDayProvider>
     <div className="min-h-screen bg-stone-950 flex">
       {sidebarOpen && (
         <div className="fixed inset-0 bg-black/60 z-30 lg:hidden" onClick={() => setSidebarOpen(false)} />
@@ -923,6 +925,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         Actualiser
       </button>
     </div>
+    </ServiceDayProvider>
     </BiometricGate>
   );
 }

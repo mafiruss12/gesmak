@@ -1,75 +1,20 @@
-import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Unlock, Lock, Loader2, Sun, Moon } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
-import {
-  openService,
-  readLocalService,
-  type ServiceSnapshot,
-  subscribeServiceDay,
-} from '@/lib/serviceDay';
+import { useServiceDay } from '@/lib/ServiceDayContext';
 
 /**
- * Bandeau service stable.
- * Après « Ouvrir la journée », le statut OPEN est verrouillé localement (pas de bascule CLOSED).
+ * Bandeau service — lit UNIQUEMENT le contexte partagé (pas de fetch, pas de chargement).
  */
 export default function WorkDayBanner({ compact = false }: { compact?: boolean }) {
-  const { member, activeEstablishment, user } = useAuth();
-  const estId = activeEstablishment?.id || member?.establishment_id || null;
-
-  const [snap, setSnap] = useState<ServiceSnapshot>(() =>
-    estId ? readLocalService(estId) : { status: 'closed', source: 'none' },
-  );
-  const [busy, setBusy] = useState(false);
-  const snapRef = useRef(snap);
-  snapRef.current = snap;
+  const { member } = useAuth();
+  const { estId, snap, isOpen, busy, open } = useServiceDay();
 
   const canManage = ['super_admin', 'admin', 'owner', 'manager', 'cashier', 'gerant', 'caissier'].includes(
     String(member?.role || '').toLowerCase(),
   );
 
-  useEffect(() => {
-    if (!estId) {
-      setSnap({ status: 'closed', source: 'none' });
-      return;
-    }
-    // Lecture locale uniquement — pas de fetch qui écrase OPEN
-    setSnap(readLocalService(estId));
-    return subscribeServiceDay(() => {
-      const next = readLocalService(estId);
-      setSnap(next);
-    });
-  }, [estId]);
-
-  async function handleOpen() {
-    if (!estId || !canManage || busy) return;
-    setBusy(true);
-    // Optimistic UI immédiat
-    const optimistic: ServiceSnapshot = {
-      status: 'open',
-      opened_at: new Date().toISOString(),
-      closed_at: null,
-      source: 'local',
-    };
-    setSnap(optimistic);
-    try {
-      const res = await openService({
-        estId,
-        userId: member?.user_id || user?.id,
-        by: member?.full_name || member?.role || 'equipe',
-      });
-      setSnap(res.snap);
-    } catch {
-      // garde optimistic si erreur réseau
-      setSnap(optimistic);
-    } finally {
-      setBusy(false);
-    }
-  }
-
   if (!estId) return null;
-
-  const isOpen = snap.status === 'open';
 
   if (compact) {
     return (
@@ -118,7 +63,7 @@ export default function WorkDayBanner({ compact = false }: { compact?: boolean }
         {!isOpen && canManage && (
           <button
             type="button"
-            onClick={() => void handleOpen()}
+            onClick={() => void open()}
             disabled={busy}
             className="inline-flex items-center gap-1.5 rounded-xl bg-orange-500 px-3 py-2 text-sm font-bold text-white hover:bg-orange-600 disabled:opacity-60"
           >

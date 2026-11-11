@@ -1,4 +1,5 @@
-import { fetchServiceStatus, isServiceOpenLocal, subscribeServiceDay, getActiveSessionId, assertServiceOpen } from '@/lib/serviceDay';
+import { getActiveSessionId, assertServiceOpen } from '@/lib/serviceDay';
+import { useServiceDay } from '@/lib/ServiceDayContext';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Search, Plus, Minus, Trash2, ShoppingCart, CreditCard, Smartphone, Loader2,
@@ -58,9 +59,7 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
   const [readyOrders, setReadyOrders] = useState<ReadyOrder[]>([]);
   const [linkedOrderId, setLinkedOrderId] = useState<string | null>(null);
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
-  const [serviceOpen, setServiceOpen] = useState(() =>
-    estId ? isServiceOpenLocal(estId) : false,
-  );
+  const { isOpen: serviceOpen } = useServiceDay();
 
   const [linkedOrderIds, setLinkedOrderIds] = useState<string[]>([]);
 
@@ -110,14 +109,6 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
     void loadReadyOrders();
   }, [loadProducts, loadReadyOrders]);
 
-  useEffect(() => {
-    if (!estId) return;
-    setServiceOpen(isServiceOpenLocal(estId));
-    void fetchServiceStatus(estId).then((s) => setServiceOpen(s.status === 'open'));
-    return subscribeServiceDay(() => {
-      setServiceOpen(isServiceOpenLocal(estId));
-    });
-  }, [estId]);
 
 
   useEffect(() => {
