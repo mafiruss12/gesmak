@@ -112,7 +112,7 @@ export default function DashboardOrdersPanel() {
 
       <div className="p-3 space-y-2 max-h-[320px] overflow-y-auto">
         {loading && orders.length === 0 && (
-          <p className="text-center text-xs text-stone-500 py-6">Chargement…</p>
+          <p className="text-center text-xs text-stone-500 py-6">Préparation…</p>
         )}
         {!loading && orders.length === 0 && (
           <div className="text-center py-8 text-stone-500 text-sm">

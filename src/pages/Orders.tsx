@@ -454,7 +454,7 @@ async function sendToKitchen(id: string) {
   }, [menuItems]);
 
   if (loading) {
-    return <div className="p-8 text-stone-400 text-center">Chargement…</div>;
+    return <div className="p-6 text-stone-500 text-center text-sm">Préparation des commandes…</div>;
   }
 
   if (!estId) {

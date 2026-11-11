@@ -395,8 +395,17 @@ export default function Dashboard() {
       </div>
     );
   }
+  // Pas d'écran plein « Chargement du tableau de bord » en boucle :
+  // on affiche la coquille (ExploitationDayCard etc.) dès que possible.
   if (loading && !data) {
-    return <GesmakLoading variant="page" label="Chargement du tableau de bord…" />;
+    return (
+      <div className="space-y-4">
+        <ExploitationDayCard />
+        <div className="rounded-2xl border border-stone-800 bg-stone-900/50 px-4 py-8 text-center text-sm text-stone-400">
+          Préparation des indicateurs…
+        </div>
+      </div>
+    );
   }
   if (!data) {
     return (
