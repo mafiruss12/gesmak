@@ -613,6 +613,7 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
       )}
 
       {serviceOpen ? (
+      <>
       <div className="grid lg:grid-cols-5 gap-3">
         {/* Catalogue */}
         <div className="lg:col-span-3 space-y-3">
@@ -866,6 +867,7 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
         </div>
       )}
 
+      </>
       ) : null}
 
       <Modal open={checkoutOpen} onClose={() => !processing && setCheckoutOpen(false)} title="Encaissement">
