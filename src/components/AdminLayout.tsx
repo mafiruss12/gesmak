@@ -1,15 +1,17 @@
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { NavLink, useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  LayoutDashboard, LogOut, Menu, X, Shield, Building2, Users, CreditCard, MapPin,
-  Activity, Clock, Megaphone, KeyRound, RefreshCw,
+  LayoutDashboard, LogOut, Menu, X, Shield, Building2, Users, MapPin,
+  Activity, Clock, Megaphone, KeyRound,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 
 /**
  * Coque visuelle console plateforme GESMAK (indigo/cyan).
- * P0 : menu latéral complet aligné sur les onglets SuperAdmin.
- * P1 : layout plein écran sans bande vide.
+ * P0 : menu latéral complet
+ * P1 : layout plein écran
+ * P2 : splash d'entrée (1× / session)
+ * P3 : micro-animations (nav, press, stagger)
  */
 const ADMIN_NAV: {
   tab: string;
@@ -26,6 +28,9 @@ const ADMIN_NAV: {
   { tab: 'pubs', label: 'Publicités', icon: Megaphone },
 ];
 
+const SPLASH_KEY = 'gesmak_admin_splash_v1';
+const SPLASH_MS = 1600;
+
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const { member, signOut, user } = useAuth();
   const navigate = useNavigate();
@@ -33,7 +38,38 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const activeTab = searchParams.get('tab') || 'overview';
 
+  const [showSplash, setShowSplash] = useState(() => {
+    try {
+      return sessionStorage.getItem(SPLASH_KEY) !== '1';
+    } catch {
+      return true;
+    }
+  });
+  const [splashOut, setSplashOut] = useState(false);
+
+  useEffect(() => {
+    if (!showSplash) return;
+    const tOut = window.setTimeout(() => setSplashOut(true), SPLASH_MS - 320);
+    const tHide = window.setTimeout(() => {
+      setShowSplash(false);
+      try {
+        sessionStorage.setItem(SPLASH_KEY, '1');
+      } catch {
+        /* ignore */
+      }
+    }, SPLASH_MS);
+    return () => {
+      window.clearTimeout(tOut);
+      window.clearTimeout(tHide);
+    };
+  }, [showSplash]);
+
   async function handleLogout() {
+    try {
+      sessionStorage.removeItem(SPLASH_KEY);
+    } catch {
+      /* ignore */
+    }
     await signOut();
     navigate('/', { replace: true });
   }
@@ -65,8 +101,15 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           border-color: rgba(99,102,241,0.55);
           box-shadow: 0 0 0 1px rgba(99,102,241,0.25);
         }
+        .gesmak-admin .admin-nav-item {
+          transition: transform 0.12s ease, background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+        }
+        .gesmak-admin .admin-nav-item:active {
+          transform: scale(0.97);
+        }
         .gesmak-admin .admin-kpi {
-          transition: transform 0.15s ease, border-color 0.15s ease;
+          transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+          animation: admin-fade-up 0.35s ease both;
         }
         .gesmak-admin .admin-kpi:active {
           transform: scale(0.98);
@@ -78,15 +121,91 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         .gesmak-admin .admin-alert-pulse {
           animation: admin-pulse-soft 2s ease-in-out infinite;
         }
+        @keyframes admin-fade-up {
+          from { opacity: 0; transform: translateY(8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes admin-splash-ring {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+        @keyframes admin-splash-in {
+          from { opacity: 0; transform: scale(0.92); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        .gesmak-admin-splash {
+          position: fixed;
+          inset: 0;
+          z-index: 80;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background:
+            radial-gradient(ellipse 70% 50% at 50% 40%, rgba(99,102,241,0.35), transparent 55%),
+            #0b1220;
+          transition: opacity 0.32s ease, visibility 0.32s ease;
+        }
+        .gesmak-admin-splash.is-out {
+          opacity: 0;
+          visibility: hidden;
+          pointer-events: none;
+        }
+        .gesmak-admin-splash .splash-inner {
+          animation: admin-splash-in 0.45s ease both;
+          text-align: center;
+        }
+        .gesmak-admin-splash .splash-ring {
+          width: 56px;
+          height: 56px;
+          border-radius: 50%;
+          border: 3px solid rgba(34,211,238,0.2);
+          border-top-color: #22d3ee;
+          border-right-color: #6366f1;
+          animation: admin-splash-ring 0.85s linear infinite;
+          margin: 0 auto 1rem;
+        }
+        .gesmak-admin-splash .splash-logo {
+          width: 52px;
+          height: 52px;
+          border-radius: 14px;
+          background: linear-gradient(135deg, #6366f1, #22d3ee);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin: 0 auto 0.75rem;
+          box-shadow: 0 12px 40px rgba(99,102,241,0.45);
+        }
       `,
         }}
       />
+
+      {/* P2 — Splash entrée console (1× / session navigateur) */}
+      {showSplash && (
+        <div
+          className={`gesmak-admin-splash ${splashOut ? 'is-out' : ''}`}
+          role="status"
+          aria-live="polite"
+          aria-label="Chargement console GESMAK"
+        >
+          <div className="splash-inner">
+            <div className="splash-logo">
+              <Shield className="text-white" size={26} />
+            </div>
+            <p className="text-xl font-black tracking-tight text-white">GESMAK</p>
+            <p className="text-[11px] uppercase font-bold tracking-[0.2em] text-cyan-300/90 mt-1 mb-5">
+              Console
+            </p>
+            <div className="splash-ring" aria-hidden />
+            <p className="text-xs text-slate-400 mt-3">Préparation de la plateforme…</p>
+          </div>
+        </div>
+      )}
 
       <header className="sticky top-0 z-40 border-b border-slate-800/80 bg-slate-950/95 backdrop-blur-md shrink-0">
         <div className="max-w-6xl mx-auto px-4 h-14 flex items-center gap-3">
           <button
             type="button"
-            className="lg:hidden p-2 rounded-lg bg-slate-800 text-slate-200"
+            className="lg:hidden p-2 rounded-lg bg-slate-800 text-slate-200 active:scale-95 transition"
             onClick={() => setOpen((v) => !v)}
             aria-label="Menu"
           >
@@ -107,7 +226,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           <button
             type="button"
             onClick={() => void handleLogout()}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 active:scale-95 transition"
           >
             <LogOut size={14} /> Déconnexion
           </button>
@@ -115,7 +234,6 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       </header>
 
       <div className="flex-1 max-w-6xl w-full mx-auto px-4 py-4 flex gap-4 items-stretch min-h-0">
-        {/* Backdrop mobile */}
         {open && (
           <button
             type="button"
@@ -143,7 +261,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             Navigation
           </p>
           <nav className="space-y-1 flex-1">
-            {ADMIN_NAV.map((item) => {
+            {ADMIN_NAV.map((item, idx) => {
               const isActive = activeTab === item.tab;
               return (
                 <NavLink
@@ -151,8 +269,9 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
                   to={item.tab === 'overview' ? '/console' : `/console?tab=${item.tab}`}
                   end={item.tab === 'overview'}
                   onClick={() => setOpen(false)}
+                  style={{ animationDelay: `${idx * 30}ms` }}
                   className={() =>
-                    `flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-semibold transition ${
+                    `admin-nav-item flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-semibold ${
                       isActive
                         ? 'admin-nav-active'
                         : 'border-transparent text-slate-400 hover:bg-slate-900 hover:text-slate-200'
@@ -176,7 +295,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         </aside>
 
         <main className="flex-1 min-w-0 flex flex-col min-h-[calc(100dvh-5.5rem)]">
-          <div className="flex-1">{children}</div>
+          <div className="flex-1 animate-[admin-fade-up_0.3s_ease_both]">{children}</div>
         </main>
       </div>
     </div>
