@@ -86,11 +86,20 @@ export default function DailyReportHub() {
         </div>
       </div>
 
+      {/* Panneaux montés en permanence : pas de rechargement à chaque onglet */}
       <div className="min-h-[50vh]">
-        {tab === 'encaisser' && <Caisse embedded />}
-        {tab === 'historique' && <LiveDaySales embedded mode="history" />}
-        {tab === 'terminer' && <LiveDaySales embedded mode="close" />}
-        {tab === 'rapport' && <VenteRapports />}
+        <div className={tab === 'encaisser' ? 'block' : 'hidden'} aria-hidden={tab !== 'encaisser'}>
+          <Caisse embedded />
+        </div>
+        <div className={tab === 'historique' ? 'block' : 'hidden'} aria-hidden={tab !== 'historique'}>
+          <LiveDaySales embedded mode="history" />
+        </div>
+        <div className={tab === 'terminer' ? 'block' : 'hidden'} aria-hidden={tab !== 'terminer'}>
+          <LiveDaySales embedded mode="close" />
+        </div>
+        <div className={tab === 'rapport' ? 'block' : 'hidden'} aria-hidden={tab !== 'rapport'}>
+          <VenteRapports />
+        </div>
       </div>
     </div>
   );

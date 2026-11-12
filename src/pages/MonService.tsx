@@ -98,7 +98,7 @@ export default function MonService() {
   }
 
   if (loading) {
-    return <div className="py-20 text-center text-stone-400">Chargement mon service…</div>;
+    return <div className="py-8 text-center text-sm text-stone-500">Préparation…</div>;
   }
 
   return (

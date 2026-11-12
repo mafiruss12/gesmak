@@ -113,7 +113,7 @@ function DailyReportSafe() {
 
 
 function PageFallback() {
-  return <GesmakLoading variant="page" label="Chargement de la page…" />;
+  return <div className="min-h-[30vh] flex items-center justify-center text-sm text-stone-500">…</div>;
 }
 
 function ConfigError() {

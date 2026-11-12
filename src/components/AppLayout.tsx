@@ -1,6 +1,6 @@
 import { type ReactNode, useState, useEffect , useRef} from 'react';
 import { NavLink, useNavigate, useLocation, Navigate } from 'react-router-dom';
-import { LayoutDashboard, ShoppingCart, Package, Camera, ClipboardCheck, QrCode, Users, Building2, Beer, LogOut, RefreshCw, Menu, X, UserCog, ClipboardList, Calculator, BarChart3, Truck, UserCircle, Calendar, CalendarDays, UtensilsCrossed, Bell, Settings, Sparkles, Receipt, Wallet, MessageCircle, FileText, Crown, Brain, Sun, Moon, Wrench } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Package, Camera, ClipboardCheck, QrCode, Users, Building2, Beer, LogOut, RefreshCw, Menu, X, ChevronsUpDown, Check, UserCog, ClipboardList, Calculator, BarChart3, Truck, UserCircle, Calendar, CalendarDays, UtensilsCrossed, Bell, Settings, Sparkles, Receipt, Wallet, MessageCircle, FileText, Crown, Brain, Sun, Moon, Wrench } from 'lucide-react';
 import DailyReportGate from '@/components/DailyReportGate';
 import OrderRealtimeAlert from '@/components/OrderRealtimeAlert';
 import { registerPushToken } from '@/lib/push';
@@ -8,6 +8,7 @@ import OwnerReportReminder from '@/components/OwnerReportReminder';
 import ReportDelayNotifier from '@/components/ReportDelayNotifier';
 import PermissionsOnboarding from '@/components/PermissionsOnboarding';
 import SubscriptionGate from '@/components/SubscriptionGate';
+import { ServiceDayProvider } from '@/lib/ServiceDayContext';
 import { useAuth } from '@/lib/auth';
 import { usePlanAccess } from '@/lib/usePlanAccess';
 import { getStoredTheme, applyTheme, type ThemeMode } from '@/lib/theme';
@@ -206,6 +207,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [estSwitchOpen, setEstSwitchOpen] = useState(false);
+  const [estSwitchBusy, setEstSwitchBusy] = useState(false);
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => getStoredTheme());
   const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
   const [estRecoveryTimedOut, setEstRecoveryTimedOut] = useState(false);
@@ -568,6 +571,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   return (
     <BiometricGate>
+    <ServiceDayProvider>
     <div className="min-h-screen bg-stone-950 flex">
       {sidebarOpen && (
         <div className="fixed inset-0 bg-black/60 z-30 lg:hidden" onClick={() => setSidebarOpen(false)} />
@@ -664,40 +668,112 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           })}
         </nav>
 
-        {/* Sélecteur d'activité : uniquement propriétaire/admin avec plusieurs établissements */}
+        {/* Sélecteur d'activité — menu déroulant custom (mobile-friendly) */}
         {member &&
           ['super_admin', 'admin', 'owner'].includes(member.role) &&
-          myEstablishments.length > 1 && (
-          <div className="px-3 pb-2">
-            <label className="text-[10px] uppercase tracking-wide text-violet-300/90 px-1 flex items-center gap-1">
+          myEstablishments.length >= 1 && (
+          <div className="px-3 pb-3 relative z-20">
+            <p className="text-[10px] uppercase tracking-wide text-violet-300/90 px-1 flex items-center gap-1 mb-1.5">
               <span className="nav-section-emoji text-sm">🎯</span> Activité
-            </label>
-            <select
-              className="input-field text-sm py-2 mt-1"
-              value={activeEstablishment?.id || member?.establishment_id || ''}
-              onChange={async (e) => {
-                if (e.target.value) await switchEstablishment(e.target.value);
-              }}
-              style={{ borderColor: theme.primary + '55' }}
-            >
-              {myEstablishments.map((e) => (
-                <option key={e.id} value={e.id}>
-                  {e.name} ({BUSINESS_LABELS[normalizeBusinessType(e.type)]})
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-        {member &&
-          ['super_admin', 'admin', 'owner'].includes(member.role) &&
-          myEstablishments.length === 1 && (
-          <div className="px-3 pb-2">
-            <p className="text-[10px] uppercase tracking-wide text-violet-300/90 px-1 flex items-center gap-1">
-              <span className="nav-section-emoji text-sm">🎯</span> Activité
+              {myEstablishments.length > 1 && (
+                <span className="ml-auto text-[10px] font-semibold text-violet-200/80 normal-case tracking-normal">
+                  {myEstablishments.length} sites
+                </span>
+              )}
             </p>
-            <p className="text-xs text-stone-400 px-1 mt-1 truncate">
-              {myEstablishments[0].name} ({BUSINESS_LABELS[normalizeBusinessType(myEstablishments[0].type)]})
-            </p>
+
+            {myEstablishments.length === 1 ? (
+              <div
+                className="w-full rounded-xl border border-stone-700 bg-stone-900/80 px-3 py-2.5 text-left"
+                style={{ borderColor: (theme?.primary || '#8b5cf6') + '55' }}
+              >
+                <p className="text-sm font-semibold text-stone-100 truncate">{myEstablishments[0].name}</p>
+                <p className="text-[11px] text-stone-500 truncate">
+                  {BUSINESS_LABELS[normalizeBusinessType(myEstablishments[0].type)] || myEstablishments[0].type}
+                </p>
+              </div>
+            ) : (
+              <div className="relative">
+                <button
+                  type="button"
+                  disabled={estSwitchBusy}
+                  onClick={() => setEstSwitchOpen((v) => !v)}
+                  className="w-full flex items-center gap-2 rounded-xl border bg-stone-900 px-3 py-2.5 text-left hover:bg-stone-800 active:scale-[0.99] transition disabled:opacity-60"
+                  style={{ borderColor: (theme?.primary || '#8b5cf6') + '66' }}
+                  aria-haspopup="listbox"
+                  aria-expanded={estSwitchOpen}
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-stone-100 truncate">
+                      {activeEstablishment?.name
+                        || myEstablishments.find((e) => e.id === member?.establishment_id)?.name
+                        || 'Choisir un établissement'}
+                    </p>
+                    <p className="text-[11px] text-stone-500 truncate">
+                      Appuyer pour changer de site
+                    </p>
+                  </div>
+                  <ChevronsUpDown size={18} className="text-violet-300 shrink-0" />
+                </button>
+
+                {estSwitchOpen && (
+                  <>
+                    <button
+                      type="button"
+                      className="fixed inset-0 z-30 cursor-default"
+                      aria-label="Fermer la liste"
+                      onClick={() => setEstSwitchOpen(false)}
+                    />
+                    <ul
+                      role="listbox"
+                      className="absolute left-0 right-0 bottom-full mb-1 z-40 max-h-56 overflow-y-auto rounded-xl border border-stone-600 bg-stone-950 shadow-xl shadow-black/50 py-1"
+                    >
+                      {myEstablishments.map((e) => {
+                        const selected =
+                          (activeEstablishment?.id || member?.establishment_id) === e.id;
+                        return (
+                          <li key={e.id}>
+                            <button
+                              type="button"
+                              role="option"
+                              aria-selected={selected}
+                              disabled={estSwitchBusy || selected}
+                              className={`w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm transition ${
+                                selected
+                                  ? 'bg-violet-500/20 text-violet-100'
+                                  : 'text-stone-200 hover:bg-stone-800 active:bg-stone-800'
+                              } disabled:opacity-80`}
+                              onClick={async () => {
+                                if (selected) {
+                                  setEstSwitchOpen(false);
+                                  return;
+                                }
+                                setEstSwitchBusy(true);
+                                try {
+                                  await switchEstablishment(e.id);
+                                  setEstSwitchOpen(false);
+                                  setSidebarOpen(false);
+                                } finally {
+                                  setEstSwitchBusy(false);
+                                }
+                              }}
+                            >
+                              <div className="flex-1 min-w-0">
+                                <p className="font-semibold truncate">{e.name}</p>
+                                <p className="text-[11px] text-stone-500 truncate">
+                                  {BUSINESS_LABELS[normalizeBusinessType(e.type)] || e.type}
+                                </p>
+                              </div>
+                              {selected && <Check size={16} className="text-violet-300 shrink-0" />}
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         )}
         <div className="p-3 border-t border-stone-800 shrink-0">
@@ -923,6 +999,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         Actualiser
       </button>
     </div>
+    </ServiceDayProvider>
     </BiometricGate>
   );
 }

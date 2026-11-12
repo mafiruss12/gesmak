@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { UserCog, Building2, Users, Plus, Check, X, Loader2, Ban, KeyRound, Trash2, Clock, Mail, RefreshCw, Copy, CheckCircle2, Pencil, Activity, Megaphone, MapPin, LayoutDashboard, AlertTriangle, TrendingUp } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
@@ -39,7 +40,26 @@ type Tab = 'overview' | 'requests' | 'members' | 'establishments' | 'map' | 'sub
 function SuperAdminInner() {
   const { member } = useAuth();
 
-  const [tab, setTab] = useState<Tab>('overview');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabFromUrl = (searchParams.get('tab') as Tab | null) || 'overview';
+  const [tab, setTab] = useState<Tab>(
+    ['overview','requests','members','establishments','map','subscriptions','activity','pubs'].includes(tabFromUrl)
+      ? tabFromUrl
+      : 'overview'
+  );
+
+  useEffect(() => {
+    const t = (searchParams.get('tab') as Tab | null) || 'overview';
+    if (['overview','requests','members','establishments','map','subscriptions','activity','pubs'].includes(t) && t !== tab) {
+      setTab(t);
+    }
+  }, [searchParams]);
+
+  function goTab(id: Tab) {
+    setTab(id);
+    if (id === 'overview') setSearchParams({}, { replace: true });
+    else setSearchParams({ tab: id }, { replace: true });
+  }
   const [reportsToday, setReportsToday] = useState(0);
   const [requests, setRequests] = useState<AccessRequest[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
@@ -79,6 +99,13 @@ function SuperAdminInner() {
     role: 'employee' as Role,
     establishment_id: '',
     status: 'active' as 'active' | 'suspended' });
+  /** Liens multi-établissements du membre en cours d'édition (member_establishments) */
+  const [memberLinks, setMemberLinks] = useState<
+    { establishment_id: string; role: string; status: string }[]
+  >([]);
+  const [memberLinksLoading, setMemberLinksLoading] = useState(false);
+  const [addEstId, setAddEstId] = useState('');
+  const [addEstBusy, setAddEstBusy] = useState(false);
   /** Mot de passe temporaire défini par l’admin (oublié par l’utilisateur) */
   const [tempPassword, setTempPassword] = useState('');
   const [pwdResetLoading, setPwdResetLoading] = useState(false);
@@ -505,7 +532,16 @@ function SuperAdminInner() {
   async function removeMemberFromEst(m: Member) {
     if (!editEst) return;
     if (!confirm(`Retirer ${m.full_name || m.email} de ${editEst.name} ?`)) return;
-    await supabase.from('members').update({ establishment_id: null }).eq('id', m.id);
+    if (m.user_id) {
+      await supabase
+        .from('member_establishments')
+        .delete()
+        .eq('user_id', m.user_id)
+        .eq('establishment_id', editEst.id);
+    }
+    if (m.establishment_id === editEst.id) {
+      await supabase.from('members').update({ establishment_id: null }).eq('id', m.id);
+    }
     await loadData();
     flash('Membre retiré de l\'établissement');
   }
@@ -534,14 +570,154 @@ function SuperAdminInner() {
     }
   }
 
+  async function loadMemberLinks(userId: string | null | undefined) {
+    setMemberLinks([]);
+    setAddEstId('');
+    if (!userId) return;
+    setMemberLinksLoading(true);
+    try {
+      const { data, error: err } = await supabase
+        .from('member_establishments')
+        .select('establishment_id, role, status')
+        .eq('user_id', userId);
+      if (err) {
+        console.warn('member_establishments load:', err.message);
+        return;
+      }
+      setMemberLinks(
+        ((data ?? []) as { establishment_id: string; role: string; status: string }[]).filter(
+          (r) => !!r.establishment_id
+        )
+      );
+    } finally {
+      setMemberLinksLoading(false);
+    }
+  }
+
   function openEditMember(m: Member) {
     setError(null);
-    setEditMember(m); setTempPassword(''); setPwdResetDone(null);
+    setEditMember(m);
+    setTempPassword('');
+    setPwdResetDone(null);
+    setAddEstId('');
     setMemberEditForm({
       full_name: m.full_name || '',
       role: m.role,
       establishment_id: m.establishment_id || '',
-      status: m.status === 'suspended' ? 'suspended' : 'active' });
+      status: m.status === 'suspended' ? 'suspended' : 'active',
+    });
+    void loadMemberLinks(m.user_id);
+  }
+
+  /** Ajoute un établissement supplémentaire au membre sans retirer les autres. */
+  async function addEstablishmentToMember() {
+    if (!editMember?.user_id) {
+      setError('Ce membre n’a pas de compte Auth lié (user_id manquant).');
+      return;
+    }
+    if (!addEstId) {
+      setError('Choisissez un établissement à ajouter.');
+      return;
+    }
+    if (memberLinks.some((l) => l.establishment_id === addEstId)) {
+      setError('Cet établissement est déjà rattaché à ce compte.');
+      return;
+    }
+    setAddEstBusy(true);
+    setError(null);
+    try {
+      const roleForLink =
+        memberEditForm.role === 'super_admin' ? 'owner' : memberEditForm.role;
+      const { error: upErr } = await supabase.from('member_establishments').upsert(
+        {
+          user_id: editMember.user_id,
+          establishment_id: addEstId,
+          role: roleForLink,
+          status: 'active',
+        },
+        { onConflict: 'user_id,establishment_id' }
+      );
+      if (upErr) {
+        setError(upErr.message);
+        return;
+      }
+      if (roleForLink === 'owner') {
+        await supabase
+          .from('establishments')
+          .update({ created_by: editMember.user_id, owner_user_id: editMember.user_id })
+          .eq('id', addEstId);
+      }
+      if (!memberEditForm.establishment_id) {
+        await supabase
+          .from('members')
+          .update({ establishment_id: addEstId })
+          .eq('id', editMember.id);
+        setMemberEditForm((f) => ({ ...f, establishment_id: addEstId }));
+      }
+      await loadMemberLinks(editMember.user_id);
+      await loadData();
+      setAddEstId('');
+      flash('Établissement ajouté au compte');
+    } finally {
+      setAddEstBusy(false);
+    }
+  }
+
+  /** Retire un établissement du membre (garde les autres liens). */
+  async function removeEstablishmentFromMember(establishmentId: string) {
+    if (!editMember?.user_id) return;
+    const estName =
+      establishments.find((e) => e.id === establishmentId)?.name || 'cet établissement';
+    if (!confirm(`Retirer « ${estName} » de ce compte ?`)) return;
+    setAddEstBusy(true);
+    setError(null);
+    try {
+      const { error: delErr } = await supabase
+        .from('member_establishments')
+        .delete()
+        .eq('user_id', editMember.user_id)
+        .eq('establishment_id', establishmentId);
+      if (delErr) {
+        setError(delErr.message);
+        return;
+      }
+      if (memberEditForm.establishment_id === establishmentId) {
+        const remaining = memberLinks.filter((l) => l.establishment_id !== establishmentId);
+        const nextId = remaining[0]?.establishment_id || null;
+        await supabase
+          .from('members')
+          .update({ establishment_id: nextId })
+          .eq('id', editMember.id);
+        setMemberEditForm((f) => ({ ...f, establishment_id: nextId || '' }));
+      }
+      await loadMemberLinks(editMember.user_id);
+      await loadData();
+      flash('Établissement retiré du compte');
+    } finally {
+      setAddEstBusy(false);
+    }
+  }
+
+  /** Définit l'établissement principal (courant) du membre. */
+  async function setPrimaryEstablishment(establishmentId: string) {
+    if (!editMember) return;
+    setAddEstBusy(true);
+    setError(null);
+    try {
+      const { error: err } = await supabase
+        .from('members')
+        .update({ establishment_id: establishmentId })
+        .eq('id', editMember.id);
+      if (err) {
+        setError(err.message);
+        return;
+      }
+      setMemberEditForm((f) => ({ ...f, establishment_id: establishmentId }));
+      flash('Établissement principal mis à jour');
+      await loadData();
+    } finally {
+      setAddEstBusy(false);
+    }
   }
 
   function openEditEst(est: Establishment) {
@@ -675,17 +851,17 @@ function SuperAdminInner() {
 
 
   return (
-    <div>
-      <h1 className="text-2xl font-bold font-display text-stone-100 mb-2">Tableau de bord</h1>
+    <div className="pb-24 min-h-full">
+      <h1 className="text-2xl font-bold font-display text-stone-100 mb-1">Tableau de bord</h1>
       <p className="text-stone-400 text-sm mb-4">
         Cliquez sur un membre ou un établissement pour le modifier
       </p>
 
       {error && (
-        <div className="mb-4 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-2 text-sm text-red-200">{error}</div>
+        <div className="mb-4 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-2 text-sm text-red-200 animate-[admin-fade-up_0.25s_ease_both]">{error}</div>
       )}
       {success && (
-        <div className="mb-4 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-200">{success}</div>
+        <div className="mb-4 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-200 animate-[admin-fade-up_0.25s_ease_both]">{success}</div>
       )}
 
       <div className="flex gap-2 mb-6 overflow-x-auto">
@@ -703,12 +879,15 @@ function SuperAdminInner() {
         ).map(([id, icon, label]) => (
           <button
             key={id}
-            onClick={() => setTab(id as Tab)}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-2 whitespace-nowrap ${
-              tab === id ? 'bg-primary-500/15 text-primary-300' : 'text-stone-400 hover:bg-stone-800'
+            onClick={() => goTab(id as Tab)}
+            className={`relative px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-2 whitespace-nowrap active:scale-[0.97] ${
+              tab === id ? 'bg-indigo-500/20 text-indigo-200 border border-indigo-500/40' : 'text-stone-400 hover:bg-stone-800 border border-transparent'
             }`}
           >
             {icon} {label}
+            {tab === id && (
+              <span className="absolute left-3 right-3 -bottom-0.5 h-0.5 rounded-full bg-gradient-to-r from-indigo-400 to-cyan-400" />
+            )}
             {id === 'requests' && pendingCount > 0 && <Badge color="warning">{pendingCount}</Badge>}
             {id === 'subscriptions' && adminStats.expired > 0 && <Badge color="error">{adminStats.expired}</Badge>}
           </button>
@@ -726,20 +905,21 @@ function SuperAdminInner() {
           {/* CARTES KPI */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {[
-              { label: 'Établissements', value: adminStats.estTotal, sub: `${adminStats.trial} essai · ${adminStats.activeSub} payés · ${adminStats.expired} expirés`, color: 'text-cyan-300', go: 'establishments' as Tab },
-              { label: 'Membres actifs', value: adminStats.activeMembers, sub: `${adminStats.owners} propriétaires · ${adminStats.staff} équipe`, color: 'text-emerald-300', go: 'members' as Tab },
-              { label: 'Demandes en attente', value: adminStats.pending, sub: 'À approuver', color: 'text-sky-300', go: 'requests' as Tab },
-              { label: 'Points du jour', value: adminStats.reportsToday, sub: "Rapports envoyés aujourd'hui", color: 'text-violet-300', go: 'activity' as Tab },
-            ].map((k) => (
+              { label: 'Établissements', value: adminStats.estTotal, sub: `${adminStats.trial} essai · ${adminStats.activeSub} payés · ${adminStats.expired} expirés`, color: 'text-cyan-300', ring: 'hover:border-cyan-500/50', go: 'establishments' as Tab },
+              { label: 'Membres actifs', value: adminStats.activeMembers, sub: `${adminStats.owners} propriétaires · ${adminStats.staff} équipe`, color: 'text-emerald-300', ring: 'hover:border-emerald-500/50', go: 'members' as Tab },
+              { label: 'Demandes en attente', value: adminStats.pending, sub: 'À approuver', color: 'text-sky-300', ring: 'hover:border-sky-500/50', go: 'requests' as Tab },
+              { label: 'Points du jour', value: adminStats.reportsToday, sub: "Rapports envoyés aujourd'hui", color: 'text-violet-300', ring: 'hover:border-violet-500/50', go: 'activity' as Tab },
+            ].map((k, idx) => (
               <button
                 key={k.label}
                 type="button"
-                onClick={() => setTab(k.go)}
-                className="text-left rounded-2xl border border-stone-700 bg-stone-900/70 p-4 hover:border-indigo-500/40 transition"
+                onClick={() => goTab(k.go)}
+                className={`admin-kpi text-left rounded-2xl border border-stone-700/90 bg-gradient-to-br from-stone-900/90 to-stone-950/80 p-4 ${k.ring} transition shadow-sm`}
+                style={{ animationDelay: `${idx * 50}ms` }}
               >
-                <p className="text-[11px] uppercase tracking-wide text-stone-500">{k.label}</p>
-                <p className={`text-3xl font-bold mt-1 ${k.color}`}>{k.value}</p>
-                <p className="text-[11px] text-stone-500 mt-1">{k.sub}</p>
+                <p className="text-[11px] uppercase tracking-wide text-stone-500 font-semibold">{k.label}</p>
+                <p className={`text-3xl font-black mt-1 tabular-nums ${k.color}`}>{k.value}</p>
+                <p className="text-[11px] text-stone-500 mt-1 leading-snug">{k.sub}</p>
               </button>
             ))}
           </div>
@@ -766,10 +946,15 @@ function SuperAdminInner() {
           {/* TABLEAU alertes abonnements */}
           <div className="rounded-2xl border border-indigo-500/30 bg-stone-900/60 overflow-hidden">
             <div className="px-4 py-3 border-b border-stone-800 flex items-center justify-between gap-2">
-              <p className="font-semibold text-stone-100 flex items-center gap-2">
-                <AlertTriangle size={16} className="text-indigo-300" /> À relancer (≤ 7 jours)
+              <p className={`text-sm font-semibold text-stone-200 flex items-center gap-2 ${adminStats.expiring.length > 0 ? 'admin-alert-pulse text-amber-200' : ''}`}>
+                <AlertTriangle size={16} className={adminStats.expiring.length > 0 ? 'text-amber-400' : 'text-indigo-300'} /> À relancer (≤ 7 jours)
+                {adminStats.expiring.length > 0 && (
+                  <span className="ml-1 text-[10px] font-bold uppercase tracking-wide bg-red-500/20 text-red-300 border border-red-500/40 px-1.5 py-0.5 rounded-full">
+                    {adminStats.expiring.length}
+                  </span>
+                )}
               </p>
-              <button type="button" className="text-xs text-cyan-300" onClick={() => setTab('subscriptions')}>
+              <button type="button" className="text-xs text-cyan-300" onClick={() => goTab('subscriptions')}>
                 Voir abonnements →
               </button>
             </div>
@@ -795,7 +980,7 @@ function SuperAdminInner() {
                           <span className={days <= 2 ? 'text-red-300 font-semibold' : 'text-amber-200'}>{days} j</span>
                         </td>
                         <td className="px-4 py-2.5">
-                          <button type="button" className="text-xs text-emerald-400 hover:underline" onClick={() => setTab('subscriptions')}>
+                          <button type="button" className="text-xs text-emerald-400 hover:underline" onClick={() => goTab('subscriptions')}>
                             Gérer
                           </button>
                         </td>
@@ -813,7 +998,7 @@ function SuperAdminInner() {
               <p className="font-semibold text-stone-100 flex items-center gap-2">
                 <Users size={16} /> Derniers membres
               </p>
-              <button type="button" className="text-xs text-cyan-300" onClick={() => setTab('members')}>
+              <button type="button" className="text-xs text-cyan-300" onClick={() => goTab('members')}>
                 Tous les membres →
               </button>
             </div>
@@ -847,14 +1032,16 @@ function SuperAdminInner() {
             )}
           </div>
 
-          {/* Raccourcis */}
-          <div className="flex flex-wrap gap-2">
-            <button type="button" className="btn-primary text-sm" onClick={() => setTab('subscriptions')}>Abonnements</button>
-            <button type="button" className="btn-secondary text-sm" onClick={() => setTab('establishments')}>Établissements</button>
-            <button type="button" className="btn-secondary text-sm" onClick={() => setMemberModal(true)}>Créer un accès</button>
-            <button type="button" className="btn-secondary text-sm" onClick={() => void loadData()}>
-              <RefreshCw size={14} className="inline mr-1" /> Actualiser
-            </button>
+          {/* Raccourcis — barre sticky bas (P1) */}
+          <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-slate-800/90 bg-slate-950/95 backdrop-blur-md">
+            <div className="max-w-6xl mx-auto px-4 py-3 flex flex-wrap gap-2 justify-center lg:justify-end">
+              <button type="button" className="btn-primary text-sm shadow-lg shadow-orange-500/20" onClick={() => goTab('subscriptions')}>Abonnements</button>
+              <button type="button" className="btn-secondary text-sm" onClick={() => goTab('establishments')}>Établissements</button>
+              <button type="button" className="btn-secondary text-sm" onClick={() => setMemberModal(true)}>Créer un accès</button>
+              <button type="button" className="btn-secondary text-sm" onClick={() => void loadData()}>
+                <RefreshCw size={14} className="inline mr-1" /> Actualiser
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1595,7 +1782,7 @@ function SuperAdminInner() {
               </select>
             </div>
             <div>
-              <label className="label">Établissement</label>
+              <label className="label">Établissement principal (courant)</label>
               <select
                 value={memberEditForm.establishment_id}
                 onChange={(e) => setMemberEditForm({ ...memberEditForm, establishment_id: e.target.value })}
@@ -1608,7 +1795,104 @@ function SuperAdminInner() {
                   </option>
                 ))}
               </select>
+              <p className="text-[11px] text-stone-500 mt-1">
+                Établissement ouvert par défaut à la connexion. Les autres restent accessibles via le sélecteur.
+              </p>
             </div>
+
+            <div className="rounded-xl border border-stone-700/80 bg-stone-900/60 p-3 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-medium text-stone-200">Établissements rattachés</p>
+                {memberLinksLoading && <Loader2 className="animate-spin text-stone-500" size={14} />}
+              </div>
+              {memberLinks.length === 0 && !memberLinksLoading ? (
+                <p className="text-xs text-stone-500">
+                  Aucun lien multi-établissements. Utilisez « + Ajouter » ci-dessous ou enregistrez un établissement principal.
+                </p>
+              ) : (
+                <ul className="space-y-1.5 max-h-40 overflow-y-auto">
+                  {memberLinks.map((link) => {
+                    const est = establishments.find((e) => e.id === link.establishment_id);
+                    const isPrimary = memberEditForm.establishment_id === link.establishment_id;
+                    return (
+                      <li
+                        key={link.establishment_id}
+                        className="flex items-center justify-between gap-2 rounded-lg bg-stone-800/70 px-2.5 py-1.5 text-sm"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-stone-100 truncate">
+                            {est?.name || link.establishment_id.slice(0, 8)}
+                            {isPrimary && (
+                              <span className="ml-1.5 text-[10px] uppercase tracking-wide text-amber-300">
+                                principal
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-[11px] text-stone-500">
+                            {(ROLE_LABELS as Record<string, string>)[link.role] || link.role}
+                            {link.status !== 'active' ? ` · ${link.status}` : ''}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {!isPrimary && (
+                            <button
+                              type="button"
+                              disabled={addEstBusy}
+                              onClick={() => void setPrimaryEstablishment(link.establishment_id)}
+                              className="text-[11px] text-amber-300 hover:underline px-1"
+                              title="Définir comme principal"
+                            >
+                              Principal
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            disabled={addEstBusy}
+                            onClick={() => void removeEstablishmentFromMember(link.establishment_id)}
+                            className="text-[11px] text-red-400 hover:underline px-1"
+                          >
+                            Retirer
+                          </button>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+
+              <div className="pt-1 border-t border-stone-700/60 space-y-2">
+                <label className="label">+ Ajouter un établissement</label>
+                <div className="flex gap-2">
+                  <select
+                    value={addEstId}
+                    onChange={(e) => setAddEstId(e.target.value)}
+                    className="input-field flex-1"
+                  >
+                    <option value="">— Choisir —</option>
+                    {establishments
+                      .filter((est) => !memberLinks.some((l) => l.establishment_id === est.id))
+                      .map((est) => (
+                        <option key={est.id} value={est.id}>
+                          {est.name}
+                        </option>
+                      ))}
+                  </select>
+                  <button
+                    type="button"
+                    disabled={addEstBusy || !addEstId || !editMember.user_id}
+                    onClick={() => void addEstablishmentToMember()}
+                    className="btn-secondary shrink-0 text-sm px-3 flex items-center gap-1 disabled:opacity-50"
+                  >
+                    {addEstBusy ? <Loader2 className="animate-spin" size={14} /> : <Plus size={14} />}
+                    Ajouter
+                  </button>
+                </div>
+                <p className="text-[11px] text-stone-500">
+                  Le propriétaire conserve tous ses établissements. Ajouter ici ne remplace pas les autres.
+                </p>
+              </div>
+            </div>
+
             <div>
               <label className="label">Statut</label>
               <select

@@ -1,4 +1,5 @@
-import { fetchServiceStatus, isServiceOpenLocal, subscribeServiceDay, getActiveSessionId, assertServiceOpen } from '@/lib/serviceDay';
+import { getActiveSessionId, assertServiceOpen } from '@/lib/serviceDay';
+import { useServiceDay } from '@/lib/ServiceDayContext';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Search, Plus, Minus, Trash2, ShoppingCart, CreditCard, Smartphone, Loader2,
@@ -32,15 +33,43 @@ type ReadyOrder = {
   created_at: string;
 };
 
+
+const PROD_CACHE_PREFIX = 'mm_prod_cache:';
+
+function readProdCache(estId: string): Product[] {
+  try {
+    const raw = sessionStorage.getItem(PROD_CACHE_PREFIX + estId);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as Product[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeProdCache(estId: string, list: Product[]) {
+  try {
+    sessionStorage.setItem(PROD_CACHE_PREFIX + estId, JSON.stringify(list));
+  } catch {
+    /* quota */
+  }
+}
+
 export default function Caisse({ embedded = false }: { embedded?: boolean } = {}) {
   const { member, activeEstablishment, user } = useAuth();
   const estId = useEstId();
   const ui = getBusinessUI(activeEstablishment?.type);
-  const [products, setProducts] = useState<Product[]>([]);
+  const estIdBoot = activeEstablishment?.id || member?.establishment_id || null;
+  const [products, setProducts] = useState<Product[]>(() =>
+    estIdBoot ? readProdCache(estIdBoot) : [],
+  );
   const [search, setSearch] = useState('');
   const [cat, setCat] = useState('Tous');
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(
+    () => !(estIdBoot && readProdCache(estIdBoot).length > 0),
+  );
+  const [refreshing, setRefreshing] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
   const [cashPart, setCashPart] = useState('');
@@ -58,18 +87,18 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
   const [readyOrders, setReadyOrders] = useState<ReadyOrder[]>([]);
   const [linkedOrderId, setLinkedOrderId] = useState<string | null>(null);
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
-  const [serviceOpen, setServiceOpen] = useState(() =>
-    estId ? isServiceOpenLocal(estId) : false,
-  );
+  const { isOpen: serviceOpen } = useServiceDay();
 
   const [linkedOrderIds, setLinkedOrderIds] = useState<string[]>([]);
 
   const loadProducts = useCallback(async () => {
     if (!estId) {
-      setLoading(false);
+      setInitialLoading(false);
+      setRefreshing(false);
       return;
     }
-    setLoading(true);
+    const hasLocal = products.length > 0 || readProdCache(estId).length > 0;
+    if (hasLocal) setRefreshing(true);
     const cacheKey = `products:${estId}`;
     try {
       const { data } = await fetchWithCache<Product[]>(cacheKey, async () => {
@@ -86,12 +115,16 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
         }
         return list;
       });
-      setProducts(data ?? []);
+      const list = data ?? [];
+      setProducts(list);
+      if (list.length) writeProdCache(estId, list);
     } catch {
-      setProducts([]);
+      if (!hasLocal) setProducts([]);
+    } finally {
+      setInitialLoading(false);
+      setRefreshing(false);
     }
-    setLoading(false);
-  }, [estId]);
+  }, [estId]); // products length intentional not in deps — avoid loop
 
   const loadReadyOrders = useCallback(async () => {
     if (!estId) return;
@@ -110,14 +143,6 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
     void loadReadyOrders();
   }, [loadProducts, loadReadyOrders]);
 
-  useEffect(() => {
-    if (!estId) return;
-    setServiceOpen(isServiceOpenLocal(estId));
-    void fetchServiceStatus(estId).then((s) => setServiceOpen(s.status === 'open'));
-    return subscribeServiceDay(() => {
-      setServiceOpen(isServiceOpenLocal(estId));
-    });
-  }, [estId]);
 
 
   useEffect(() => {
@@ -455,14 +480,14 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
     w.document.close();
   }
 
-  if (loading) {
-    return <div className="p-8 text-center text-stone-400">Chargement vente journalière…</div>;
-  }
-
+  // Jamais d'écran plein « Chargement vente journalière » : shell toujours visible.
   return (
     <div className={`max-w-5xl mx-auto space-y-3 pb-40 ${embedded ? '' : 'px-1'}`}>
       <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2.5 text-sm text-stone-200">
         <p className="font-semibold text-amber-200">Vente journalière — clients sans QR</p>
+        {(initialLoading || refreshing) && (
+          <p className="text-[11px] text-amber-300/80 mt-1">Actualisation du stock…</p>
+        )}
         <p className="text-xs text-stone-400 mt-0.5">
           Panier → paiement → valider après l&apos;argent : le <strong className="text-stone-300">stock diminue tout de suite</strong>,
           la vente reste dans l&apos;{' '}
@@ -588,6 +613,7 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
       )}
 
       {serviceOpen ? (
+      <>
       <div className="grid lg:grid-cols-5 gap-3">
         {/* Catalogue */}
         <div className="lg:col-span-3 space-y-3">
@@ -841,6 +867,7 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
         </div>
       )}
 
+      </>
       ) : null}
 
       <Modal open={checkoutOpen} onClose={() => !processing && setCheckoutOpen(false)} title="Encaissement">
