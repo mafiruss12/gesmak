@@ -1,8 +1,18 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@600;700;800&display=swap');
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@theme {
+  --color-primary-300: #FFA54F;
+  --color-primary-400: #FF8C1A;
+  --color-primary-500: #FF7900;
+  --color-primary-600: #E56A00;
+  --color-primary-700: #C2410C;
+  --color-secondary-600: #2563EB;
+  --color-secondary-700: #1D4ED8;
+  --color-error-600: #DC2626;
+  --color-error-700: #B91C1C;
+}
 
 :root {
   --color-bg: #0D0D0D;
