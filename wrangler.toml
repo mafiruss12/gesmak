@@ -1,0 +1,4 @@
+# Cloudflare Pages — Stock Manager AI
+name = "stock-manager-ai"
+compatibility_date = "2024-11-01"
+pages_build_output_dir = "dist"

@@ -1,0 +1,6 @@
+{
+  "name": "GitDeploy AI & GitHub Access Manager",
+  "description": "Comprehensive guide for GitHub access, permissions, automated deployments, and CI/CD workflow generator powered by Gemini AI.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

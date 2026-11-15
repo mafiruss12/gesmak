@@ -1,0 +1,68 @@
+name: Build GESMAK APKs
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'apk-*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install & build web
+        run: |
+          npm install --legacy-peer-deps
+          npm run build:mobile
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Android SDK packages
+        run: |
+          export ANDROID_HOME=/usr/local/lib/android/sdk
+          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          SM=$(find $ANDROID_HOME/cmdline-tools -name sdkmanager 2>/dev/null | head -1)
+          yes | "$SM" --licenses || true
+          "$SM" "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+
+      - name: Capacitor sync + branding
+        run: |
+          npx cap sync android
+          bash scripts/inject-android-permissions.sh || true
+          bash scripts/ensure-android-flavors.sh
+
+      - name: Build GESMAK.apk
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:assembleDebug --no-daemon --stacktrace
+          mkdir -p ../out-apk
+          cp app/build/outputs/apk/debug/*.apk ../out-apk/GESMAK.apk
+
+      - name: Build GESMAK-plus.apk
+        working-directory: android
+        run: |
+          sed -i 's/applicationId "com.gesmak.app"/applicationId "com.gesmak.plus"/' app/build.gradle
+          # Icône distincte : fond indigo (app principale = ambre)
+          printf '%s\n' '<?xml version="1.0" encoding="utf-8"?>' '<resources>' '    <color name="ic_launcher_background">#6366F1</color>' '</resources>' > app/src/main/res/values/ic_launcher_background.xml
+          ./gradlew :app:assembleDebug --no-daemon --stacktrace
+          cp app/build/outputs/apk/debug/*.apk ../out-apk/GESMAK-plus.apk
+          ls -lh ../out-apk
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: gesmak-apks
+          path: out-apk/*.apk
+          retention-days: 14
