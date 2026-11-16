@@ -51,3 +51,12 @@ node scripts/validate-3b-migration.mjs
 2. Offline: immutable origin session + `client_op_id`  
 3. UI services/caisses behind `multiServices`  
 4. Optional harden of `cash_sessions` policies after dual-path tests  
+
+
+## Lot 3B.2 — Ventes ↔ sessions (implémenté sur branche)
+
+- `src/lib/saleSession.ts` : résolution session + `client_op_id` ; blocage si `VITE_FF_REQUIRE_CASH_SESSION`
+- `src/pages/Caisse.tsx` : rattache `cash_session_id` ; **en ligne** stock décrémenté **uniquement** par le trigger SQL
+- `src/lib/offline.ts` : conserve la session d'origine à la sync
+- Flags restent **off** par défaut
+- QR : inchangé (commande ≠ vente automatique)
