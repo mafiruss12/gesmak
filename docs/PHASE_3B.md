@@ -1,36 +1,53 @@
 # GESMAK Phase 3B — Multi-services / multi-caisses
 
 **Branch:** `feature/gesmak-multi-services`  
-**Base commit:** `a9f08fd`  
-**Status:** schema additive prepared — **not applied to production**
+**Base commit:** `a9f08fd` (also current `main` tip at branch creation)  
+**Status:** first implementation lot on branch — **not applied to production**
 
-## 3A.2 summary
+## Files (lot 1)
 
-- `cash_sessions` RLS isolates by `members.establishment_id` (no cross-est leak via that policy alone).
-- `operation_audit`: RLS blocks UPDATE/DELETE for normal roles; REVOKE of table grants deferred until owner validates (prod).
-- `sales.cash_session_id` / `orders.cash_session_id` missing in live until this migration is applied.
-- Multiple `open` sessions per establishment observed — partial unique indexes added when `cash_register_id` / `opened_by` set.
+| Path | Role |
+|------|------|
+| `supabase/migrations/20261116_multi_services_caisses_v1.sql` | Additive schema |
+| `docs/PHASE_3B.md` | This document |
+| `src/lib/types.ts` | `cash_session_id?` + 3B entity types |
+| `src/lib/featureFlags.ts` | Transition flags (default **off**) |
+| `scripts/validate-3b-migration.mjs` | Static migration safety checks |
 
-## Migration
+## Feature flags (default off)
 
-File: `supabase/migrations/20261116_multi_services_caisses_v1.sql`
+| Flag env | Purpose |
+|----------|---------|
+| `VITE_FF_MULTI_SERVICES` | Enable multi-service UI/paths |
+| `VITE_FF_REQUIRE_CASH_SESSION` | Require session on new sales |
+| `VITE_FF_STRICT_SESSION` | UI enforce one open session |
+| `VITE_FF_APPROVAL_REQUESTS` | Approval UI |
 
-Additive only:
+Until flags are on, existing maquis/caisse/QR flows stay unchanged.
 
-- `services`, `cash_registers`, `service_assignments`, `cash_register_assignments`, `approval_requests`
-- nullable extensions on `cash_sessions`, `sales`, `orders`
-- technical default service + register (`assignment_kind = technical_compat`)
-- no DROP, no historical session invention
+## Schema (additive)
 
-## Production rules
+- **New:** `services`, `cash_registers`, `service_assignments`, `cash_register_assignments`, `approval_requests`
+- **Extend (nullable):** `cash_sessions.cash_register_id`, `cash_sessions.service_id`, `sales.cash_session_id`, `orders.cash_session_id`
+- **Backfill:** default service + register per establishment with `assignment_kind = technical_compat` only
+- **Constraints:** partial unique open session per register; per opener+establishment
+- **RLS:** new tables only; existing `cash_sessions_member_all` **not** replaced in this lot
 
-- Do **not** run this migration on production without explicit owner approval.
-- Do **not** deploy this branch to production until UI flags and regression tests pass.
-- Feature flags recommended before enforcing single open session / mandatory `cash_session_id`.
+## Production limits
 
-## Next lot
+- Do **not** run migration on production without explicit owner approval
+- Do **not** deploy this branch to production until flags + regression pass
+- No DROP / DELETE of business data in this migration
 
-1. App types + optional `cash_session_id` on new sales only  
+## Validate locally
+
+```bash
+node scripts/validate-3b-migration.mjs
+```
+
+## Next lots
+
+1. Wire new sales to `cash_session_id` when flag on  
 2. Offline: immutable origin session + `client_op_id`  
-3. UI services/caisses (behind flag)  
-4. Harden `cash_sessions_member_all` after dual-path tests  
+3. UI services/caisses behind `multiServices`  
+4. Optional harden of `cash_sessions` policies after dual-path tests  
