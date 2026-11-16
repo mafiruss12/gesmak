@@ -70,6 +70,8 @@ export interface Sale {
   payment_method: PaymentMethod;
   created_by: string | null;
   created_at: string;
+  /** GESMAK 3B — nullable until multi-caisse is enforced */
+  cash_session_id?: string | null;
 }
 
 export interface DailyReport {
