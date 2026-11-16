@@ -266,3 +266,66 @@ export const ORDER_TYPE_LABELS: Record<string, string> = {
   takeaway: 'À emporter',
   delivery: 'Livraison',
 };
+
+/** GESMAK 3B — multi-services / multi-caisses (additive; unused until feature flag on) */
+export type AssignmentKind = 'verified_historical' | 'technical_compat' | 'unknown_needs_reconcile';
+
+export interface GService {
+  id: string;
+  establishment_id: string;
+  name: string;
+  code: string | null;
+  is_default: boolean;
+  status: 'active' | 'inactive';
+  assignment_kind: AssignmentKind;
+  created_at: string;
+}
+
+export interface CashRegister {
+  id: string;
+  establishment_id: string;
+  service_id: string;
+  name: string;
+  is_default: boolean;
+  status: 'active' | 'inactive';
+  assignment_kind: AssignmentKind;
+  created_at: string;
+}
+
+export interface ServiceAssignment {
+  id: string;
+  establishment_id: string;
+  service_id: string;
+  user_id: string;
+  role: 'manager' | 'owner';
+  status: 'active' | 'inactive';
+  created_at: string;
+}
+
+export interface CashRegisterAssignment {
+  id: string;
+  establishment_id: string;
+  cash_register_id: string;
+  user_id: string;
+  status: 'active' | 'inactive';
+  created_at: string;
+}
+
+export type ApprovalRequestStatus = 'pending' | 'approved' | 'rejected' | 'executed' | 'cancelled';
+
+export interface ApprovalRequest {
+  id: string;
+  establishment_id: string;
+  service_id: string | null;
+  request_type: string;
+  status: ApprovalRequestStatus;
+  payload: Record<string, unknown>;
+  requested_by: string;
+  resolved_by: string | null;
+  executed_by: string | null;
+  resolution_note: string | null;
+  created_at: string;
+  resolved_at: string | null;
+  executed_at: string | null;
+}
+
