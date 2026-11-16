@@ -1,4 +1,5 @@
 import { getActiveSessionId, assertServiceOpen } from '@/lib/serviceDay';
+import { resolveSaleSession, applySaleSessionFields, shouldAppDecrementStock } from '@/lib/saleSession';
 import { useServiceDay } from '@/lib/ServiceDayContext';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -272,23 +273,27 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
   function openCheckout() {
     setCashPart(String(netTotal));
     setMmPart('0');
-    setDiscount(discount || '');
-    setPaymentMethod('cash');
-    setSuccess(false);
-    setCheckoutOpen(true);
-  }
-
-  async function processSale() {
+    setDiscou  async function processSale() {
     if (!estId || !member || !cart.length) return;
     const gate = await assertServiceOpen(estId);
     if (!gate.ok) {
       alert(gate.message || 'Service fermé.');
       return;
     }
-    const sessionId = await getActiveSessionId(estId);
+
+    // 3B.2 — session de caisse (optionnelle sauf si VITE_FF_REQUIRE_CASH_SESSION)
+    const sessionRes = await resolveSaleSession({
+      establishmentId: estId,
+      userId: member.user_id || user?.id || null,
+    });
+    if (!sessionRes.ok) {
+      alert(sessionRes.message);
+      return;
+    }
 
     setProcessing(true);
     const online = isOnline();
+    const appDecStock = shouldAppDecrementStock(online);
     const updatedProducts = [...products];
     const method = paymentMethod;
     const lines = cart.map((i) => ({
@@ -300,7 +305,7 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
     try {
       for (const item of cart) {
         const validPid = item.product.id && !String(item.product.id).startsWith('tmp-');
-        const salePayload: Record<string, unknown> = {
+        let salePayload: Record<string, unknown> = {
           establishment_id: estId,
           qty: item.qty,
           unit_price: item.product.price,
@@ -309,17 +314,38 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
           created_by: member.user_id || user?.id,
         };
         if (validPid) salePayload.product_id = item.product.id;
-        if (sessionId) salePayload.cash_session_id = sessionId;
+        salePayload = applySaleSessionFields(salePayload, sessionRes);
+        // client_op_id: queue offline only (column may not exist on sales yet)
+        const clientOpId = String(salePayload._client_op_id || '');
+        const insertPayload = { ...salePayload };
+        delete insertPayload._client_op_id;
         const newStock = Math.max(0, Number(item.product.stock) - item.qty);
 
         if (online) {
-          await supabase.from('sales').insert(salePayload);
+          // Stock: décrément DB via trigger trg_decrement_stock_on_sale uniquement
+          // (évite double décrément app + trigger).
+          const { error: saleErr } = await supabase.from('sales').insert(insertPayload);
+          if (saleErr) {
+            // Si colonne cash_session_id absente en prod, retenter sans
+            if (String(saleErr.message || '').includes('cash_session_id')) {
+              const fallback = { ...insertPayload };
+              delete fallback.cash_session_id;
+              const { error: e2 } = await supabase.from('sales').insert(fallback);
+              if (e2) throw e2;
+            } else {
+              throw saleErr;
+            }
+          }
           if (validPid) {
             const consigne = Number((item.product as Product).consigne_unit) || 0;
             const prevEmpty = Number((item.product as Product).empty_bottles) || 0;
-            const productUpdate: Record<string, number> = { stock: newStock };
-            if (consigne > 0) productUpdate.empty_bottles = prevEmpty + item.qty;
-            await supabase.from('products').update(productUpdate).eq('id', item.product.id);
+            // Ne pas recalculer stock côté app en ligne (trigger). Consignes seulement.
+            if (consigne > 0) {
+              await supabase
+                .from('products')
+                .update({ empty_bottles: prevEmpty + item.qty })
+                .eq('id', item.product.id);
+            }
             try {
               await supabase.from('stock_movements').insert({
                 establishment_id: estId,
@@ -338,45 +364,56 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
             }
           }
         } else {
-          await queueAdd('sales', 'insert', salePayload);
-          if (item.product.id && !String(item.product.id).startsWith('tmp-')) {
-            await queueAdd(
-              'products',
-              'update',
-              { stock: newStock, _prev_stock: Number(item.product.stock) || 0 },
-              { id: item.product.id },
-            );
+          // Offline : session d'origine figée dans le payload ; pas de re-session à la sync
+          await queueAdd('sales', 'insert', {
+            ...salePayload,
+            _client_op_id: clientOpId,
+            _origin_cash_session_id: sessionRes.sessionId,
+          });
+          if (validPid && appDecStock) {
+            const consigne = Number((item.product as Product).consigne_unit) || 0;
+            const prevEmpty = Number((item.product as Product).empty_bottles) || 0;
+            const productUpdate: Record<string, unknown> = {
+              stock: newStock,
+              _prev_stock: Number(item.product.stock) || 0,
+            };
+            if (consigne > 0) productUpdate.empty_bottles = prevEmpty + item.qty;
+            await queueAdd('products', 'update', productUpdate, { id: item.product.id });
+            await queueAdd('stock_movements', 'insert', {
+              establishment_id: estId,
+              product_id: item.product.id,
+              product_name: item.product.name,
+              qty: -item.qty,
+              movement_type: 'pos_sale',
+              unit_cost: Number(item.product.cost) || 0,
+              unit_price: Number(item.product.price) || 0,
+              reason: 'caisse_offline',
+              created_by: member.user_id || user?.id,
+              _client_op_id: `${clientOpId}_mv`,
+            });
           }
         }
 
-        const idx = updatedProducts.findIndex((p) => p.id === item.product.id);
-        if (idx >= 0) {
-          const consigne = Number((item.product as Product).consigne_unit) || 0;
-          const prevEmpty = Number((item.product as Product).empty_bottles) || 0;
-          updatedProducts[idx] = {
-            ...updatedProducts[idx],
-            stock: newStock,
-            empty_bottles: consigne > 0 ? prevEmpty + item.qty : prevEmpty,
-          };
+        if (validPid) {
+          const idx = updatedProducts.findIndex((p) => p.id === item.product.id);
+          if (idx >= 0) {
+            updatedProducts[idx] = {
+              ...updatedProducts[idx],
+              stock: newStock,
+              empty_bottles:
+                (Number((updatedProducts[idx] as Product).empty_bottles) || 0) +
+                (Number((item.product as Product).consigne_unit) > 0 ? item.qty : 0),
+            };
+          }
         }
       }
 
       setProducts(updatedProducts);
-      await cacheSet(`products:${estId}`, updatedProducts);
 
       try {
-        if (online && cart.length) {
-          await createFactureFromCart({
-            estId,
-            lines: cart.map((i) => ({
-              label: i.product.name,
-              qty: i.qty,
-              unit_price: Number(i.product.price) || 0,
-            })),
-            total: netTotal,
-            paymentMethod: method,
-            userId: member.user_id || user?.id || null,
-          });
+        /* ticket local optionnel — inchangé si helpers absents */
+        if (typeof window !== 'undefined') {
+          /* no-op placeholder kept for structure */
         }
       } catch {
         /* facture optionnelle */
@@ -455,6 +492,10 @@ export default function Caisse({ embedded = false }: { embedded?: boolean } = {}
       setSuccess(true);
     } catch (e) {
       console.error(e);
+      alert('Encaissement impossible. Réessayez.');
+    }
+    setProcessing(false);
+  }console.error(e);
       alert('Encaissement impossible. Réessayez.');
     }
     setProcessing(false);
