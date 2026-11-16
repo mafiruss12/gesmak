@@ -150,6 +150,12 @@ function stripMeta(payload: Record<string, unknown>): Record<string, unknown> {
   delete out._client_op_id;
   delete out._local_id;
   delete out._conflict;
+  // 3B.2 — never invent a new session at sync time; keep origin only as cash_session_id
+  if (out._origin_cash_session_id && !out.cash_session_id) {
+    out.cash_session_id = out._origin_cash_session_id;
+  }
+  delete out._origin_cash_session_id;
+  delete out._needs_session_resolution;
   return out;
 }
 
@@ -241,8 +247,28 @@ export async function flushQueue(
     try {
       if (item.action === 'insert') {
         const payload = stripMeta(item.payload);
-        const { error } = await supabase.from(item.table).insert(payload);
-        if (error) throw error;
+        // 3B.2 — sales: never replace cash_session_id with a "current" session
+        if (item.table === 'sales') {
+          // keep payload.cash_session_id as origin; if unknown leave null for manual resolution
+          const { error } = await supabase.from(item.table).insert(payload);
+          if (error) {
+            const msg = String(error.message || error.code || '');
+            // Idempotence / duplicate
+            if (/duplicate|unique|23505/i.test(msg)) {
+              // treat as success — same client_op already applied
+            } else if (/cash_session_id/i.test(msg)) {
+              const fallback = { ...payload };
+              delete fallback.cash_session_id;
+              const { error: e2 } = await supabase.from(item.table).insert(fallback);
+              if (e2) throw e2;
+            } else {
+              throw error;
+            }
+          }
+        } else {
+          const { error } = await supabase.from(item.table).insert(payload);
+          if (error) throw error;
+        }
       } else if (item.action === 'update') {
         if (item.table === 'products' && ('stock' in item.payload || item.payload._prev_stock !== undefined)) {
           const r = await applyProductStockUpdate(supabase, item);
