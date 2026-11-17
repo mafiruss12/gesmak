@@ -312,9 +312,21 @@ async function saveProfile() {
         .eq('id', est.id);
       if (err) setError(err.message);
       else {
+        const typeChanged = est.type !== form.type;
         setSaved(true);
         setTimeout(() => setSaved(false), 2500);
         await refresh();
+        if (typeChanged) {
+          // Recharge pour appliquer menus / thème / modules du nouveau type
+          try {
+            localStorage.setItem(
+              'mm_active_est',
+              JSON.stringify({ id: est.id, type: form.type, name: form.name })
+            );
+          } catch { /* */ }
+          window.location.assign('/dashboard?type_switch=' + encodeURIComponent(form.type));
+          return;
+        }
       }
     } else if (canManageEst) {
       // Créer l'établissement et rattacher le membre
@@ -972,11 +984,13 @@ async function saveProfile() {
                   className="input-field"
                   disabled={!canManageEst && !!est}
                 >
-                  <option value="maquis">Maquis</option>
+                  <option value="maquis">Maquis / Bar</option>
+                  <option value="restaurant">Restaurant</option>
+                  <option value="depot">Grossiste / Dépôt</option>
                   <option value="location_event">Location événementielle</option>
-              <option value="complexe">Établissement</option>
-            </select>
-                <p className="text-xs text-stone-500 mt-1">Change le menu, le thème et le tableau de bord.</p>
+                  <option value="complexe">Établissement (multi-services)</option>
+                </select>
+                <p className="text-xs text-stone-500 mt-1">Change le menu, le thème, le stock et le tableau de bord. Après enregistrement l&apos;app se recharge.</p>
               </div>
               <div>
                 <label className="label">Adresse</label>
