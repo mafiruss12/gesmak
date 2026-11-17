@@ -1,3 +1,4 @@
+import { newEstablishmentTrialFields } from '@/lib/subscription';
 import { DEFAULT_BRANDING, type BtpBranding } from '@/lib/btp';
 import { isBtp } from '@/lib/businessTypes';
 import { getStoredTheme, applyTheme, type ThemeMode } from '@/lib/theme';
@@ -18,6 +19,7 @@ import { registerPushToken, isPushConfigured } from '@/lib/push';
 import { seedDefaultStockForEstablishment } from '@/lib/seedDefaultStock';
 import { useAuth } from '@/lib/auth';
 import { PLAN, PLANS, getSubscriptionState, getEffectivePlan, getPlanLimits, getPlanDisplayTitle, getActivePlanLimits, formatPlanLimitsLine, isOnTrial, paymentInstructions, paymentWhatsAppLink } from '@/lib/subscription';
+// trial fields via newEstablishmentTrialFields;
 import { APP_VERSION, fetchLatestRelease, fetchRemoteWebVersion, forceAppUpdate, isNewerVersion, WEB_APP_URL } from '@/lib/appVersion';
 import type { Establishment } from '@/lib/types';
 import { ROLE_LABELS } from '@/lib/types';
@@ -338,7 +340,7 @@ async function saveProfile() {
           address: form.address || null,
           phone: form.phone || null,
           logo_url: form.logo_url || null,
-          created_by: member.user_id, subscription_status: 'trial', trial_ends_at: new Date(Date.now()+30*86400000).toISOString(),
+          created_by: member.user_id, ...newEstablishmentTrialFields(),
         } as any)
         .select()
         .single();
