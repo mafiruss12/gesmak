@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Beer, CalendarDays, Loader2, Check, Building2, UtensilsCrossed, Warehouse, LogOut } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { newEstablishmentTrialFields } from '@/lib/subscription';
 import { useAuth } from '@/lib/auth';
 import { seedDefaultStockForEstablishment } from '@/lib/seedDefaultStock';
 import { ensureDefaultHotelServices, HOTEL_SERVICE_PRESETS } from '@/lib/hotel';
@@ -79,8 +80,7 @@ export default function TypePicker({ mode, onDone, defaultName = '' }: Props) {
             name: name.trim(),
             type: selected,
             created_by: user.id,
-            subscription_status: 'trial',
-            trial_ends_at: new Date(Date.now() + 30 * 86400000).toISOString(),
+            ...newEstablishmentTrialFields(),
           })
           .select()
           .single();
