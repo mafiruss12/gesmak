@@ -1,0 +1,102 @@
+/* GESMAK — Service Worker v8 (network-first assets) */
+const CACHE_NAME = 'gesmak-shell-v9-phase2';
+const PRECACHE = [
+  '/',
+  '/index.html',
+  '/manifest.webmanifest',
+  '/icon-192.png',
+  '/icon-512.png',
+];
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE)).then(() => self.skipWaiting())
+  );
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys().then((keys) =>
+      Promise.all(
+        keys
+          .filter((k) => k !== CACHE_NAME)
+          .map((k) => caches.delete(k))
+      )
+    ).then(() => self.clients.claim())
+  );
+  // Notifier les onglets qu'une nouvelle version SW est active
+  self.clients.matchAll({ type: 'window' }).then((list) => {
+    for (const c of list) c.postMessage({ type: 'GESMAK_SW_UPDATED', cache: CACHE_NAME });
+  });
+});
+
+self.addEventListener('fetch', (event) => {
+  const { request } = event;
+  if (request.method !== 'GET') return;
+
+  const url = new URL(request.url);
+
+  // API distantes : réseau uniquement
+  if (url.hostname.includes('supabase.co') || url.hostname.includes('googleapis.com')) return;
+
+  // Navigation SPA : réseau d'abord, fallback shell
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request)
+        .then((res) => {
+          const clone = res.clone();
+          caches.open(CACHE_NAME).then((c) => {
+            c.put('/index.html', clone.clone());
+            c.put('/', clone);
+          });
+          return res;
+        })
+        .catch(() =>
+          caches.match('/index.html').then((r) => r || caches.match('/'))
+        )
+    );
+    return;
+  }
+
+  // JS / CSS / modules : TOUJOURS réseau d'abord (évite vieux bundles cassés)
+  if (
+    url.origin === self.location.origin &&
+    (url.pathname.endsWith('.js') ||
+      url.pathname.endsWith('.css') ||
+      url.pathname.endsWith('.mjs') ||
+      url.pathname.includes('/assets/'))
+  ) {
+    event.respondWith(
+      fetch(request)
+        .then((res) => {
+          if (!res || !res.ok) return res;
+          const ct = (res.headers.get('content-type') || '').toLowerCase();
+          // Ne jamais mettre en cache une page HTML à la place d'un chunk JS
+          if (ct.includes('text/html')) return res;
+          const clone = res.clone();
+          caches.open(CACHE_NAME).then((c) => c.put(request, clone));
+          return res;
+        })
+        .catch(() => caches.match(request).then((c) => c || Response.error()))
+    );
+    return;
+  }
+
+  // Autres assets même origine : cache puis réseau
+  if (url.origin === self.location.origin) {
+    event.respondWith(
+      caches.match(request).then((cached) => {
+        const fetched = fetch(request)
+          .then((res) => {
+            if (res && res.ok) {
+              const clone = res.clone();
+              caches.open(CACHE_NAME).then((c) => c.put(request, clone));
+            }
+            return res;
+          })
+          .catch(() => cached);
+        return cached || fetched;
+      })
+    );
+  }
+});

@@ -1,0 +1,756 @@
+import DashboardOrdersPanel from '@/components/DashboardOrdersPanel';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import {
+  TrendingUp, DollarSign, Package, Users, AlertTriangle, Receipt, ShoppingCart,
+  UtensilsCrossed, LayoutDashboard, Truck, ArrowRight, Loader2,
+} from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/lib/auth';
+import { formatFCFA, todayISO } from '@/lib/format'
+import { loadRestaurantDayStats, type RestaurantDayStats } from '@/lib/restaurantStats';
+import { loadBeverageProfitForRange, loadBeverageProfitFromReports, loadFondsCommerce, mondayOfISO, dateDaysAgo, monthStartISO } from '@/lib/beverageProfit';
+import { StatCard, EmptyState } from '@/components/ui';
+import { BarChart, Sparkline } from '@/components/MiniChart';
+import {
+  normalizeBusinessType,
+  getEstablishmentServices,
+  BUSINESS_LABELS,
+  BUSINESS_THEMES,
+  type BusinessType,
+  getBusinessUI,
+} from '@/lib/businessTypes';
+import type { Sale, Order } from '@/lib/types';
+import type { BeveragePeriodReport } from '@/lib/beverageProfit';
+import OwnerReportCalendar from '@/components/OwnerReportCalendar';
+import QuickActions from '@/components/QuickActions';
+import StartupGuide from '@/components/StartupGuide';
+import ExchangeRatesCard from '@/components/ExchangeRatesCard';
+import SectorNews from '@/components/SectorNews';
+import OwnerSitesBar from '@/components/OwnerSitesBar';
+import ExploitationDayCard from '@/components/ExploitationDayCard';
+import { GesmakLoading } from '@/components/GesmakLoading';
+
+function DashLink({ to, children, className = '' }: { to: string; children: ReactNode; className?: string }) {
+  return (
+    <Link
+      to={to}
+      className={`block rounded-2xl transition-all hover:ring-2 hover:ring-amber-500/40 hover:scale-[1.01] active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-amber-400/50 ${className}`}
+    >
+      {children}
+    </Link>
+  );
+}
+
+
+interface DashboardData {
+  todaySales: number;
+  todayExpenses: number;
+  todayProfit: number;
+  weekSalesTotal: number;
+  lowStockCount: number;
+  employeeCount: number;
+  activeOrders: number;
+  freeTables: number;
+  occupiedTables: number;
+  weeklyData: { label: string; value: number }[];
+  weekValues: number[];
+  recentSales: Sale[];
+  activeOrdersList: Order[];
+  topProducts: { name: string; revenue: number }[];
+  aiAlerts: string[];
+  dataPartial: boolean;
+  monthSales: number;
+  monthExpenses: number;
+  monthPurchases: number;
+  monthProfit: number;
+  stockValue: number;
+  todayCogs: number;
+  weekExpenses: number;
+  weekPurchases: number;
+  weekProfit: number;
+  bevToday: BeveragePeriodReport;
+  bevWeek: BeveragePeriodReport;
+  bevMonth: BeveragePeriodReport;
+}
+
+export default function Dashboard() {
+  const { member, activeEstablishment, effectiveRole, refresh} = useAuth();
+  const role = String(effectiveRole || member?.role || '');
+  const canSeeFinance = ['super_admin', 'admin', 'owner'].includes(role);
+  const estIdInit = activeEstablishment?.id || member?.establishment_id || null;
+  const [data, setData] = useState<DashboardData | null>(() => {
+    try {
+      if (!estIdInit) return null;
+      const raw = sessionStorage.getItem('mm_dash_' + estIdInit);
+      return raw ? (JSON.parse(raw) as DashboardData) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [error, setError] = useState<string | null>(null);
+  // Si cache présent → pas de spinner plein écran
+  const [loading, setLoading] = useState(() => {
+    try {
+      if (!estIdInit) return false;
+      return !sessionStorage.getItem('mm_dash_' + estIdInit);
+    } catch {
+      return true;
+    }
+  });
+
+  // Persister le dernier dashboard pour affichage immédiat au prochain refresh
+  useEffect(() => {
+    const id = activeEstablishment?.id || member?.establishment_id;
+    if (id && data) {
+      try {
+        sessionStorage.setItem('mm_dash_' + id, JSON.stringify(data));
+      } catch { /* quota */ }
+    }
+  }, [data, activeEstablishment?.id, member?.establishment_id]);
+
+  const bizType: BusinessType = normalizeBusinessType(activeEstablishment?.type);
+  const estServices =
+    bizType === 'complexe'
+      ? getEstablishmentServices(activeEstablishment?.id, (activeEstablishment as any)?.services)
+      : [];
+  const theme = BUSINESS_THEMES[bizType];
+  const ui = getBusinessUI(bizType);
+  const [restoStats, setRestoStats] = useState<RestaurantDayStats | null>(null);
+  useEffect(() => {
+    const id = activeEstablishment?.id || member?.establishment_id || null;
+    if (bizType !== 'restaurant' || !id) {
+      setRestoStats(null);
+      return;
+    }
+    let cancelled = false;
+    loadRestaurantDayStats(id)
+      .then((s) => {
+        if (!cancelled) setRestoStats(s);
+      })
+      .catch(() => {
+        if (!cancelled) setRestoStats(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [bizType, activeEstablishment?.id, member?.establishment_id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      let estId = activeEstablishment?.id || member?.establishment_id || null;
+      if (!estId) {
+        try {
+          const uid = member?.user_id;
+          const raw =
+            (uid && localStorage.getItem(`mm_active_est:${uid}`)) ||
+            localStorage.getItem('mm_active_est');
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed?.id) estId = String(parsed.id);
+          }
+        } catch { /* */ }
+      }
+      if (!estId) {
+        // Ne pas effacer un dashboard déjà affiché (évite flash au refresh)
+        setLoading(false);
+        return;
+      }
+      // Rafraîchir en arrière-plan si on a déjà des données (pas de flash blanc)
+      if (!data) setLoading(true);
+      setError(null);
+
+      const emptyFallback: DashboardData = {
+        todaySales: 0, todayExpenses: 0, todayProfit: 0, monthSales: 0, monthExpenses: 0,
+        monthPurchases: 0, monthProfit: 0, stockValue: 0, todayCogs: 0, weekExpenses: 0,
+        weekPurchases: 0, weekProfit: 0,
+        bevToday: { lines: [], totalQty: 0, totalCA: 0, totalCost: 0, totalProfit: 0 },
+        bevWeek: { lines: [], totalQty: 0, totalCA: 0, totalCost: 0, totalProfit: 0 },
+        bevMonth: { lines: [], totalQty: 0, totalCA: 0, totalCost: 0, totalProfit: 0 },
+        weekSalesTotal: 0, lowStockCount: 0, employeeCount: 0, activeOrders: 0,
+        freeTables: 0, occupiedTables: 0, weeklyData: [], weekValues: [],
+        recentSales: [], activeOrdersList: [], topProducts: [], aiAlerts: [], dataPartial: true,
+      };
+
+      // Sécurité : jamais rester sur « Chargement... » plus de 5 s
+      const safety = window.setTimeout(() => {
+        if (!cancelled) {
+          setData((prev) => prev ?? emptyFallback);
+          setLoading(false);
+          setError((e) => e || 'Chargement incomplet — vérifiez la connexion puis actualisez.');
+        }
+      }, 5000);
+
+      try {
+      const today = todayISO();
+
+      const [salesRes, expensesRes, productsRes, employeesRes, ordersRes, recentRes, tablesRes, weekSalesRes] =
+        await Promise.all([
+          supabase.from('sales').select('total').eq('establishment_id', estId).gte('created_at', today),
+          supabase.from('expenses').select('amount').eq('establishment_id', estId).gte('created_at', today),
+          supabase.from('products').select('id, stock, min_stock, name').eq('establishment_id', estId),
+          supabase.from('employees').select('id').eq('establishment_id', estId).eq('status', 'active'),
+          supabase.from('orders').select('*').eq('establishment_id', estId).in('status', ['pending', 'preparing', 'ready']),
+          supabase.from('sales').select('*').eq('establishment_id', estId).order('created_at', { ascending: false }).limit(5),
+          supabase.from('restaurant_tables').select('status').eq('establishment_id', estId),
+          supabase.from('sales').select('total, created_at, product_id').eq('establishment_id', estId).gte('created_at', new Date(Date.now() - 7 * 86400000).toISOString()),
+        ]);
+
+      const queryErrors = [salesRes, expensesRes, productsRes, weekSalesRes]
+        .map((r) => r.error?.message)
+        .filter(Boolean);
+      const dataPartial = queryErrors.length > 0;
+      if (dataPartial) {
+        const raw = String(queryErrors[0] || '');
+        const network =
+          /failed to fetch|network|timeout|offline|load failed/i.test(raw) ||
+          (typeof navigator !== 'undefined' && !navigator.onLine);
+        setError(
+          network
+            ? 'Connexion instable — chiffres partiels. Réessayez dès que le réseau revient.'
+            : 'Certaines données n’ont pas pu être chargées. Tirez pour actualiser.'
+        );
+      }
+
+      const todaySales = (salesRes.data ?? []).reduce((s, x) => s + Number(x.total), 0);
+      const todayExpenses = (expensesRes.data ?? []).reduce((s, x) => s + Number(x.amount), 0);
+
+      // Comptabilité mois en cours + valeur stock
+      const monthStart = new Date();
+      monthStart.setDate(1);
+      monthStart.setHours(0, 0, 0, 0);
+      const [monthSalesRes, monthExpRes, stockValRes, purchRes] = await Promise.all([
+        supabase.from('sales').select('total').eq('establishment_id', estId).gte('created_at', monthStart.toISOString()),
+        supabase.from('expenses').select('amount').eq('establishment_id', estId).gte('created_at', monthStart.toISOString()),
+        supabase.from('products').select('stock, cost').eq('establishment_id', estId),
+        supabase.from('purchases').select('total').eq('establishment_id', estId).gte('created_at', monthStart.toISOString()),
+      ]);
+      const monthSales = (monthSalesRes.data ?? []).reduce((s, x) => s + Number(x.total || 0), 0);
+      const monthExpenses = (monthExpRes.data ?? []).reduce((s, x) => s + Number(x.amount || 0), 0);
+      const monthPurchases = (purchRes.data ?? []).reduce((s, x) => s + Number(x.total || 0), 0);
+      const stockValue = (stockValRes.data ?? []).reduce(
+        (s, p) => s + (Number(p.stock) || 0) * (Number(p.cost) || 0),
+        0
+      );
+      // Bénéfice = marge rapports (pas ventes − achats)
+      const mon = mondayOfISO(today);
+      const [todayProfitRep, weekProfitRep, monthProfitRep, fonds] = await Promise.all([
+        loadBeverageProfitForRange(estId, today, today),
+        loadBeverageProfitForRange(estId, mon, today),
+        loadBeverageProfitForRange(estId, monthStart.toISOString().slice(0, 10), today),
+        loadFondsCommerce(estId),
+      ]);
+      const monthProfit = monthProfitRep.totalProfit;
+      const todayCogs = todayProfitRep.totalCost;
+      const weekProfitMargin = weekProfitRep.totalProfit;
+      const weekPurchases = monthPurchases; // conservé pour affichage séparément
+      const weekExpenses = 0;
+      const stockValueFonds = fonds.stockValueAtCost;
+
+      const products = productsRes.data ?? [];
+      const lowStockItems = products.filter((p) => Number(p.stock) <= Number(p.min_stock));
+      const lowStock = lowStockItems.length;
+      const tables = tablesRes.data ?? [];
+      const freeTables = tables.filter((t) => t.status === 'free').length;
+      const occupiedTables = tables.filter((t) => t.status === 'occupied').length;
+
+      const toLocalDay = (iso: string) => {
+        const d = new Date(iso);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+      };
+
+      const weeklyData: { label: string; value: number }[] = [];
+      const weekValues: number[] = [];
+      for (let i = 6; i >= 0; i--) {
+        const date = new Date();
+        date.setHours(12, 0, 0, 0);
+        date.setDate(date.getDate() - i);
+        const dayStr = toLocalDay(date.toISOString());
+        const label = date.toLocaleDateString('fr-FR', { weekday: 'short' });
+        const sum = (weekSalesRes.data ?? [])
+          .filter((s) => s.created_at && toLocalDay(s.created_at) === dayStr)
+          .reduce((a, b) => a + Number(b.total), 0);
+        weeklyData.push({ label, value: sum });
+        weekValues.push(sum);
+      }
+      const weekSalesTotal = weekValues.reduce((a, b) => a + b, 0);
+      const weekProfit = weekProfitMargin;
+
+      const aiAlerts: string[] = [];
+      for (const p of lowStockItems.slice(0, 5)) {
+        const st = Number(p.stock);
+        const min = Number(p.min_stock) || 1;
+        if (st <= 0) aiAlerts.push(`Rupture : ${p.name}`);
+        else aiAlerts.push(`Stock bas : ${p.name} (${st} restant, seuil ${min})`);
+      }
+      if (weekSalesTotal > 0 && todaySales === 0) {
+        aiAlerts.push('Aucune vente enregistrée aujourd\'hui alors que la semaine est active.');
+      }
+      if (todayExpenses > todaySales && todaySales > 0) {
+        aiAlerts.push('Dépenses du jour supérieures aux ventes — marge négative.');
+      }
+
+      const prodRev: Record<string, number> = {};
+      for (const s of weekSalesRes.data ?? []) {
+        if (s.product_id) prodRev[s.product_id] = (prodRev[s.product_id] ?? 0) + Number(s.total);
+      }
+      const topProducts = Object.entries(prodRev).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([id, revenue]) => ({
+        name: (productsRes.data ?? []).find((p) => p.id === id)?.name ?? 'Produit',
+        revenue,
+      }));
+
+      if (!cancelled) {
+        const [bevToday, bevWeek, bevMonth] = await Promise.all([
+          loadBeverageProfitFromReports(estId, dateDaysAgo(0)),
+          loadBeverageProfitFromReports(estId, dateDaysAgo(6)),
+          loadBeverageProfitFromReports(estId, monthStartISO()),
+        ]);
+
+        setData({
+          todaySales, todayExpenses, todayProfit: todayProfitRep.totalProfit,
+          weekSalesTotal, lowStockCount: lowStock,
+          employeeCount: employeesRes.data?.length ?? 0, activeOrders: ordersRes.data?.length ?? 0,
+          freeTables, occupiedTables, weeklyData, weekValues,
+          recentSales: (recentRes.data ?? []) as Sale[],
+          activeOrdersList: (ordersRes.data ?? []) as Order[],
+          topProducts,
+          aiAlerts,
+          dataPartial,
+          monthSales,
+          monthExpenses,
+          monthPurchases,
+          monthProfit: monthProfitRep.totalProfit,
+          stockValue: stockValueFonds,
+          todayCogs,
+          weekExpenses,
+          weekPurchases,
+          weekProfit,
+          bevToday,
+          bevWeek,
+          bevMonth,
+        });
+      }
+      } catch (e) {
+        setError("Impossible de charger le tableau de bord");
+        console.error(e);
+        if (!cancelled) {
+          setData({
+            todaySales: 0, todayExpenses: 0, todayProfit: 0, monthSales: 0, monthExpenses: 0, monthPurchases: 0, monthProfit: 0, stockValue: 0, todayCogs: 0, weekExpenses: 0, weekPurchases: 0, weekProfit: 0, bevToday: { lines: [], totalQty: 0, totalCA: 0, totalCost: 0, totalProfit: 0 }, bevWeek: { lines: [], totalQty: 0, totalCA: 0, totalCost: 0, totalProfit: 0 }, bevMonth: { lines: [], totalQty: 0, totalCA: 0, totalCost: 0, totalProfit: 0 }, weekSalesTotal: 0, lowStockCount: 0,
+            employeeCount: 0, activeOrders: 0, freeTables: 0, occupiedTables: 0,
+            weeklyData: [], weekValues: [], recentSales: [], activeOrdersList: [], topProducts: [],
+            aiAlerts: [], dataPartial: true,
+          });
+        }
+      } finally {
+        window.clearTimeout(safety);
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeEstablishment?.id, member?.establishment_id]);
+
+  // Établissement : cache local immédiat (évite écran « Chargement… » permanent)
+  let cachedEstId: string | null = null;
+  let cachedEstName: string | null = null;
+  try {
+    const uid = member?.user_id;
+    const raw =
+      (uid && localStorage.getItem(`mm_active_est:${uid}`)) ||
+      localStorage.getItem('mm_active_est');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed?.id) {
+        cachedEstId = String(parsed.id);
+        cachedEstName = parsed.name || null;
+      }
+    }
+  } catch { /* */ }
+
+  const estId = activeEstablishment?.id || member?.establishment_id || cachedEstId;
+
+  // Retry auto établissement — refresh via ref pour ne pas relancer l'effet à chaque rendu
+  const refreshRef = useRef(refresh);
+  refreshRef.current = refresh;
+  useEffect(() => {
+    if (estId) return;
+    let n = 0;
+    const t = window.setInterval(() => {
+      n += 1;
+      void refreshRef.current?.();
+      if (n >= 8) window.clearInterval(t);
+    }, 600);
+    return () => window.clearInterval(t);
+  }, [estId]);
+
+  if (!estId) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="animate-spin text-amber-500" size={24} />
+      </div>
+    );
+  }
+  // Pas d'écran plein « Chargement du tableau de bord » en boucle :
+  // on affiche la coquille (ExploitationDayCard etc.) dès que possible.
+  if (loading && !data) {
+    return (
+      <div className="space-y-4">
+        <ExploitationDayCard />
+        <div className="rounded-2xl border border-stone-800 bg-stone-900/50 px-4 py-8 text-center text-sm text-stone-400">
+          Préparation des indicateurs…
+        </div>
+      </div>
+    );
+  }
+  if (!data) {
+    return (
+      <EmptyState
+        icon={<LayoutDashboard size={48} />}
+        title="Tableau de bord"
+        message="Aucune donnée pour le moment. Ajoutez du stock ou enregistrez une vente."
+      />
+    );
+  }
+
+  const shortcuts =
+    bizType === 'depot' ? [
+      { to: '/depot/deliveries', label: 'Livraisons', icon: Truck },
+      { to: '/depot/clients', label: 'Clients', icon: Users },
+      { to: '/depot/tours', label: 'Tournées', icon: Truck },
+      { to: '/depot/creances', label: 'Créances', icon: DollarSign },
+    ] : bizType === 'restaurant' ? [
+      { to: '/tables', label: 'Salle', icon: LayoutDashboard },
+      { to: '/menu-carte', label: 'Carte', icon: Receipt },
+      { to: '/kitchen', label: 'Cuisine', icon: UtensilsCrossed },
+      { to: '/reservations', label: 'Réservations', icon: Receipt },
+    ] : bizType === 'maquis' ? [
+      { to: '/live-sales', label: 'Ventes journée', icon: ShoppingCart },
+      { to: '/pos', label: ui.posTitle, icon: ShoppingCart },
+      { to: '/inventory', label: ui.shortcutInventory, icon: Package },
+      { to: '/daily-report', label: 'Point du soir', icon: TrendingUp },
+    ] : bizType === 'complexe' ? [
+      { to: '/hotel', label: 'Établissement', icon: LayoutDashboard },
+      { to: '/hotel/rooms', label: 'Chambres', icon: LayoutDashboard },
+      { to: '/hotel/reservations', label: 'Réservations', icon: Receipt },
+      { to: '/pos', label: 'Caisse', icon: ShoppingCart },
+    ] : bizType === 'location_event' ? [
+      { to: '/rent/equipment', label: 'Matériel', icon: Package },
+      { to: '/rent/orders', label: 'Commandes', icon: Receipt },
+      { to: '/rent/calendar', label: 'Calendrier', icon: LayoutDashboard },
+      { to: '/rent/clients', label: 'Clients', icon: Users },
+    ] : [
+      { to: '/pos', label: ui.posTitle, icon: ShoppingCart },
+      { to: '/inventory', label: ui.shortcutInventory, icon: Package },
+      { to: '/expenses', label: 'Dépenses', icon: DollarSign },
+      { to: '/daily-report', label: 'Clôture', icon: TrendingUp },
+    ];
+
+  return (
+    <div>
+      <DashboardOrdersPanel />
+      <OwnerSitesBar />
+      <ExploitationDayCard />
+      {error && (
+        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-sm text-amber-900 dark:text-amber-100 mb-3">
+          {error}
+        </div>
+      )}
+      <div className="flex flex-wrap items-end justify-between gap-3 mb-6">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wide" style={{ color: theme.primary }}>Mode {bizType === 'complexe' && estServices.length
+            ? `Établissement · ${estServices.map((s) => ({ maquis: 'Maquis', restaurant: 'Resto', chambres: 'Chambres', location: 'Location', magasin: 'Magasin' } as Record<string, string>)[s] || s).join(' · ')}`
+            : BUSINESS_LABELS[bizType]}</p>
+          <h1 className="text-2xl font-bold font-display text-stone-100">{activeEstablishment?.name ?? 'Tableau de bord'}</h1>
+          <p className="text-stone-400 text-sm">Vue d&apos;évolution de votre activité</p>
+        </div>
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium" style={{ background: theme.primarySoft, color: theme.primary }}>
+          <Sparkline values={data.weekValues} color={theme.primary} />
+          7 jours
+        </div>
+      </div>
+
+      <QuickActions businessType={activeEstablishment?.type} />
+      <StartupGuide compact />
+      <ExchangeRatesCard />
+      <SectorNews businessType={activeEstablishment?.type} />
+
+{canSeeFinance && (activeEstablishment?.id || member?.establishment_id) && (
+        <OwnerReportCalendar establishmentId={(activeEstablishment?.id || member?.establishment_id)!} />
+      )}
+
+{canSeeFinance && (
+      <>
+      {/* Comptabilité */}
+      <div className="mb-6 rounded-2xl border border-stone-800 bg-stone-900/60 p-4 theme-card-light">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <div>
+            <h2 className="text-lg font-semibold text-stone-100">Comptabilité</h2>
+            <p className="text-xs text-stone-500">Chiffres de gestion — appuyez sur une carte pour ouvrir</p>
+          </div>
+          <Link to="/accounting" className="text-sm text-amber-400 hover:underline">
+            Voir détail →
+          </Link>
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <DashLink to="/pos"><StatCard title="CA du jour" value={formatFCFA(data.todaySales)} icon={<DollarSign size={20} />} /></DashLink>
+          <DashLink to="/expenses"><StatCard title="Dépenses du jour" value={formatFCFA(data.todayExpenses)} icon={<DollarSign size={20} />} /></DashLink>
+          <DashLink to="/accounting"><StatCard title="Résultat du jour" value={formatFCFA(data.todayProfit)} icon={<TrendingUp size={20} />} /></DashLink>
+          <DashLink to="/statistics"><StatCard title="CA 7 jours" value={formatFCFA(data.weekSalesTotal)} icon={<TrendingUp size={20} />} /></DashLink>
+          <DashLink to="/accounting"><StatCard title="CA du mois" value={formatFCFA(data.monthSales ?? 0)} icon={<TrendingUp size={20} />} /></DashLink>
+          <DashLink to="/expenses"><StatCard title="Dépenses du mois" value={formatFCFA(data.monthExpenses ?? 0)} icon={<DollarSign size={20} />} /></DashLink>
+          <DashLink to="/inventory"><StatCard title="Achats stock (mois)" value={formatFCFA(data.monthPurchases ?? 0)} icon={<Package size={20} />} /></DashLink>
+        </div>
+        <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <DashLink to="/accounting" className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3">
+            <p className="text-emerald-200/80 text-xs uppercase tracking-wide">Bénéfice (marge) — semaine (7 j) →</p>
+            <p className={`text-2xl font-bold mt-1 ${(data.weekProfit ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+              {formatFCFA(data.weekProfit ?? 0)}
+            </p>
+            <p className="text-[11px] text-stone-500 mt-1">
+              CA {formatFCFA(data.weekSalesTotal)} − dépenses {formatFCFA(data.weekExpenses ?? 0)} − achats {formatFCFA(data.weekPurchases ?? 0)}
+            </p>
+          </DashLink>
+          <DashLink to="/accounting" className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+            <p className="text-amber-200/80 text-xs uppercase tracking-wide">Bénéfice (marge) — mois →</p>
+            <p className={`text-2xl font-bold mt-1 ${(data.monthProfit ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+              {formatFCFA(data.monthProfit ?? 0)}
+            </p>
+            <p className="text-[11px] text-stone-500 mt-1">
+              CA {formatFCFA(data.monthSales ?? 0)} − dépenses {formatFCFA(data.monthExpenses ?? 0)} − achats {formatFCFA(data.monthPurchases ?? 0)}
+            </p>
+          </DashLink>
+        </div>
+      </div>
+
+      {/* Sorties boissons & bénéfice auto (rapports du jour) */}
+      <div className="mb-6 rounded-2xl border border-stone-800 bg-stone-900/60 p-4 theme-card-light">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <div>
+            <h2 className="text-lg font-semibold text-stone-100">Sorties boissons &amp; bénéfice</h2>
+            <p className="text-xs text-stone-500">
+              Calcul auto : rapports du jour + ventes caisse × (prix vente − prix achat)
+            </p>
+          </div>
+          <Link to="/daily-report" className="text-sm text-amber-400 hover:underline">
+            Rapport du jour →
+          </Link>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+          {[
+            { label: "Aujourd'hui", r: data.bevToday },
+            { label: '7 jours', r: data.bevWeek },
+            { label: 'Mois', r: data.bevMonth },
+          ].map((b) => (
+            <div key={b.label} className="rounded-xl border border-stone-700 bg-stone-800/50 px-3 py-3 theme-inner-card">
+              <p className="text-xs text-stone-500 uppercase">{b.label}</p>
+              <p className="text-stone-300 text-sm mt-1">{b.r?.totalQty ?? 0} sorties</p>
+              <p className="text-stone-400 text-xs">CA {formatFCFA(b.r?.totalCA ?? 0)}</p>
+              <p className={`text-lg font-bold mt-1 ${(b.r?.totalProfit ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                {formatFCFA(b.r?.totalProfit ?? 0)}
+              </p>
+              <p className="text-[11px] text-stone-500">bénéfice brut boissons</p>
+            </div>
+          ))}
+        </div>
+        {(data.bevToday?.lines?.length ?? 0) > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[480px]">
+              <thead>
+                <tr className="text-stone-500 text-left border-b border-stone-800">
+                  <th className="py-2">Boisson</th>
+                  <th className="py-2">Sorties (jour)</th>
+                  <th className="py-2">CA</th>
+                  <th className="py-2">Coût</th>
+                  <th className="py-2">Bénéfice</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(data.bevToday?.lines ?? []).slice(0, 12).map((l) => (
+                  <tr key={l.product_id} className="border-b border-stone-800/60">
+                    <td className="py-2 text-stone-200">{l.name}</td>
+                    <td className="py-2 text-stone-300">{l.qty_out}</td>
+                    <td className="py-2 text-stone-300">{formatFCFA(l.ca)}</td>
+                    <td className="py-2 text-stone-400">{formatFCFA(l.cost)}</td>
+                    <td className={`py-2 font-medium ${l.profit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {formatFCFA(l.profit)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="text-sm text-stone-500">
+            Aucune sortie boisson dans les rapports du jour pour aujourd&apos;hui. Faites la clôture pour alimenter ce rapport.
+          </p>
+        )}
+      </div>
+
+      <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="rounded-xl bg-stone-800/80 px-3 py-2 text-sm theme-inner-card">
+          <p className="text-stone-500 text-xs">Valeur du stock (au coût d&apos;achat)</p>
+          <p className="text-amber-300 font-semibold text-lg">{formatFCFA(data.stockValue ?? 0)}</p>
+        </div>
+        <div className="rounded-xl bg-stone-800/80 px-3 py-2 text-sm theme-inner-card">
+          <p className="text-stone-500 text-xs">Résultat du jour (CA − dépenses)</p>
+          <p className={`font-semibold text-lg ${(data.todayProfit ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+            {formatFCFA(data.todayProfit ?? 0)}
+          </p>
+        </div>
+      </div>
+      </>
+      )}
+
+      {/* Stats résumées — montants réservés au propriétaire */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+        {canSeeFinance ? (
+          <>
+        <StatCard title="Ventes du jour" value={formatFCFA(data.todaySales)} icon={<DollarSign size={20} />} />
+        <DashLink to="/statistics"><StatCard title="CA 7 jours" value={formatFCFA(data.weekSalesTotal)} icon={<TrendingUp size={20} />} /></DashLink>
+        <DashLink to="/expenses"><StatCard title="Dépenses du jour" value={formatFCFA(data.todayExpenses)} icon={<DollarSign size={20} />} /></DashLink>
+        <StatCard title="Bénéfice jour" value={formatFCFA(data.todayProfit)} icon={<TrendingUp size={20} />} />
+          </>
+        ) : (
+          <>
+        <StatCard title="Stock bas" value={String(data.lowStockCount)} icon={<AlertTriangle size={20} />} />
+        <StatCard title="Équipe" value={String(data.employeeCount)} icon={<Users size={20} />} />
+          </>
+        )}
+        {(false || false) && (
+          <StatCard title="Commandes actives" value={String(data.activeOrders)} icon={<Receipt size={20} />} />
+        )}
+        {false && (
+          <StatCard title="Tables" value={`${data.occupiedTables}/${data.occupiedTables + data.freeTables}`} icon={<LayoutDashboard size={20} />} />
+        )}
+        {(bizType === 'maquis' || bizType === 'magasin') && (
+          <StatCard title={ui.stockAlert} value={String(data.lowStockCount)} icon={<AlertTriangle size={20} />} />
+        )}
+        {bizType === 'magasin' && (
+          <StatCard title="Employés" value={String(data.employeeCount)} icon={<Users size={20} />} />
+        )}
+        {bizType === 'maquis' && (
+          <StatCard title="Résultat jour" value={formatFCFA(data.todayProfit)} icon={<TrendingUp size={20} />} />
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+
+      {bizType === 'restaurant' && restoStats && (
+        <section className="card p-4 space-y-3 mb-4">
+          <h2 className="font-semibold text-stone-100">Restaurant · aujourd&apos;hui</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
+            <div className="rounded-xl bg-stone-800/50 p-2">
+              <div className="text-lg font-bold text-amber-300">{restoStats.ordersCount}</div>
+              <div className="text-[10px] text-stone-400">Commandes encaissées</div>
+            </div>
+            <div className="rounded-xl bg-stone-800/50 p-2">
+              <div className="text-lg font-bold text-amber-300">{formatFCFA(restoStats.revenue)}</div>
+              <div className="text-[10px] text-stone-400">CA jour</div>
+            </div>
+            <div className="rounded-xl bg-stone-800/50 p-2">
+              <div className="text-lg font-bold text-amber-300">{formatFCFA(restoStats.avgTicket)}</div>
+              <div className="text-[10px] text-stone-400">Ticket moyen</div>
+            </div>
+            <div className="rounded-xl bg-stone-800/50 p-2">
+              <div className="text-lg font-bold text-amber-300">{Math.round(restoStats.occupancyRate * 100)}%</div>
+              <div className="text-[10px] text-stone-400">Occupation ({restoStats.tablesOccupied}/{restoStats.tablesTotal})</div>
+            </div>
+          </div>
+          {restoStats.topDishes.length > 0 && (
+            <div>
+              <p className="text-xs text-stone-400 mb-1">Plats les plus vendus</p>
+              <ul className="text-sm space-y-1">
+                {restoStats.topDishes.map((d) => (
+                  <li key={d.name} className="flex justify-between gap-2">
+                    <span className="truncate">{d.name}</span>
+                    <span className="text-stone-400 shrink-0">{d.qty} · {formatFCFA(d.revenue)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </section>
+      )}
+
+        {shortcuts.map((s) => {
+          const Icon = s.icon;
+          return (
+            <Link key={s.to} to={s.to} className="card flex items-center gap-3 hover:border-stone-600 transition-all">
+              <div className="p-2 rounded-xl" style={{ background: theme.primarySoft, color: theme.primary }}><Icon size={18} /></div>
+              <span className="font-medium text-stone-200 text-sm">{s.label}</span>
+              <ArrowRight size={14} className="ml-auto text-stone-600" />
+            </Link>
+          );
+        })}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+        <DashLink to="/statistics" className="block">
+        <div className={`card bg-gradient-to-br ${theme.gradient} h-full`}>
+          <h2 className="font-semibold text-stone-100 mb-1">Évolution des ventes (7 j) →</h2>
+          <p className="text-xs text-stone-500 mb-3">Graphique {BUSINESS_LABELS[bizType]}</p>
+          <BarChart data={data.weeklyData} color={theme.primary} height={140} />
+          <p className="text-xs text-stone-400 mt-2">Appuyer pour statistiques détaillées</p>
+        </div>
+        </DashLink>
+        <DashLink to="/inventory" className="block">
+        <div className="card h-full">
+          <h2 className="font-semibold text-stone-100 mb-3">{false ? 'Commandes en cours' : 'Top produits (7 j)'} →</h2>
+          {false && data.activeOrdersList.length > 0 ? (
+            <ul className="space-y-2">
+              {data.activeOrdersList.slice(0, 5).map((o) => (
+                <li key={o.id} className="flex justify-between text-sm text-stone-300">
+                  <span>Table {o.table_number ?? '—'} · {o.status}</span>
+                  <span className="font-medium">{formatFCFA(Number(o.total))}</span>
+                </li>
+              ))}
+            </ul>
+          ) : data.topProducts.length > 0 ? (
+            <ul className="space-y-2">
+              {data.topProducts.map((p, i) => (
+                <li key={i} className="flex justify-between text-sm">
+                  <span className="text-stone-300">{p.name}</span>
+                  <span className="font-medium" style={{ color: theme.primary }}>{formatFCFA(p.revenue)}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-stone-500">Pas encore assez de données.</p>
+          )}
+        </div>
+        </DashLink>
+      </div>
+
+      
+      {data.aiAlerts.length > 0 && (
+        <DashLink to="/inventory" className="mb-6">
+        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 space-y-2">
+          <p className="text-sm font-semibold text-amber-200">Alertes IA — GESMAK →</p>
+          <ul className="space-y-1">
+            {data.aiAlerts.map((a, i) => (
+              <li key={i} className="text-sm text-amber-100/90">⚠️ {a}</li>
+            ))}
+          </ul>
+        </div>
+        </DashLink>
+      )}
+
+      {data.lowStockCount > 0 && (
+        <DashLink to="/inventory">
+        <div className="card border border-warning-500/30 bg-warning-500/5 flex items-start gap-3">
+          <AlertTriangle className="text-warning-400 shrink-0" size={20} />
+          <div>
+            <p className="font-medium text-stone-100">{data.lowStockCount} produit(s) sous le seuil</p>
+            <span className="text-sm text-primary-400">Voir l&apos;inventaire →</span>
+          </div>
+        </div>
+        </DashLink>
+      )}
+    </div>
+  );
+}

@@ -1,0 +1,6 @@
+{
+  "name": "GESMAK",
+  "description": "Gestion simplifiée, business maîtrisé — Stock, caisse multi-pôles, complexe hôtelier et suivi d'équipe.",
+  "requestFramePermissions": ["camera", "microphone", "geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

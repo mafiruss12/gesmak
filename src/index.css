@@ -1,0 +1,1136 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-bg: #0D0D0D;
+  --color-surface: #1a1612;
+  --color-border: #2a241e;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Inter', system-ui, sans-serif;
+  background: #0D0D0D;
+  color: #f5f5f4;
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1a1612;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #3a3028;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #4a3f34;
+}
+
+@layer components {
+  .btn-primary {
+    @apply px-4 py-2.5 rounded-xl bg-primary-500 text-white font-semibold transition-all hover:bg-primary-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-secondary {
+    @apply px-4 py-2.5 rounded-xl bg-secondary-600 text-white font-semibold transition-all hover:bg-secondary-700 active:scale-95;
+  }
+
+  .btn-danger {
+    @apply px-4 py-2.5 rounded-xl bg-error-600 text-white font-semibold transition-all hover:bg-error-700 active:scale-95;
+  }
+
+  .btn-ghost {
+    @apply px-4 py-2.5 rounded-xl bg-transparent text-stone-300 font-medium transition-all hover:bg-stone-800 active:scale-95;
+  }
+
+  .input-field {
+    @apply w-full px-4 py-2.5 rounded-xl bg-stone-900 border border-stone-700 text-stone-100 placeholder-stone-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all;
+  }
+
+  .card {
+    @apply bg-stone-900 border border-stone-800 rounded-2xl p-5;
+  }
+
+  .label {
+    @apply block text-sm font-medium text-stone-300 mb-1.5;
+  }
+}
+
+
+/* Menu latéral — sections animées */
+@keyframes nav-section-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+@keyframes nav-icon-wiggle {
+  0%, 100% { transform: rotate(0deg) scale(1); }
+  25% { transform: rotate(-8deg) scale(1.08); }
+  75% { transform: rotate(8deg) scale(1.08); }
+}
+@keyframes nav-shimmer {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+@keyframes nav-pulse-soft {
+  0%, 100% { opacity: 0.85; }
+  50% { opacity: 1; }
+}
+.nav-section-card {
+  border-radius: 1rem;
+  padding: 0.35rem;
+  margin-bottom: 0.25rem;
+  border: 1px solid transparent;
+  background: linear-gradient(145deg, rgba(28,25,23,0.9), rgba(41,37,36,0.6));
+}
+.nav-section-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 0.75rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 0.25rem;
+  background-size: 200% 100%;
+  animation: nav-shimmer 6s linear infinite, nav-pulse-soft 3s ease-in-out infinite;
+}
+.nav-section-emoji {
+  font-size: 1.05rem;
+  line-height: 1;
+  animation: nav-section-float 2.8s ease-in-out infinite;
+  display: inline-block;
+}
+.nav-item-link .nav-item-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.65rem;
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+/* Partie 6 — focus / hover menu discret */
+.nav-item-link {
+  transition: transform 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease;
+}
+.nav-item-link:hover {
+  transform: translateX(2px);
+}
+.nav-item-link:focus-visible {
+  outline: 2px solid rgba(245, 158, 11, 0.55);
+  outline-offset: 2px;
+}
+.nav-item-link.active {
+  box-shadow: inset 3px 0 0 rgba(245, 158, 11, 0.85);
+}
+@media (prefers-reduced-motion: reduce) {
+  .nav-item-link:hover { transform: none; }
+}
+
+.nav-item-link:hover .nav-item-icon {
+  animation: nav-icon-wiggle 0.6s ease;
+}
+.nav-item-link.active .nav-item-icon {
+  animation: nav-icon-wiggle 1.2s ease-in-out infinite;
+}
+
+
+/* ========== Mode jour — style type app Orange (fond clair, orange vif) ========== */
+html.theme-light,
+html[data-theme='light'] {
+  --color-bg: #F5F5F5;
+  --color-surface: #ffffff;
+  --color-border: #E8E8E8;
+  --color-text: #1A1A1A;
+  --color-muted: #666666;
+  --color-accent: #FF7900;
+  --color-accent-soft: #FFF3E6;
+  --color-cta: #FF7900;
+  --color-primary: #FF7900;
+  --color-primary-deep: #E56A00;
+  color-scheme: light;
+}
+
+html.theme-light body,
+html[data-theme='light'] body {
+  background: #F5F5F5 !important;
+  color: #1A1A1A !important;
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif !important;
+}
+
+/* —— Fonds mode jour : blanc / gris très clair (plus de cartes noires) —— */
+html.theme-light .bg-stone-950,
+html.theme-light .bg-stone-950\/40,
+html.theme-light .bg-stone-950\/50,
+html.theme-light .bg-stone-950\/60,
+html.theme-light .bg-stone-950\/70,
+html.theme-light .bg-stone-950\/80,
+html.theme-light .bg-stone-950\/90,
+html[data-theme='light'] .bg-stone-950,
+html[data-theme='light'] [class*="bg-stone-950"] {
+  background-color: #F5F5F5 !important;
+}
+
+html.theme-light .bg-stone-900,
+html.theme-light .bg-stone-900\/40,
+html.theme-light .bg-stone-900\/50,
+html.theme-light .bg-stone-900\/60,
+html.theme-light .bg-stone-900\/70,
+html.theme-light .bg-stone-900\/80,
+html.theme-light .bg-stone-900\/90,
+html.theme-light .bg-stone-900\/95,
+html[data-theme='light'] .bg-stone-900,
+html.theme-light [class*="bg-stone-900"],
+html[data-theme='light'] [class*="bg-stone-900"] {
+  background-color: #ffffff !important;
+}
+
+html.theme-light .bg-stone-800,
+html.theme-light .bg-stone-800\/40,
+html.theme-light .bg-stone-800\/50,
+html.theme-light .bg-stone-800\/60,
+html.theme-light .bg-stone-800\/70,
+html.theme-light .bg-stone-800\/80,
+html.theme-light .bg-stone-800\/90,
+html[data-theme='light'] .bg-stone-800,
+html.theme-light [class*="bg-stone-800"],
+html[data-theme='light'] [class*="bg-stone-800"] {
+  background-color: #F7F7F7 !important;
+}
+
+html.theme-light .bg-stone-700,
+html.theme-light .bg-stone-700\/40,
+html.theme-light .bg-stone-700\/50,
+html.theme-light [class*="bg-stone-700"] {
+  background-color: #EEEEEE !important;
+}
+
+html.theme-light .bg-black\/40,
+html.theme-light .bg-black\/50,
+html.theme-light .bg-black\/60,
+html.theme-light .bg-black\/70 {
+  background-color: rgba(0, 0, 0, 0.25) !important;
+}
+
+/* listes inventaire / tableaux */
+html.theme-light .divide-stone-800,
+html.theme-light .divide-stone-800\/80 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #E8E8E8 !important;
+}
+
+html.theme-light .hover\:bg-stone-800\/40:hover,
+html.theme-light .hover\:bg-stone-800:hover,
+html.theme-light .hover\:bg-stone-700:hover {
+  background-color: #F0F0F0 !important;
+}
+
+/* tuiles internes (valeur stock, stats) */
+html.theme-light .theme-inner-card {
+  background-color: #ffffff !important;
+  border-color: #EEEEEE !important;
+}
+
+/* —— Bordures —— */
+html.theme-light .border-stone-700,
+html.theme-light .border-stone-800,
+html.theme-light .border-stone-900,
+html.theme-light .border-stone-800\/80,
+html[data-theme='light'] .border-stone-700,
+html[data-theme='light'] .border-stone-800 {
+  border-color: #E8E8E8 !important;
+}
+
+/* —— Textes —— */
+html.theme-light .text-stone-100,
+html.theme-light .text-stone-200,
+html.theme-light .text-white,
+html[data-theme='light'] .text-stone-100,
+html[data-theme='light'] .text-stone-200,
+html[data-theme='light'] .text-white {
+  color: #1A1A1A !important;
+}
+
+html.theme-light .text-stone-300,
+html[data-theme='light'] .text-stone-300 {
+  color: #333333 !important;
+}
+
+html.theme-light .text-stone-400,
+html[data-theme='light'] .text-stone-400 {
+  color: #666666 !important;
+}
+
+html.theme-light .text-stone-500,
+html.theme-light .text-stone-600,
+html[data-theme='light'] .text-stone-500 {
+  color: #888888 !important;
+}
+
+/* Accents orange — toujours lisibles sur fond clair */
+html.theme-light .text-amber-50,
+html.theme-light .text-amber-100,
+html.theme-light .text-amber-100\/90,
+html.theme-light .text-amber-200,
+html.theme-light .text-amber-200\/80,
+html.theme-light .text-amber-200\/90,
+html.theme-light .text-amber-300,
+html.theme-light .text-amber-400,
+html.theme-light .text-amber-500,
+html.theme-light .text-amber-500\/90,
+html.theme-light .text-primary-300,
+html.theme-light .text-primary-400,
+html.theme-light .text-primary-500,
+html[data-theme='light'] .text-amber-100,
+html[data-theme='light'] .text-amber-200,
+html[data-theme='light'] .text-amber-300,
+html[data-theme='light'] .text-amber-400,
+html[data-theme='light'] .text-amber-500,
+html.theme-light [class*="text-amber-1"],
+html.theme-light [class*="text-amber-2"] {
+  color: #C2410C !important; /* orange foncé lisible */
+}
+
+html.theme-light .text-amber-600,
+html.theme-light .text-amber-700,
+html.theme-light .text-orange-600,
+html.theme-light .text-orange-700 {
+  color: #C2410C !important;
+}
+
+html.theme-light .bg-amber-500\/15,
+html.theme-light .bg-amber-500\/10,
+html.theme-light .bg-primary-600\/20 {
+  background-color: #FFF3E6 !important;
+}
+
+html.theme-light .border-amber-500,
+html.theme-light .border-amber-500\/30,
+html.theme-light .border-amber-500\/50 {
+  border-color: #FF7900 !important;
+}
+
+html.theme-light .bg-amber-500,
+html.theme-light .bg-primary-500,
+html.theme-light .bg-primary-600 {
+  background-color: #FF7900 !important;
+}
+
+/* —— Champs —— */
+html.theme-light .input-field,
+html[data-theme='light'] .input-field,
+html.theme-light input:not([type='checkbox']):not([type='radio']),
+html.theme-light select,
+html.theme-light textarea {
+  background-color: #ffffff !important;
+  color: #1A1A1A !important;
+  border: 1px solid #E0E0E0 !important;
+}
+
+html.theme-light input::placeholder,
+html.theme-light textarea::placeholder {
+  color: #AAAAAA !important;
+}
+
+/* —— Boutons —— */
+html.theme-light .btn-primary {
+  background-color: #FF7900 !important;
+  color: #ffffff !important;
+}
+html.theme-light .btn-primary:hover {
+  background-color: #E56A00 !important;
+}
+html.theme-light .btn-secondary {
+  background-color: #FF7900 !important;
+  color: #ffffff !important;
+  border-color: transparent !important;
+}
+html.theme-light .btn-ghost {
+  color: #666666 !important;
+}
+html.theme-light .btn-ghost:hover {
+  background-color: #F0F0F0 !important;
+}
+
+/* —— Cartes (tuiles blanches type Orange) —— */
+html.theme-light .card,
+html[data-theme='light'] .card {
+  background-color: #ffffff !important;
+  border: 1px solid #EEEEEE !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  border-radius: 16px;
+}
+
+/* —— Menu latéral clair —— */
+html.theme-light aside,
+html.theme-light .nav-section-card {
+  background: #ffffff !important;
+  border-color: #E8E8E8 !important;
+  box-shadow: none !important;
+}
+
+html.theme-light .nav-section-card {
+  background: #ffffff !important;
+  border: 1px solid #EEEEEE !important;
+}
+
+html.theme-light aside a,
+html.theme-light aside button,
+html.theme-light aside .text-stone-300,
+html.theme-light aside .text-stone-400 {
+  color: #333333 !important;
+  opacity: 1 !important;
+}
+
+html.theme-light aside a:hover,
+html.theme-light aside button:hover {
+  background-color: #FFF3E6 !important;
+  color: #1A1A1A !important;
+}
+
+html.theme-light aside a.active,
+html.theme-light aside a[aria-current='page'],
+html.theme-light aside .bg-primary-600\/20,
+html.theme-light .bg-primary-600\/20 {
+  background-color: #FFF3E6 !important;
+  color: #FF7900 !important;
+  font-weight: 600 !important;
+}
+
+html.theme-light aside .font-bold,
+html.theme-light aside .text-stone-100,
+html.theme-light aside h1,
+html.theme-light aside h2 {
+  color: #1A1A1A !important;
+}
+
+html.theme-light aside .rounded-xl,
+html.theme-light aside .rounded-2xl {
+  opacity: 1 !important;
+}
+
+html.theme-light .hover\:bg-stone-800:hover {
+  background-color: #F0F0F0 !important;
+}
+
+html.theme-light ::-webkit-scrollbar-track {
+  background: #F0F0F0;
+}
+html.theme-light ::-webkit-scrollbar-thumb {
+  background: #CCCCCC;
+}
+
+/* Menu — lisibilité mode jour */
+html.theme-light .nav-section-head {
+  background-image: none !important;
+  background-color: #FFF3E6 !important;
+  border: 1px solid #FFE0B8 !important;
+  color: #FF7900 !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.02em;
+}
+html.theme-light .nav-section-emoji {
+  filter: none !important;
+  opacity: 1 !important;
+}
+html.theme-light .nav-item-link {
+  color: #333333 !important;
+  opacity: 1 !important;
+  font-weight: 500 !important;
+}
+html.theme-light .nav-item-link:hover {
+  background-color: #FFF3E6 !important;
+  color: #1A1A1A !important;
+}
+html.theme-light .nav-item-link.active {
+  background-color: #FFF3E6 !important;
+  color: #FF7900 !important;
+  box-shadow: none !important;
+}
+html.theme-light .nav-item-icon {
+  background-color: #FFF3E6 !important;
+  color: #FF7900 !important;
+  opacity: 1 !important;
+}
+
+/* Header & barre du bas type app mobile */
+html.theme-light header {
+  background-color: #ffffff !important;
+  border-color: #E8E8E8 !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+html.theme-light footer,
+html.theme-light nav.fixed,
+html.theme-light .bottom-nav,
+html.theme-light [class*="bottom-0"][class*="fixed"] {
+  background-color: #ffffff !important;
+  color: #666666 !important;
+  border-color: #E8E8E8 !important;
+  box-shadow: 0 -1px 6px rgba(0,0,0,0.05);
+}
+
+/* Cartes dashboard */
+html.theme-light .theme-card-light,
+html[data-theme='light'] .theme-card-light {
+  background-color: #ffffff !important;
+  border-color: #EEEEEE !important;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+html.theme-light .theme-card-light h2,
+html.theme-light .theme-card-light .text-stone-100 {
+  color: #1A1A1A !important;
+}
+html.theme-light .theme-card-light .text-stone-500,
+html.theme-light .theme-card-light .text-stone-400 {
+  color: #666666 !important;
+}
+
+/* Tuiles actions rapides — fond blanc, icône orange */
+html.theme-light .bg-amber-500\/20,
+html.theme-light .bg-orange-500\/20 {
+  background-color: #FFF3E6 !important;
+}
+
+/* Sky / alertes */
+html.theme-light .bg-sky-500\/10,
+html.theme-light .bg-sky-50 {
+  background-color: #e0f2fe !important;
+}
+html.theme-light .text-sky-50,
+html.theme-light .text-sky-100,
+html.theme-light .text-sky-100\/90,
+html.theme-light .text-sky-200,
+html.theme-light .text-sky-200\/80,
+html.theme-light .text-sky-200\/70 {
+  color: #0c4a6e !important;
+}
+html.theme-light .text-sky-300 {
+  color: #0369a1 !important;
+}
+
+/* Emerald */
+html.theme-light .text-emerald-200,
+html.theme-light .text-emerald-300,
+html.theme-light .text-emerald-400 {
+  color: #047857 !important;
+}
+html.theme-light .bg-emerald-600\/30 {
+  background-color: #d1fae5 !important;
+  color: #065f46 !important;
+  border-color: #6ee7b7 !important;
+}
+html.theme-light .bg-red-600\/25 {
+  background-color: #fee2e2 !important;
+  color: #991b1b !important;
+  border-color: #fca5a5 !important;
+}
+html.theme-light .text-red-200 {
+  color: #b91c1c !important;
+}
+
+/* Bottom nav active = orange */
+html.theme-light .text-primary-500,
+html.theme-light [class*="text-primary"] {
+  color: #FF7900 !important;
+}
+
+
+.auth-logo-bg {
+  background: radial-gradient(ellipse at 50% 40%, rgba(37, 99, 235, 0.15), transparent 55%),
+    linear-gradient(160deg, #0c0a09 0%, #1c1917 50%, #0f172a 100%);
+}
+.auth-logo-bg-glow {
+  position: absolute;
+  inset: -20%;
+  background: radial-gradient(circle at 50% 45%, rgba(59, 130, 246, 0.18), transparent 50%);
+  animation: auth-glow-pulse 8s ease-in-out infinite;
+}
+.auth-logo-float {
+  animation-name: auth-logo-drift;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  filter: drop-shadow(0 0 24px rgba(59, 130, 246, 0.25));
+}
+.auth-logo-center {
+  animation: auth-logo-breathe 10s ease-in-out infinite;
+  filter: drop-shadow(0 0 40px rgba(37, 99, 235, 0.2));
+}
+@keyframes auth-logo-drift {
+  0%, 100% { transform: translateY(0) rotate(-4deg) scale(1); }
+  50% { transform: translateY(-28px) rotate(4deg) scale(1.06); }
+}
+@keyframes auth-logo-breathe {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.07; }
+  50% { transform: translate(-50%, -50%) scale(1.08); opacity: 0.14; }
+}
+@keyframes auth-glow-pulse {
+  0%, 100% { opacity: 0.7; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.05); }
+}
+html.theme-light .auth-logo-bg {
+  background: radial-gradient(ellipse at 50% 40%, rgba(59, 130, 246, 0.12), transparent 55%),
+    linear-gradient(160deg, #f8fafc 0%, #e2e8f0 100%) !important;
+}
+html.theme-light .auth-logo-float {
+  opacity: 0.18 !important;
+}
+html.theme-light .auth-logo-center {
+  opacity: 0.12 !important;
+}
+
+/* ========== Impression devis/facture BTP uniquement ========== */
+@media print {
+  html,
+  body {
+    background: white !important;
+    color: black !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Masquer toute la plateforme */
+  body.printing-btp-doc nav,
+  body.printing-btp-doc aside,
+  body.printing-btp-doc header,
+  body.printing-btp-doc .bottom-nav-maquis,
+  body.printing-btp-doc .brand-footer,
+  body.printing-btp-doc .no-print,
+  body.printing-btp-doc [data-no-print],
+  .no-print {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  body.printing-btp-doc * {
+    visibility: hidden;
+  }
+
+  body.printing-btp-doc .btp-print-root,
+  body.printing-btp-doc .btp-print-root *,
+  body.printing-btp-doc .btp-print-sheet,
+  body.printing-btp-doc .btp-print-sheet * {
+    visibility: visible !important;
+  }
+
+  body.printing-btp-doc .btp-print-root {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    background: white !important;
+  }
+
+  body.printing-btp-doc .btp-print-sheet {
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 12mm !important;
+  }
+}
+
+
+/* —— Calendrier des points + Guide démarrage (mode jour Crème & Ambre) —— */
+html.theme-light .cal-points-card,
+html[data-theme='light'] .cal-points-card {
+  background: #ffffff !important;
+  border-color: #E8DFD0 !important;
+  box-shadow: 0 2px 8px rgba(44, 36, 22, 0.06);
+}
+html.theme-light .cal-points-card h2,
+html.theme-light .cal-points-card .text-stone-100,
+html.theme-light .cal-points-card .text-stone-200 {
+  color: #2C2416 !important;
+}
+html.theme-light .cal-points-card .text-amber-400,
+html.theme-light .cal-points-card .text-amber-200 {
+  color: #C47A12 !important;
+}
+html.theme-light .cal-day-ok {
+  background-color: #ecfdf5 !important;
+  color: #047857 !important;
+  border-color: #6ee7b7 !important;
+}
+html.theme-light .cal-day-miss {
+  background-color: #fef2f2 !important;
+  color: #b91c1c !important;
+  border-color: #fca5a5 !important;
+}
+html.theme-light .cal-day-future {
+  background-color: #F7F0E6 !important;
+  color: #8A7B6B !important;
+}
+
+html.theme-light .startup-guide-card,
+html[data-theme='light'] .startup-guide-card {
+  background: linear-gradient(145deg, #ffffff, #FBF7F0) !important;
+  border-color: #E89B2D !important;
+  box-shadow: 0 2px 10px rgba(196, 122, 18, 0.08);
+}
+html.theme-light .startup-guide-card h2,
+html.theme-light .startup-guide-card .text-stone-100 {
+  color: #2C2416 !important;
+}
+html.theme-light .startup-guide-card .text-stone-400 {
+  color: #6B5E4F !important;
+}
+html.theme-light .startup-guide-card .bg-stone-800,
+html.theme-light .startup-guide-card .bg-stone-950\/40 {
+  background-color: #F7F0E6 !important;
+}
+
+
+/* —— Auth page toujours lisible (fond clair) —— */
+.auth-form-card h1,
+.auth-form-card .label {
+  color: #1A1A1A !important;
+}
+.auth-form-card .text-stone-100,
+.auth-form-card .text-stone-200 {
+  color: #1A1A1A !important;
+}
+.auth-form-card .text-stone-400,
+.auth-form-card .text-stone-500 {
+  color: #666666 !important;
+}
+.auth-form-card .input-field {
+  background: #ffffff !important;
+  color: #1A1A1A !important;
+  border: 1px solid #E0E0E0 !important;
+  padding-top: 0.75rem !important;
+  padding-bottom: 0.75rem !important;
+}
+.auth-form-card .btn-primary {
+  background: #FF7900 !important;
+  color: #fff !important;
+}
+
+/* Mode jour : supprimer les cartes dégradé sombre */
+html.theme-light .from-amber-950\/50,
+html.theme-light .from-stone-900,
+html.theme-light .via-stone-900\/80,
+html.theme-light .to-stone-950,
+html.theme-light [class*="from-amber-950"],
+html.theme-light [class*="from-stone-900"] {
+  --tw-gradient-from: #ffffff !important;
+  --tw-gradient-to: #ffffff !important;
+  --tw-gradient-stops: #ffffff, #ffffff !important;
+  background-image: none !important;
+  background-color: #ffffff !important;
+}
+html.theme-light .bg-stone-900\/90,
+html.theme-light .bg-stone-900\/80 {
+  background-color: #ffffff !important;
+}
+
+
+/* ========== Mode jour — filet de sécurité global ========== */
+html.theme-light main,
+html[data-theme='light'] main {
+  background-color: #F5F5F5 !important;
+}
+
+/* Cartes / listes inventaire, finance, gestion */
+html.theme-light ul.rounded-2xl,
+html.theme-light .rounded-2xl.border.border-stone-800,
+html.theme-light div.rounded-2xl.border {
+  background-color: #ffffff !important;
+}
+
+html.theme-light .rounded-xl.bg-stone-800\/80,
+html.theme-light .rounded-xl.bg-stone-800\/50,
+html.theme-light .rounded-xl.bg-stone-900\/60 {
+  background-color: #ffffff !important;
+  border-color: #EEEEEE !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+/* Badges OK restent verts lisibles */
+html.theme-light .text-emerald-300,
+html.theme-light .text-emerald-400,
+html.theme-light .text-green-400 {
+  color: #059669 !important;
+}
+
+/* Rupture reste visible */
+html.theme-light .text-red-300,
+html.theme-light .text-red-400,
+html.theme-light .bg-red-500\/20 {
+  color: #dc2626 !important;
+}
+
+/* Boutons primaires restent blanc sur orange */
+html.theme-light .btn-primary {
+  color: #ffffff !important;
+}
+
+
+/* ========== Mode jour — lisibilité forcée (tous établissements) ========== */
+html.theme-light,
+html[data-theme='light'] {
+  color: #1A1A1A;
+}
+
+/* Titres et textes principaux */
+html.theme-light h1,
+html.theme-light h2,
+html.theme-light h3,
+html.theme-light .font-bold,
+html.theme-light .font-semibold {
+  color: #1A1A1A;
+}
+
+/* Ne pas forcer les boutons orange */
+html.theme-light .btn-primary,
+html.theme-light .btn-primary *,
+html.theme-light button.bg-amber-500,
+html.theme-light button.bg-primary-500 {
+  color: #ffffff !important;
+}
+
+/* Barre établissements */
+html.theme-light .sites-bar {
+  background-color: #ffffff !important;
+  border-color: #FDBA74 !important;
+}
+html.theme-light .sites-bar-title {
+  color: #9A3412 !important;
+  opacity: 1 !important;
+}
+html.theme-light .sites-bar-btn {
+  opacity: 1 !important;
+}
+html.theme-light .sites-bar-btn .opacity-80 {
+  opacity: 1 !important;
+  color: #57534E !important;
+}
+
+/* Fond amber semi-transparent = crème, texte foncé dessus */
+html.theme-light .bg-amber-500\/20,
+html.theme-light .bg-amber-500\/15,
+html.theme-light .bg-amber-500\/10,
+html.theme-light .bg-amber-50,
+html.theme-light [class*="bg-amber-500/"] {
+  background-color: #FFF7ED !important;
+}
+
+/* Labels menu Principal / Gestion / Finances / Outils */
+html.theme-light .nav-section-head {
+  color: #9A3412 !important;
+  background-color: #FFF7ED !important;
+  border-color: #FDBA74 !important;
+  opacity: 1 !important;
+}
+html.theme-light .nav-item-link {
+  color: #292524 !important;
+  opacity: 1 !important;
+}
+html.theme-light .nav-item-link .text-stone-400,
+html.theme-light .nav-item-link .text-stone-500 {
+  color: #57534E !important;
+}
+
+/* Sous-titres dashboard */
+html.theme-light .text-stone-400,
+html.theme-light .text-stone-500 {
+  color: #57534E !important;
+}
+
+/* Alertes / bandeaux */
+html.theme-light .text-red-300,
+html.theme-light .text-red-400 {
+  color: #B91C1C !important;
+}
+html.theme-light .bg-red-500\/10,
+html.theme-light .bg-red-50 {
+  background-color: #FEF2F2 !important;
+}
+
+/* Teal dépôt lisible */
+html.theme-light .text-teal-300,
+html.theme-light .text-teal-400,
+html.theme-light .text-teal-200 {
+  color: #0F766E !important;
+}
+
+/* Évite texte quasi invisible (jaune pâle / blanc cassé) */
+html.theme-light [class*="text-amber-100"],
+html.theme-light [class*="text-amber-50"] {
+  color: #9A3412 !important;
+  opacity: 1 !important;
+}
+
+/* Opacité réduite uniquement sur textes de navigation / cartes */
+html.theme-light .sites-bar .opacity-80,
+html.theme-light .nav-section-card .opacity-80,
+html.theme-light main .opacity-80 {
+  opacity: 1 !important;
+}
+
+
+/* Bandeau messages login — défilement lent et toujours visible */
+.auth-marquee-bar {
+  height: 2.5rem;
+  background: #FF7900;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  z-index: 30;
+}
+.auth-marquee-track {
+  display: flex;
+  width: max-content;
+  animation: auth-marquee-scroll 40s linear infinite;
+  will-change: transform;
+}
+.auth-marquee-track span {
+  flex-shrink: 0;
+  padding: 0 2rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+@keyframes auth-marquee-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+
+/* ========== Lisibilité mode clair — forcer contrastes (textes invisibles) ========== */
+html.theme-light,
+html[data-theme='light'] {
+  /* Base */
+  color: #1A1A1A;
+}
+
+/* Textes clairs pensés pour fond sombre → foncés en mode jour */
+html.theme-light .text-stone-50,
+html.theme-light .text-stone-100,
+html.theme-light .text-stone-200,
+html.theme-light .text-white,
+html[data-theme='light'] .text-stone-50,
+html[data-theme='light'] .text-stone-100,
+html[data-theme='light'] .text-stone-200,
+html[data-theme='light'] .text-white {
+  color: #1A1A1A !important;
+}
+
+html.theme-light .text-stone-300,
+html[data-theme='light'] .text-stone-300 {
+  color: #292524 !important;
+}
+
+html.theme-light .text-stone-400,
+html.theme-light .text-stone-500,
+html[data-theme='light'] .text-stone-400,
+html[data-theme='light'] .text-stone-500 {
+  color: #44403C !important;
+}
+
+html.theme-light .text-stone-600,
+html[data-theme='light'] .text-stone-600 {
+  color: #57534E !important;
+}
+
+/* Ambre / orange / jaune pâles */
+html.theme-light .text-amber-50,
+html.theme-light .text-amber-100,
+html.theme-light .text-amber-200,
+html.theme-light .text-amber-300,
+html.theme-light .text-orange-50,
+html.theme-light .text-orange-100,
+html.theme-light .text-orange-200,
+html.theme-light .text-orange-300,
+html.theme-light .text-yellow-100,
+html.theme-light .text-yellow-200,
+html.theme-light .text-yellow-300,
+html[data-theme='light'] .text-amber-50,
+html[data-theme='light'] .text-amber-100,
+html[data-theme='light'] .text-amber-200,
+html[data-theme='light'] .text-amber-300,
+html[data-theme='light'] .text-orange-100,
+html[data-theme='light'] .text-orange-200,
+html[data-theme='light'] .text-orange-300 {
+  color: #C2410C !important;
+  opacity: 1 !important;
+}
+
+html.theme-light .text-amber-400,
+html.theme-light .text-amber-500,
+html.theme-light .text-orange-400,
+html.theme-light .text-orange-500,
+html[data-theme='light'] .text-amber-400,
+html[data-theme='light'] .text-orange-400 {
+  color: #EA580C !important;
+  opacity: 1 !important;
+}
+
+/* Vert / bleu / violet / rose pâles */
+html.theme-light .text-emerald-100,
+html.theme-light .text-emerald-200,
+html.theme-light .text-emerald-300,
+html.theme-light .text-green-200,
+html.theme-light .text-green-300,
+html.theme-light .text-sky-100,
+html.theme-light .text-sky-200,
+html.theme-light .text-sky-300,
+html.theme-light .text-blue-200,
+html.theme-light .text-blue-300,
+html.theme-light .text-indigo-200,
+html.theme-light .text-violet-200,
+html.theme-light .text-purple-200,
+html.theme-light .text-pink-200,
+html.theme-light .text-rose-200,
+html.theme-light .text-cyan-200,
+html.theme-light .text-teal-100,
+html.theme-light .text-teal-200 {
+  color: #0F766E !important;
+  opacity: 1 !important;
+}
+
+html.theme-light .text-emerald-400,
+html.theme-light .text-green-400 {
+  color: #047857 !important;
+}
+
+html.theme-light .text-sky-400,
+html.theme-light .text-blue-400 {
+  color: #0369A1 !important;
+}
+
+html.theme-light .text-red-200,
+html.theme-light .text-red-300,
+html.theme-light .text-rose-300 {
+  color: #B91C1C !important;
+}
+
+/* Bandeaux / alertes très pâles → fond + texte lisibles */
+html.theme-light [class*="bg-amber-500/5"],
+html.theme-light [class*="bg-amber-500/10"],
+html.theme-light [class*="bg-amber-500/15"],
+html.theme-light [class*="bg-orange-500/5"],
+html.theme-light [class*="bg-orange-500/10"],
+html.theme-light [class*="bg-orange-500/15"],
+html.theme-light .bg-amber-500\/5,
+html.theme-light .bg-amber-500\/10,
+html.theme-light .bg-orange-500\/10 {
+  background-color: #FFF7ED !important;
+  border-color: #FDBA74 !important;
+  color: #9A3412 !important;
+}
+
+html.theme-light [class*="bg-emerald-500/5"],
+html.theme-light [class*="bg-emerald-500/10"],
+html.theme-light [class*="bg-sky-500/5"],
+html.theme-light [class*="bg-sky-500/10"] {
+  background-color: #ECFDF5 !important;
+  color: #065F46 !important;
+}
+
+html.theme-light [class*="border-amber-500/30"],
+html.theme-light [class*="border-amber-500/40"],
+html.theme-light [class*="border-orange-500/30"],
+html.theme-light [class*="border-orange-500/40"] {
+  border-color: #FB923C !important;
+}
+
+/* Placeholder inputs */
+html.theme-light input::placeholder,
+html.theme-light textarea::placeholder,
+html.theme-light .placeholder-stone-500,
+html.theme-light .placeholder-stone-400 {
+  color: #78716C !important;
+  opacity: 1 !important;
+}
+
+/* Opacités qui rendent le texte fantôme */
+html.theme-light main .opacity-40,
+html.theme-light main .opacity-50,
+html.theme-light main .opacity-60,
+html.theme-light main .opacity-70,
+html.theme-light main .opacity-80,
+html.theme-light main .text-opacity-50,
+html.theme-light main .text-opacity-60,
+html.theme-light main .text-opacity-70,
+html.theme-light main .text-opacity-80 {
+  opacity: 1 !important;
+}
+
+/* Titres / labels toujours lisibles */
+html.theme-light h1,
+html.theme-light h2,
+html.theme-light h3,
+html.theme-light h4,
+html.theme-light .font-bold,
+html.theme-light .font-semibold,
+html.theme-light .font-black {
+  opacity: 1 !important;
+}
+
+html.theme-light .label {
+  color: #292524 !important;
+}
+
+html.theme-light .input-field {
+  background-color: #ffffff !important;
+  border-color: #D6D3D1 !important;
+  color: #1C1917 !important;
+}
+
+/* Boutons onglets actifs en mode clair */
+html.theme-light .bg-amber-500\/20,
+html.theme-light .bg-orange-500\/25,
+html.theme-light [class*="bg-amber-500/20"],
+html.theme-light [class*="bg-orange-500/25"] {
+  background-color: #FFEDD5 !important;
+  color: #9A3412 !important;
+  border-color: #FB923C !important;
+}
+
+/* Cartes stats */
+html.theme-light .rounded-xl.border,
+html.theme-light .rounded-2xl.border {
+  opacity: 1 !important;
+}
+
+/* Liens */
+html.theme-light a {
+  opacity: 1;
+}
+
+/* Sticky bars caisse / commandes */
+html.theme-light .sticky {
+  opacity: 1 !important;
+}
+
+/* Messages d'aide / empty states */
+html.theme-light .text-center.text-sm,
+html.theme-light p.text-sm,
+html.theme-light p.text-xs {
+  opacity: 1 !important;
+}
+

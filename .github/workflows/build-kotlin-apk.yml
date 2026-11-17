@@ -1,0 +1,79 @@
+name: Build GESMAK Native (Kotlin) APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'android-native/**'
+      - '.github/workflows/build-kotlin-apk.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android-native
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Generate wrapper if needed
+        run: |
+          if [ ! -f gradlew ]; then
+            gradle wrapper --gradle-version 8.2 || true
+          fi
+          if [ ! -f gradlew ]; then
+            curl -sL -o gradle.zip https://services.gradle.org/distributions/gradle-8.2-bin.zip
+            unzip -q gradle.zip
+            ./gradle-8.2/bin/gradle wrapper --gradle-version 8.2
+          fi
+          chmod +x gradlew
+
+      - name: Assemble signed Release APK
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          ./gradlew :app:assembleRelease \
+            -PSUPABASE_URL="${SUPABASE_URL:-}" \
+            -PSUPABASE_ANON_KEY="${SUPABASE_ANON_KEY:-}" \
+            --no-daemon --stacktrace
+
+      - name: Package APK
+        run: |
+          mkdir -p ../out-apk
+          cp app/build/outputs/apk/release/app-release.apk ../out-apk/GESMAK-native.apk
+          ls -lh ../out-apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gesmak-native-apk
+          path: out-apk/GESMAK-native.apk
+          retention-days: 30
+
+      - name: Publish GitHub Release (apk-latest)
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VNAME=$(grep '^versionName=' android-native/UPDATE_VERSION | cut -d= -f2-)
+          VCODE=$(grep '^versionCode=' android-native/UPDATE_VERSION | cut -d= -f2-)
+          NOTES="GESMAK Mobile Natif v${VNAME} (code ${VCODE}) — Interface alignée sur gesmak.vercel.app · Mise à jour in-app dans Paramètres sans désinstaller."
+          if gh release view apk-latest >/dev/null 2>&1; then
+            gh release upload apk-latest out-apk/GESMAK-native.apk --clobber
+            gh release edit apk-latest --title "GESMAK Android APK (v${VNAME})" --notes "${NOTES}"
+          else
+            gh release create apk-latest out-apk/GESMAK-native.apk \
+              --title "GESMAK Android APK (v${VNAME})" \
+              --notes "${NOTES}"
+          fi

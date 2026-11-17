@@ -1,0 +1,2 @@
+-- Module restaurant : menu_items, options, réservations (appliqué via API aussi)
+-- Voir exécution Management API du même jour.
