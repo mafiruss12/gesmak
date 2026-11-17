@@ -1,6 +1,6 @@
 /** Version affichée dans l'app (incrémenter à chaque release notable) */
-export const APP_VERSION = '1.4.0';
-export const APP_VERSION_CODE = 11;
+export const APP_VERSION = '1.4.1';
+export const APP_VERSION_CODE = 12;
 
 export const GITHUB_OWNER = 'mafiruss12';
 export const GITHUB_REPO = 'gesmak';
