@@ -8,7 +8,7 @@ import {
   paymentWhatsAppLink,
 } from '@/lib/subscription';
 
-/** Routes encore accessibles quand l'abonnement est bloqué (paiement / compte uniquement). */
+/** Seules ces routes restent accessibles quand l'abonnement est bloqué. */
 const ALLOWED_WHEN_BLOCKED = ['/subscription', '/settings'];
 
 export default function SubscriptionGate() {
@@ -25,14 +25,17 @@ export default function SubscriptionGate() {
   if (isPlatformAdmin) return null;
   if (!activeEstablishment) return null;
 
-  const pathOk = ALLOWED_WHEN_BLOCKED.some((p) => location.pathname === p || location.pathname.startsWith(p + '/'));
+  const pathOk = ALLOWED_WHEN_BLOCKED.some(
+    (p) => location.pathname === p || location.pathname.startsWith(p + '/')
+  );
   const wa = paymentWhatsAppLink(
     `Bonjour, je souhaite régulariser l'abonnement GESMAK.\nÉtablissement : ${estName}\nOffre : ${PLAN.monthlyFcfa} F/mois (1, 3, 6, 12 mois ou plus).`
   );
 
-  // Bannière d'avertissement (essai bientôt fini / past_due en grâce)
-  const warningBanner =
-    !state.blocked && state.message ? (
+  // Essai bientôt fini / grâce past_due
+  if (!state.blocked) {
+    if (!state.message) return null;
+    return (
       <div
         className={`mx-3 mt-2 sm:mx-4 rounded-xl px-3 py-2 text-xs sm:text-sm border flex flex-wrap items-center gap-2 ${
           state.status === 'past_due'
@@ -64,71 +67,60 @@ export default function SubscriptionGate() {
           </>
         )}
       </div>
-    ) : null;
-
-  if (!state.blocked) {
-    return <>{warningBanner}</>;
+    );
   }
 
-  // Bloqué : rediriger hors des routes autorisées
+  // BLOQUÉ : hors /subscription|/settings → redirection stricte
   if (!pathOk) {
     return <Navigate to="/subscription" replace state={{ reason: 'subscription_blocked' }} />;
   }
 
-  // Sur /subscription ou /settings : panneau fixe d'acquittement
+  // Sur pages autorisées : bannière collante (sans masquer le formulaire de paiement)
   return (
-    <>
-      <div className="fixed inset-0 z-[80] bg-stone-950/95 flex items-center justify-center p-4">
-        <div className="max-w-md w-full rounded-2xl border border-red-500/40 bg-stone-900 p-6 space-y-4 shadow-2xl">
-          <div className="flex items-center gap-2 text-red-300">
-            <AlertTriangle size={22} />
-            <h2 className="text-lg font-semibold">Abonnement requis</h2>
-          </div>
-          <p className="text-stone-300 text-sm leading-relaxed">
+    <div className="mx-3 mt-2 sm:mx-4 rounded-xl border border-red-500/50 bg-red-950/40 px-3 py-3 text-sm text-red-100 space-y-2">
+      <div className="flex items-start gap-2">
+        <AlertTriangle size={18} className="shrink-0 mt-0.5" />
+        <div className="flex-1 space-y-1">
+          <p className="font-semibold">Abonnement requis — accès métier suspendu</p>
+          <p className="text-xs text-red-100/90">
             {state.message ||
-              "La période d'essai ou l'abonnement est terminé. Régularisez pour continuer à utiliser GESMAK."}
+              "Essai ou forfait terminé. Payez via Wave puis confirmez sur WhatsApp pour réactiver caisse, stock et ventes."}
           </p>
-          <pre className="text-xs text-stone-400 whitespace-pre-wrap bg-stone-950/50 rounded-xl p-3 border border-stone-800">
+          <pre className="text-[10px] text-red-100/70 whitespace-pre-wrap font-mono opacity-90">
             {paymentInstructions()}
           </pre>
-          <Link
-            to="/subscription"
-            className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-sky-600 text-white font-medium hover:bg-sky-500"
-          >
-            Voir les forfaits et payer (Wave)
-          </Link>
-          <a
-            href={wa}
-            target="_blank"
-            rel="noreferrer"
-            className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-emerald-600 text-white font-medium hover:bg-emerald-500"
-          >
-            <MessageCircle size={18} /> Confirmer le paiement sur WhatsApp
-          </a>
-          <div className="flex gap-2">
-            <Link
-              to="/settings"
-              className="flex-1 text-center text-sm py-2 rounded-lg border border-stone-700 text-stone-300 hover:bg-stone-800"
-            >
-              Paramètres
-            </Link>
-            <button
-              type="button"
-              className="flex-1 inline-flex items-center justify-center gap-1 text-sm py-2 rounded-lg border border-stone-700 text-stone-300 hover:bg-stone-800"
-              onClick={async () => {
-                try {
-                  await signOut();
-                } catch {
-                  /* */
-                }
-                window.location.assign('/');
-              }}
-            >
-              <LogOut size={14} /> Déconnexion
-            </button>
-          </div>
         </div>
       </div>
-    </>
+      <div className="flex flex-wrap gap-2">
+        <Link
+          to="/subscription"
+          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-sky-600 text-white text-xs font-medium"
+        >
+          Forfaits / Payer
+        </Link>
+        <a
+          href={wa}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-medium"
+        >
+          <MessageCircle size={14} /> WhatsApp
+        </a>
+        <button
+          type="button"
+          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-red-400/40 text-xs"
+          onClick={async () => {
+            try {
+              await signOut();
+            } catch {
+              /* */
+            }
+            window.location.assign('/');
+          }}
+        >
+          <LogOut size={14} /> Déconnexion
+        </button>
+      </div>
+    </div>
   );
 }
