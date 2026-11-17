@@ -213,41 +213,35 @@ export function getSubscriptionState(est: EstSubscription | null | undefined): {
     return { status: 'trial', blocked: false, label: '—', daysLeft: null, message: '' };
   }
 
-  const status = (est.subscription_status || 'trial') as SubscriptionStatus;
+  const raw = String(est.subscription_status || '').toLowerCase().trim();
   const now = Date.now();
+  const createdMs = (est as { created_at?: string | null }).created_at
+    ? new Date(String((est as { created_at?: string }).created_at)).getTime()
+    : null;
 
-  if (status === 'suspended') {
-    return {
-      status: 'suspended',
-      blocked: true,
-      label: 'Suspendu',
-      daysLeft: 0,
-      message: `Abonnement impayé (${PLAN.monthlyFcfa.toLocaleString('fr-FR')} ${PLAN.currencyLabel}/mois). Contactez-nous sur WhatsApp pour payer.`,
-    };
-  }
-
-  if (status === 'active') {
+  // --- Actif (payé / validé admin) : ne jamais bloquer sauf échéance dépassée ---
+  if (raw === 'active' || raw === 'paid' || raw === 'ok') {
     const end = est.subscription_ends_at ? new Date(est.subscription_ends_at).getTime() : null;
-    if (end && end < now) {
+    if (end && !Number.isNaN(end) && end < now) {
       const graceEnd = end + PLAN.graceDays * 86400000;
       if (now <= graceEnd) {
         return {
           status: 'past_due',
           blocked: false,
-          label: 'En retard',
+          label: 'Paiement en retard',
           daysLeft: Math.max(0, Math.ceil((graceEnd - now) / 86400000)),
-          message: `Paiement en retard. Régularisez sous ${PLAN.graceDays} jours via WhatsApp.`,
+          message: `Abonnement expiré. Régularisez sous ${PLAN.graceDays} jours via WhatsApp.`,
         };
       }
       return {
         status: 'suspended',
         blocked: true,
-        label: 'Suspendu',
+        label: 'Abonnement expiré',
         daysLeft: 0,
-        message: `Accès suspendu. Abonnement ${PLAN.monthlyFcfa.toLocaleString('fr-FR')} F/mois — payez via WhatsApp.`,
+        message: `Abonnement terminé. Payez ${PLAN.monthlyFcfa.toLocaleString('fr-FR')} F/mois (Wave) puis confirmez sur WhatsApp.`,
       };
     }
-    const daysLeft = end ? Math.max(0, Math.ceil((end - now) / 86400000)) : null;
+    const daysLeft = end && !Number.isNaN(end) ? Math.max(0, Math.ceil((end - now) / 86400000)) : null;
     return {
       status: 'active',
       blocked: false,
@@ -255,77 +249,92 @@ export function getSubscriptionState(est: EstSubscription | null | undefined): {
       daysLeft,
       message:
         daysLeft != null
-          ? `Abonnement actif jusqu’au ${est.subscription_ends_at ? new Date(est.subscription_ends_at).toLocaleDateString('fr-FR') : '—'} (${daysLeft} j)`
+          ? `Abonnement actif jusqu'au ${new Date(est.subscription_ends_at!).toLocaleDateString('fr-FR')} (${daysLeft} j)`
           : 'Abonnement actif',
     };
   }
 
-  // --- Essai 1 mois (nouveaux comptes) ---
-  // trial_ends_at est obligatoire. Sans date → on estime via created_at, sinon blocage.
-  const createdMs = (est as { created_at?: string | null }).created_at
-    ? new Date(String((est as { created_at?: string }).created_at)).getTime()
-    : null;
-  let trialEnd = est.trial_ends_at ? new Date(est.trial_ends_at).getTime() : null;
-  if ((status === 'trial' || !est.subscription_status) && !trialEnd && createdMs && !Number.isNaN(createdMs)) {
-    trialEnd = createdMs + PLAN.trialDays * 86400000;
+  // --- Suspendu explicitement ---
+  if (raw === 'suspended' || raw === 'cancelled' || raw === 'canceled' || raw === 'expired') {
+    return {
+      status: 'suspended',
+      blocked: true,
+      label: 'Suspendu',
+      daysLeft: 0,
+      message: `Accès suspendu. Abonnement ${PLAN.monthlyFcfa.toLocaleString('fr-FR')} F/mois — payez via Wave puis WhatsApp.`,
+    };
   }
 
-  if (status === 'trial' || !est.subscription_status) {
-    // Pas de date d'essai connue → ne pas laisser un essai infini
+  // --- Essai (défaut pour nouveaux comptes) ---
+  if (raw === 'trial' || raw === '' || raw === 'null' || raw === 'undefined') {
+    let trialEnd = est.trial_ends_at ? new Date(est.trial_ends_at).getTime() : null;
+    if ((!trialEnd || Number.isNaN(trialEnd)) && createdMs && !Number.isNaN(createdMs)) {
+      trialEnd = createdMs + PLAN.trialDays * 86400000;
+    }
+
+    // Comptes historiques sans dates : laisser l'accès (ne pas bloquer les clients existants)
+    // L'admin peut renseigner trial_ends_at / subscription_status en base.
     if (!trialEnd || Number.isNaN(trialEnd)) {
       return {
-        status: 'suspended',
-        blocked: true,
-        label: 'Essai non initialisé',
-        daysLeft: 0,
-        message: `Compte sans période d'essai valide. Contactez WhatsApp pour activer (${PLAN.monthlyFcfa.toLocaleString('fr-FR')} F/mois) ou demandez une réinitialisation d'essai.`,
+        status: 'trial',
+        blocked: false,
+        label: 'Essai',
+        daysLeft: PLAN.trialDays,
+        message: `Essai en cours. Les nouveaux comptes disposent de ${PLAN.trialDays} jours gratuits.`,
       };
     }
+
     if (trialEnd < now) {
-      // Fin d'essai → blocage automatique (pas d'usage métier sans abonnement)
       return {
         status: 'suspended',
         blocked: true,
         label: 'Essai terminé',
         daysLeft: 0,
-        message: `Votre mois d'essai est terminé. Payez l'abonnement (${PLAN.monthlyFcfa.toLocaleString('fr-FR')} F/mois) via Wave puis confirmez sur WhatsApp pour continuer.`,
+        message: `Votre mois d'essai est terminé. Payez ${PLAN.monthlyFcfa.toLocaleString('fr-FR')} F/mois (Wave) puis confirmez sur WhatsApp pour continuer.`,
       };
     }
+
     const daysLeft = Math.max(0, Math.ceil((trialEnd - now) / 86400000));
-    const afterTrial = PLANS.starter;
     return {
       status: 'trial',
       blocked: false,
       label: 'Essai 1 mois',
       daysLeft,
-      message: `Essai gratuit — ${daysLeft} j restant${daysLeft === 1 ? '' : 's'} (1 mois à la création du compte). Ensuite ${afterTrial.monthlyFcfa.toLocaleString('fr-FR')} F/mois (Essentiel) ou ${PLANS.pro.monthlyFcfa.toLocaleString('fr-FR')} F/mois (Pro).`,
+      message: `Essai gratuit — ${daysLeft} j restant${daysLeft === 1 ? '' : 's'}. Ensuite ${PLANS.starter.monthlyFcfa.toLocaleString('fr-FR')} F/mois.`,
     };
   }
 
-  if (status === 'past_due') {
+  // --- past_due ---
+  if (raw === 'past_due' || raw === 'grace') {
+    const end = est.subscription_ends_at ? new Date(est.subscription_ends_at).getTime() : null;
+    if (end && !Number.isNaN(end) && end + PLAN.graceDays * 86400000 < now) {
+      return {
+        status: 'suspended',
+        blocked: true,
+        label: 'Paiement requis',
+        daysLeft: 0,
+        message: `Délai de grâce dépassé. Payez ${PLAN.monthlyFcfa.toLocaleString('fr-FR')} F/mois via Wave + WhatsApp.`,
+      };
+    }
     return {
       status: 'past_due',
-      blocked: true,
-      label: 'Paiement requis',
-      daysLeft: 0,
-      message: `Abonnement en retard. Régularisez via WhatsApp : ${PLAN.monthlyFcfa.toLocaleString('fr-FR')} F/mois.`,
+      blocked: false,
+      label: 'Paiement en attente',
+      daysLeft: PLAN.graceDays,
+      message: `Régularisez bientôt : ${PLAN.monthlyFcfa.toLocaleString('fr-FR')} F/mois (Wave + WhatsApp).`,
     };
   }
 
-  // Statut inconnu → bloquer (sécurité)
+  // Statut inconnu : ne pas bloquer (évite de couper les clients en prod)
   return {
-    status: 'suspended',
-    blocked: true,
-    label: 'Accès restreint',
-    daysLeft: 0,
-    message: `Statut d'abonnement inconnu. Contactez le support WhatsApp.`,
+    status: 'active',
+    blocked: false,
+    label: 'Compte',
+    daysLeft: null,
+    message: '',
   };
 }
 
-/**
- * Garantit trial_ends_at = 1 mois après création pour un nouvel établissement.
- * À appeler après insert (TypePicker / Settings).
- */
 export function newEstablishmentTrialFields(): {
   subscription_status: 'trial';
   trial_ends_at: string;
