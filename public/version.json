@@ -1,6 +1,1 @@
-{
-  "version": "1.4.0",
-  "git": "subscription-gate-type-switch",
-  "build": "2026-11-17",
-  "notes": "Verrou abonnement strict après essai. Switch type établissement (menus/thème). Mise à jour in-app recharge le site live."
-}
+{"version":"1.4.1","git":"trial-1-month-auto-block","build":"2026-11-17","notes":"Essai strict 1 mois dès création du compte, puis blocage automatique jusqu au paiement."}
