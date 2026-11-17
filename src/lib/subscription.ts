@@ -260,49 +260,82 @@ export function getSubscriptionState(est: EstSubscription | null | undefined): {
     };
   }
 
-  const trialEnd = est.trial_ends_at ? new Date(est.trial_ends_at).getTime() : null;
+  // --- Essai 1 mois (nouveaux comptes) ---
+  // trial_ends_at est obligatoire. Sans date → on estime via created_at, sinon blocage.
+  const createdMs = (est as { created_at?: string | null }).created_at
+    ? new Date(String((est as { created_at?: string }).created_at)).getTime()
+    : null;
+  let trialEnd = est.trial_ends_at ? new Date(est.trial_ends_at).getTime() : null;
+  if ((status === 'trial' || !est.subscription_status) && !trialEnd && createdMs && !Number.isNaN(createdMs)) {
+    trialEnd = createdMs + PLAN.trialDays * 86400000;
+  }
+
   if (status === 'trial' || !est.subscription_status) {
-    if (trialEnd && trialEnd < now) {
-      const graceEnd = trialEnd + PLAN.graceDays * 86400000;
-      if (now <= graceEnd) {
-        return {
-          status: 'past_due',
-          blocked: false,
-          label: 'Essai terminé',
-          daysLeft: Math.max(0, Math.ceil((graceEnd - now) / 86400000)),
-          message: `Essai d'1 mois terminé. Payez via WhatsApp (${PLAN.monthlyFcfa.toLocaleString('fr-FR')} F/mois).`,
-        };
-      }
+    // Pas de date d'essai connue → ne pas laisser un essai infini
+    if (!trialEnd || Number.isNaN(trialEnd)) {
       return {
         status: 'suspended',
         blocked: true,
-        label: 'Suspendu',
+        label: 'Essai non initialisé',
         daysLeft: 0,
-        message: `Essai terminé. Contactez WhatsApp pour activer l'abonnement (${PLAN.monthlyFcfa.toLocaleString('fr-FR')} F/mois).`,
+        message: `Compte sans période d'essai valide. Contactez WhatsApp pour activer (${PLAN.monthlyFcfa.toLocaleString('fr-FR')} F/mois) ou demandez une réinitialisation d'essai.`,
       };
     }
-    const daysLeft = trialEnd ? Math.max(0, Math.ceil((trialEnd - now) / 86400000)) : PLAN.trialDays;
+    if (trialEnd < now) {
+      // Fin d'essai → blocage automatique (pas d'usage métier sans abonnement)
+      return {
+        status: 'suspended',
+        blocked: true,
+        label: 'Essai terminé',
+        daysLeft: 0,
+        message: `Votre mois d'essai est terminé. Payez l'abonnement (${PLAN.monthlyFcfa.toLocaleString('fr-FR')} F/mois) via Wave puis confirmez sur WhatsApp pour continuer.`,
+      };
+    }
+    const daysLeft = Math.max(0, Math.ceil((trialEnd - now) / 86400000));
     const afterTrial = PLANS.starter;
     return {
       status: 'trial',
       blocked: false,
-      label: 'Essai Pro',
+      label: 'Essai 1 mois',
       daysLeft,
-      message: `Essai Pro — ${daysLeft} j restant${daysLeft === 1 ? '' : 's'}. Ensuite forfait Essentiel à ${afterTrial.monthlyFcfa.toLocaleString('fr-FR')} F/mois (ou Pro à ${PLANS.pro.monthlyFcfa.toLocaleString('fr-FR')} F/mois).`,
+      message: `Essai gratuit — ${daysLeft} j restant${daysLeft === 1 ? '' : 's'} (1 mois à la création du compte). Ensuite ${afterTrial.monthlyFcfa.toLocaleString('fr-FR')} F/mois (Essentiel) ou ${PLANS.pro.monthlyFcfa.toLocaleString('fr-FR')} F/mois (Pro).`,
     };
   }
 
   if (status === 'past_due') {
     return {
       status: 'past_due',
-      blocked: false,
+      blocked: true,
       label: 'Paiement requis',
-      daysLeft: PLAN.graceDays,
-      message: `Régularisez via WhatsApp : ${PLAN.monthlyFcfa.toLocaleString('fr-FR')} F/mois.`,
+      daysLeft: 0,
+      message: `Abonnement en retard. Régularisez via WhatsApp : ${PLAN.monthlyFcfa.toLocaleString('fr-FR')} F/mois.`,
     };
   }
 
-  return { status: 'trial', blocked: false, label: 'Essai', daysLeft: null, message: '' };
+  // Statut inconnu → bloquer (sécurité)
+  return {
+    status: 'suspended',
+    blocked: true,
+    label: 'Accès restreint',
+    daysLeft: 0,
+    message: `Statut d'abonnement inconnu. Contactez le support WhatsApp.`,
+  };
+}
+
+/**
+ * Garantit trial_ends_at = 1 mois après création pour un nouvel établissement.
+ * À appeler après insert (TypePicker / Settings).
+ */
+export function newEstablishmentTrialFields(): {
+  subscription_status: 'trial';
+  trial_ends_at: string;
+  plan_tier: 'starter';
+} {
+  return {
+    subscription_status: 'trial',
+    trial_ends_at: trialEndsAtFromNow(PLAN.trialDays),
+    plan_tier: 'starter',
+  };
 }
 
 
