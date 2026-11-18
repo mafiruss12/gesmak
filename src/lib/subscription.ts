@@ -279,8 +279,8 @@ export function getSubscriptionState(est: EstSubscription | null | undefined): {
         status: 'trial',
         blocked: false,
         label: 'Essai',
-        daysLeft: PLAN.trialDays,
-        message: `Essai en cours. Les nouveaux comptes disposent de ${PLAN.trialDays} jours gratuits.`,
+        daysLeft: null,
+        message: '', // pas de bannière intrusive pour les comptes sans date
       };
     }
 
@@ -295,12 +295,13 @@ export function getSubscriptionState(est: EstSubscription | null | undefined): {
     }
 
     const daysLeft = Math.max(0, Math.ceil((trialEnd - now) / 86400000));
+    // Pas de message d'essai visible en continu — uniquement blocage à expiration
     return {
       status: 'trial',
       blocked: false,
-      label: 'Essai 1 mois',
+      label: 'Essai',
       daysLeft,
-      message: `Essai gratuit — ${daysLeft} j restant${daysLeft === 1 ? '' : 's'}. Ensuite ${PLANS.starter.monthlyFcfa.toLocaleString('fr-FR')} F/mois.`,
+      message: '',
     };
   }
 
