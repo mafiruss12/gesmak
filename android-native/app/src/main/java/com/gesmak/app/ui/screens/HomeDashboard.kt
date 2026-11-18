@@ -43,6 +43,7 @@ import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Store
 import androidx.compose.material.icons.filled.TableRestaurant
 import androidx.compose.material.icons.filled.TrendingDown
+import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -64,9 +65,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.gesmak.app.data.BizSpec
+import com.gesmak.app.data.BusinessTypes
 import com.gesmak.app.data.SubscriptionPlans
 import com.gesmak.app.data.SupabaseApi
 import com.gesmak.app.data.SupabaseAuth
+import com.gesmak.app.ui.components.EstablishmentLogo
 import com.gesmak.app.ui.components.GesmakCard
 import com.gesmak.app.ui.components.StatusPill
 import com.gesmak.app.ui.theme.LocalGesmakColors
@@ -78,7 +82,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-data class EstChoice(val id: String, val name: String)
+data class EstChoice(val id: String, val name: String, val type: String? = null, val logoUrl: String? = null)
 
 object AppRoute {
     const val HOME = 0
@@ -102,6 +106,7 @@ object AppRoute {
     const val POINT_MANUEL = 18
     const val TRANSFERS = 19
     const val KITS = 20
+    const val FINANCIAL_REPORTS = 21
 }
 
 @Composable
@@ -123,17 +128,21 @@ fun HomeDashboard(
     establishments: List<EstChoice>,
     currentEstId: String?,
     activePoleCode: String?,
+    allowedTypes: List<BizSpec> = emptyList(),
+    isPlatformAdmin: Boolean = false,
     loading: Boolean,
     error: String?,
     updateLabel: String?,
     updateBusy: Boolean,
     onSelectEst: (String) -> Unit,
+    onSwitchBusinessType: (String) -> Unit = {},
     onRefresh: () -> Unit,
     onToggleServiceDay: () -> Unit,
     onNavigate: (Int) -> Unit,
     onUpdateClick: () -> Unit,
 ) {
     val c = LocalGesmakColors.current
+    val bizSpec = BusinessTypes.spec(establishment?.type)
     val role = member?.role?.lowercase().orEmpty()
     val canSeeFinance = role in setOf("super_admin", "admin", "owner", "propriétaire", "proprietaire")
     val canManageTeam = canSeeFinance || role in setOf("manager", "gérant", "gerant")
@@ -274,15 +283,29 @@ fun HomeDashboard(
             }
         }
 
-        // En-tête utilisateur & site
+        // En-tête utilisateur & site actif avec logo
         item {
             val cleanLogin = SupabaseAuth.displayLogin(memberEmail)
-            GesmakCard {
+            GesmakCard(borderColor = c.accent.copy(alpha = 0.4f)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    EstablishmentLogo(
+                        name = establishment?.name ?: "GESMAK",
+                        logoUrl = establishment?.logoUrl,
+                        size = 50.dp,
+                        cornerRadius = 14.dp,
+                        accentColor = c.accent,
+                    )
+                    Spacer(Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "ÉTABLISSEMENT ACTIF",
+                            color = c.accentDeep,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 10.sp,
+                        )
                         Text(
                             text = establishment?.name ?: "Établissement",
                             color = c.text,
@@ -302,9 +325,9 @@ fun HomeDashboard(
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            if (!establishment?.type.isNullOrBlank()) {
+                            if (establishment != null) {
                                 StatusPill(
-                                    label = establishment?.type?.replaceFirstChar { it.uppercase() }.orEmpty(),
+                                    label = bizSpec.label,
                                     color = c.accent,
                                 )
                             }
@@ -334,7 +357,26 @@ fun HomeDashboard(
             }
         }
 
-        // Bouton principal Caisse POS (CTA prioritaire au-dessus de la ligne de flottaison)
+        if (establishment == null && !loading && !isPlatformAdmin) {
+            item {
+                GesmakCard(borderColor = c.accent.copy(alpha = 0.45f)) {
+                    Text(
+                        "Établissement en attente d'attribution",
+                        color = c.text,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Aucun établissement ni type d'activité ne vous a encore été attribué. Contactez l'administrateur GESMAK pour obtenir votre accès sur demande.",
+                        color = c.muted,
+                        fontSize = 12.sp,
+                    )
+                }
+            }
+        }
+
+        // Bouton principal adapté au type d'activité
         item {
             Button(
                 onClick = { onNavigate(AppRoute.POS) },
@@ -350,9 +392,11 @@ fun HomeDashboard(
                 Icon(Icons.Default.ShoppingCart, contentDescription = null, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    "Nouvelle vente · Caisse POS",
+                    bizSpec.ctaText,
                     fontWeight = FontWeight.Bold,
                     fontSize = 15.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
@@ -369,16 +413,103 @@ fun HomeDashboard(
                     ) {
                         establishments.forEach { est ->
                             val selected = est.id == currentEstId
+                            val spec = BusinessTypes.spec(est.type)
                             FilterChip(
                                 selected = selected,
                                 onClick = { onSelectEst(est.id) },
-                                label = { Text(est.name, maxLines = 1) },
+                                leadingIcon = {
+                                    EstablishmentLogo(
+                                        name = est.name,
+                                        logoUrl = est.logoUrl,
+                                        size = 20.dp,
+                                        cornerRadius = 6.dp,
+                                        accentColor = spec.accent(c.isLight),
+                                    )
+                                },
+                                label = {
+                                    Text(
+                                        "${est.name} · ${spec.shortLabel}",
+                                        maxLines = 1,
+                                    )
+                                },
                                 colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = c.accent,
+                                    selectedContainerColor = spec.accent(c.isLight),
                                     selectedLabelColor = Color.White,
                                     containerColor = c.card,
                                     labelColor = c.text,
                                 ),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Sélecteur de mode d'activité : uniquement si l'administrateur a attribué plusieurs types (+ admins)
+        if (canSeeFinance && establishment != null) {
+            val switchableSpecs = if (isPlatformAdmin) BusinessTypes.ALL else allowedTypes
+            if (isPlatformAdmin || switchableSpecs.size > 1) {
+                item {
+                    Column {
+                        Text(
+                            "Mode d'activité attribué · ${bizSpec.label}",
+                            color = c.muted,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Row(
+                            modifier = Modifier.horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            switchableSpecs.forEach { spec ->
+                                val selected = spec.key == bizSpec.key
+                                val chipColor = spec.accent(c.isLight)
+                                FilterChip(
+                                    selected = selected,
+                                    onClick = { if (!selected) onSwitchBusinessType(spec.key) },
+                                    label = {
+                                        Text(
+                                            spec.label,
+                                            maxLines = 1,
+                                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                        )
+                                    },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = chipColor,
+                                        selectedLabelColor = Color.White,
+                                        containerColor = c.card,
+                                        labelColor = c.text,
+                                    ),
+                                )
+                            }
+                        }
+                    }
+                }
+            } else {
+                item {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = c.accentSoft,
+                        border = BorderStroke(1.dp, c.accent.copy(alpha = 0.25f)),
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = "Activité attribuée : ${bizSpec.label}",
+                                color = c.accentDeep,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 12.sp,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Text(
+                                text = "Sur demande admin",
+                                color = c.muted,
+                                fontSize = 11.sp,
                             )
                         }
                     }
@@ -530,16 +661,16 @@ fun HomeDashboard(
                 Text("Actions rapides", color = c.text, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                 Spacer(Modifier.height(8.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    QuickActionTile("Ma Caisse", "Encaisser POS", Icons.Default.ShoppingCart, Color(0xFFFF7900), Modifier.weight(1f)) {
+                    QuickActionTile(bizSpec.posLabel, bizSpec.shortLabel, Icons.Default.ShoppingCart, c.accent, Modifier.weight(1f)) {
                         onNavigate(AppRoute.POS)
                     }
-                    QuickActionTile("Commandes", "${orders.size} active(s)", Icons.Default.ReceiptLong, Color(0xFF0284C7), Modifier.weight(1f)) {
+                    QuickActionTile(bizSpec.ordersLabel, "${orders.size} active(s)", Icons.Default.ReceiptLong, Color(0xFF0284C7), Modifier.weight(1f)) {
                         onNavigate(AppRoute.ORDERS)
                     }
                 }
                 Spacer(Modifier.height(8.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    QuickActionTile("Arrivages", "Casiers & stock", Icons.Default.LocalShipping, Color(0xFF059669), Modifier.weight(1f)) {
+                    QuickActionTile(bizSpec.arrivalsLabel, "Entrées stock", Icons.Default.LocalShipping, Color(0xFF059669), Modifier.weight(1f)) {
                         onNavigate(AppRoute.ARRIVAL)
                     }
                     QuickActionTile("Dépenses", formatFcfa(expensesDay), Icons.Default.TrendingDown, Color(0xFFDC2626), Modifier.weight(1f)) {
@@ -551,7 +682,7 @@ fun HomeDashboard(
                     QuickActionTile("Clôture Z", "Point caisse", Icons.Default.PointOfSale, Color(0xFFD97706), Modifier.weight(1f)) {
                         onNavigate(AppRoute.CLOTURE)
                     }
-                    QuickActionTile("Inventaire", "${products.size} produits", Icons.Default.Inventory2, Color(0xFF0D9488), Modifier.weight(1f)) {
+                    QuickActionTile(bizSpec.inventoryLabel, "${products.size} articles", Icons.Default.Inventory2, Color(0xFF0D9488), Modifier.weight(1f)) {
                         onNavigate(AppRoute.INVENTORY)
                     }
                 }
@@ -581,7 +712,7 @@ fun HomeDashboard(
                     QuickActionTile("Rôles & Pouvoirs", "Mes droits & PIN", Icons.Default.Shield, Color(0xFFE11D48), Modifier.weight(1f)) {
                         onNavigate(AppRoute.POWERS)
                     }
-                    QuickActionTile("Tables & Carte", "Salle, Menu & Résa", Icons.Default.TableRestaurant, Color(0xFF0EA5E9), Modifier.weight(1f)) {
+                    QuickActionTile(bizSpec.tablesLabel, "Organisation", Icons.Default.TableRestaurant, Color(0xFF0EA5E9), Modifier.weight(1f)) {
                         onNavigate(AppRoute.TABLES)
                     }
                 }
@@ -618,6 +749,17 @@ fun HomeDashboard(
                     } else {
                         QuickActionTile("Notifications", "Alertes & validations", Icons.Default.Notifications, Color(0xFFF59E0B), Modifier.weight(1f)) {
                             onNavigate(AppRoute.NOTIFICATIONS)
+                        }
+                    }
+                }
+                if (canSeeFinance) {
+                    Spacer(Modifier.height(8.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        QuickActionTile("Rapports Financiers", "Bénéfices nets & charges", Icons.Default.TrendingUp, Color(0xFF059669), Modifier.weight(1f)) {
+                            onNavigate(AppRoute.FINANCIAL_REPORTS)
+                        }
+                        QuickActionTile("Paramètres", "Logo, Contacts & MAJ", Icons.Default.Settings, Color(0xFF475569), Modifier.weight(1f)) {
+                            onNavigate(AppRoute.SETTINGS)
                         }
                     }
                 }

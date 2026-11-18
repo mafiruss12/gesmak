@@ -10,6 +10,7 @@ import { StatCard, EmptyState } from '@/components/ui';
 import { BUSINESS_THEMES } from '@/lib/businessTypes';
 import type { RentalOrder, RentalEquipment } from '@/lib/rentalTypes';
 import { orderBalance } from '@/lib/rentalTypes';
+import OwnerSitesBar from '@/components/OwnerSitesBar';
 
 export default function RentDashboard() {
   const { member, activeEstablishment } = useAuth();
@@ -97,6 +98,7 @@ export default function RentDashboard() {
 
   return (
     <div>
+      <OwnerSitesBar />
       <p className="text-xs font-medium uppercase tracking-wide mb-1" style={{ color: theme.primary }}>
         Location événementielle
       </p>

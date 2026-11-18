@@ -104,17 +104,26 @@ export type PlanFeature =
   | 'advancedReports'
   | 'prioritySupport';
 
-/** Pendant l’essai gratuit : accès Pro pour convaincre, puis retour au plan choisi */
+/** Pendant l’essai gratuit actif : accès Pro pour convaincre, puis retour au plan choisi */
 export function getEffectivePlan(
-  est: { plan_tier?: string | null; subscription_status?: string | null } | null | undefined,
+  est: {
+    plan_tier?: string | null;
+    subscription_status?: string | null;
+    trial_ends_at?: string | null;
+    created_at?: string | null;
+  } | null | undefined,
 ): PlanLimits {
-  const status = String(est?.subscription_status || 'trial');
-  if (status === 'trial') return PLANS.pro;
+  if (isOnTrial(est)) return PLANS.pro;
   return getPlanLimits(est);
 }
 
 export function canUseFeature(
-  est: { plan_tier?: string | null; subscription_status?: string | null } | null | undefined,
+  est: {
+    plan_tier?: string | null;
+    subscription_status?: string | null;
+    trial_ends_at?: string | null;
+    created_at?: string | null;
+  } | null | undefined,
   feature: PlanFeature,
 ): boolean {
   return Boolean(getEffectivePlan(est)[feature]);
@@ -193,6 +202,7 @@ export type EstSubscription = {
   subscription_ends_at?: string | null;
   last_payment_at?: string | null;
   plan_tier?: string | null;
+  created_at?: string | null;
 };
 
 export function trialEndsAtFromNow(days = PLAN.trialDays): string {
@@ -200,6 +210,19 @@ export function trialEndsAtFromNow(days = PLAN.trialDays): string {
   d.setDate(d.getDate() + days);
   d.setHours(23, 59, 59, 999);
   return d.toISOString();
+}
+
+function resolveTrialEndMs(est: EstSubscription | null | undefined): number | null {
+  if (!est) return null;
+  if (est.trial_ends_at) {
+    const t = new Date(est.trial_ends_at).getTime();
+    if (!Number.isNaN(t)) return t;
+  }
+  if (est.created_at) {
+    const c = new Date(est.created_at).getTime();
+    if (!Number.isNaN(c)) return c + PLAN.trialDays * 86400000;
+  }
+  return null;
 }
 
 export function getSubscriptionState(est: EstSubscription | null | undefined): {
@@ -213,32 +236,40 @@ export function getSubscriptionState(est: EstSubscription | null | undefined): {
     return { status: 'trial', blocked: false, label: '—', daysLeft: null, message: '' };
   }
 
-  const raw = String(est.subscription_status || '').toLowerCase().trim();
+  const rawStatus = String(est.subscription_status || 'trial').trim().toLowerCase();
   const now = Date.now();
-  const createdMs = (est as { created_at?: string | null }).created_at
-    ? new Date(String((est as { created_at?: string }).created_at)).getTime()
-    : null;
+  const minMonthly = PLANS.starter.monthlyFcfa.toLocaleString('fr-FR');
 
-  // --- Actif (payé / validé admin) : ne jamais bloquer sauf échéance dépassée ---
-  if (raw === 'active' || raw === 'paid' || raw === 'ok') {
+  if (rawStatus === 'suspended') {
+    return {
+      status: 'suspended',
+      blocked: true,
+      label: 'Suspendu',
+      daysLeft: 0,
+      message: `Abonnement expiré ou impayé (à partir de ${minMonthly} ${PLAN.currencyLabel}/mois). Payez via Wave 05 02 01 20 11 puis confirmez sur WhatsApp pour réactiver.`,
+    };
+  }
+
+  if (rawStatus === 'active') {
     const end = est.subscription_ends_at ? new Date(est.subscription_ends_at).getTime() : null;
     if (end && !Number.isNaN(end) && end < now) {
       const graceEnd = end + PLAN.graceDays * 86400000;
       if (now <= graceEnd) {
+        const left = Math.max(0, Math.ceil((graceEnd - now) / 86400000));
         return {
           status: 'past_due',
           blocked: false,
-          label: 'Paiement en retard',
-          daysLeft: Math.max(0, Math.ceil((graceEnd - now) / 86400000)),
-          message: `Abonnement expiré. Régularisez sous ${PLAN.graceDays} jours via WhatsApp.`,
+          label: 'En retard',
+          daysLeft: left,
+          message: `Abonnement expiré — il vous reste ${left} jour${left > 1 ? 's' : ''} de grâce pour renouveler via Wave.`,
         };
       }
       return {
         status: 'suspended',
         blocked: true,
-        label: 'Abonnement expiré',
+        label: 'Suspendu',
         daysLeft: 0,
-        message: `Abonnement terminé. Payez ${PLAN.monthlyFcfa.toLocaleString('fr-FR')} F/mois (Wave) puis confirmez sur WhatsApp.`,
+        message: `Accès suspendu (abonnement expiré). Réglez dès ${minMonthly} F/mois sur Wave 05 02 01 20 11 pour débloquer.`,
       };
     }
     const daysLeft = end && !Number.isNaN(end) ? Math.max(0, Math.ceil((end - now) / 86400000)) : null;
@@ -249,102 +280,74 @@ export function getSubscriptionState(est: EstSubscription | null | undefined): {
       daysLeft,
       message:
         daysLeft != null
-          ? `Abonnement actif jusqu'au ${new Date(est.subscription_ends_at!).toLocaleDateString('fr-FR')} (${daysLeft} j)`
+          ? `Abonnement actif jusqu’au ${est.subscription_ends_at ? new Date(est.subscription_ends_at).toLocaleDateString('fr-FR') : '—'} (${daysLeft} j)`
           : 'Abonnement actif',
     };
   }
 
-  // --- Suspendu explicitement ---
-  if (raw === 'suspended' || raw === 'cancelled' || raw === 'canceled' || raw === 'expired') {
-    return {
-      status: 'suspended',
-      blocked: true,
-      label: 'Suspendu',
-      daysLeft: 0,
-      message: `Accès suspendu. Abonnement ${PLAN.monthlyFcfa.toLocaleString('fr-FR')} F/mois — payez via Wave puis WhatsApp.`,
-    };
-  }
-
-  // --- Essai (défaut pour nouveaux comptes) ---
-  if (raw === 'trial' || raw === '' || raw === 'null' || raw === 'undefined') {
-    let trialEnd = est.trial_ends_at ? new Date(est.trial_ends_at).getTime() : null;
-    if ((!trialEnd || Number.isNaN(trialEnd)) && createdMs && !Number.isNaN(createdMs)) {
-      trialEnd = createdMs + PLAN.trialDays * 86400000;
-    }
-
-    // Comptes historiques sans dates : laisser l'accès (ne pas bloquer les clients existants)
-    // L'admin peut renseigner trial_ends_at / subscription_status en base.
-    if (!trialEnd || Number.isNaN(trialEnd)) {
+  if (rawStatus === 'past_due') {
+    const subEnd = est.subscription_ends_at ? new Date(est.subscription_ends_at).getTime() : null;
+    const trialEnd = resolveTrialEndMs(est);
+    const refEnd = subEnd && !Number.isNaN(subEnd) ? subEnd : trialEnd;
+    if (refEnd != null) {
+      const graceEnd = refEnd + PLAN.graceDays * 86400000;
+      if (now > graceEnd) {
+        return {
+          status: 'suspended',
+          blocked: true,
+          label: 'Suspendu',
+          daysLeft: 0,
+          message: `Délai de grâce expiré. Réglez votre forfait sur Wave 05 02 01 20 11 pour débloquer l'établissement.`,
+        };
+      }
+      const left = Math.max(0, Math.ceil((graceEnd - now) / 86400000));
       return {
-        status: 'trial',
+        status: 'past_due',
         blocked: false,
-        label: 'Essai',
-        daysLeft: null,
-        message: '', // pas de bannière intrusive pour les comptes sans date
-      };
-    }
-
-    if (trialEnd < now) {
-      return {
-        status: 'suspended',
-        blocked: true,
-        label: 'Essai terminé',
-        daysLeft: 0,
-        message: `Votre mois d'essai est terminé. Payez ${PLAN.monthlyFcfa.toLocaleString('fr-FR')} F/mois (Wave) puis confirmez sur WhatsApp pour continuer.`,
-      };
-    }
-
-    const daysLeft = Math.max(0, Math.ceil((trialEnd - now) / 86400000));
-    // Pas de message d'essai visible en continu — uniquement blocage à expiration
-    return {
-      status: 'trial',
-      blocked: false,
-      label: 'Essai',
-      daysLeft,
-      message: '',
-    };
-  }
-
-  // --- past_due ---
-  if (raw === 'past_due' || raw === 'grace') {
-    const end = est.subscription_ends_at ? new Date(est.subscription_ends_at).getTime() : null;
-    if (end && !Number.isNaN(end) && end + PLAN.graceDays * 86400000 < now) {
-      return {
-        status: 'suspended',
-        blocked: true,
         label: 'Paiement requis',
-        daysLeft: 0,
-        message: `Délai de grâce dépassé. Payez ${PLAN.monthlyFcfa.toLocaleString('fr-FR')} F/mois via Wave + WhatsApp.`,
+        daysLeft: left,
+        message: `Paiement requis sous ${left} j (${minMonthly} F/mois min) via Wave 05 02 01 20 11.`,
       };
     }
     return {
       status: 'past_due',
       blocked: false,
-      label: 'Paiement en attente',
+      label: 'Paiement requis',
       daysLeft: PLAN.graceDays,
-      message: `Régularisez bientôt : ${PLAN.monthlyFcfa.toLocaleString('fr-FR')} F/mois (Wave + WhatsApp).`,
+      message: `Régularisez votre abonnement via Wave 05 02 01 20 11 (${minMonthly} F/mois min).`,
     };
   }
 
-  // Statut inconnu : ne pas bloquer (évite de couper les clients en prod)
-  return {
-    status: 'active',
-    blocked: false,
-    label: 'Compte',
-    daysLeft: null,
-    message: '',
-  };
-}
+  const trialEnd = resolveTrialEndMs(est);
+  if (trialEnd && trialEnd < now) {
+    const graceEnd = trialEnd + PLAN.graceDays * 86400000;
+    if (now <= graceEnd) {
+      const left = Math.max(0, Math.ceil((graceEnd - now) / 86400000));
+      return {
+        status: 'past_due',
+        blocked: false,
+        label: 'Essai terminé',
+        daysLeft: left,
+        message: `Essai d'1 mois terminé (${left} j avant coupure). Activez un forfait dès ${minMonthly} F/mois via Wave.`,
+      };
+    }
+    return {
+      status: 'suspended',
+      blocked: true,
+      label: 'Suspendu',
+      daysLeft: 0,
+      message: `Essai gratuit terminé. Activez un abonnement (dès ${minMonthly} F/mois) sur Wave 05 02 01 20 11 pour débloquer.`,
+    };
+  }
 
-export function newEstablishmentTrialFields(): {
-  subscription_status: 'trial';
-  trial_ends_at: string;
-  plan_tier: 'starter';
-} {
+  const daysLeft = trialEnd ? Math.max(0, Math.ceil((trialEnd - now) / 86400000)) : PLAN.trialDays;
+  const afterTrial = PLANS.starter;
   return {
-    subscription_status: 'trial',
-    trial_ends_at: trialEndsAtFromNow(PLAN.trialDays),
-    plan_tier: 'starter',
+    status: 'trial',
+    blocked: false,
+    label: 'Essai Pro',
+    daysLeft,
+    message: `Essai Pro — ${daysLeft} j restant${daysLeft === 1 ? '' : 's'}. Ensuite forfait Essentiel à ${afterTrial.monthlyFcfa.toLocaleString('fr-FR')} F/mois (ou Pro à ${PLANS.pro.monthlyFcfa.toLocaleString('fr-FR')} F/mois).`,
   };
 }
 
@@ -356,24 +359,42 @@ export function formatUnit(n: number, singular: string, plural?: string): string
 }
 
 export function isOnTrial(
-  est: { subscription_status?: string | null } | null | undefined,
+  est: {
+    subscription_status?: string | null;
+    trial_ends_at?: string | null;
+    created_at?: string | null;
+  } | null | undefined,
 ): boolean {
-  const s = String(est?.subscription_status || 'trial');
-  return s === 'trial' || !est?.subscription_status;
+  if (!est) return false;
+  const s = String(est?.subscription_status || 'trial').trim().toLowerCase();
+  if (s !== 'trial' && est?.subscription_status) return false;
+  const trialEnd = resolveTrialEndMs(est);
+  if (trialEnd && trialEnd < Date.now()) return false;
+  return true;
 }
 
 /** Titre affiché cohérent (essai vs forfait payant) */
 export function getPlanDisplayTitle(
-  est: { plan_tier?: string | null; subscription_status?: string | null } | null | undefined,
+  est: {
+    plan_tier?: string | null;
+    subscription_status?: string | null;
+    trial_ends_at?: string | null;
+    created_at?: string | null;
+  } | null | undefined,
 ): string {
   if (!est) return '—';
   if (isOnTrial(est)) return 'Essai Pro';
   return getEffectivePlan(est).label;
 }
 
-/** Limites réellement actives (Pro pendant essai) */
+/** Limites réellement actives (Pro pendant essai actif) */
 export function getActivePlanLimits(
-  est: { plan_tier?: string | null; subscription_status?: string | null } | null | undefined,
+  est: {
+    plan_tier?: string | null;
+    subscription_status?: string | null;
+    trial_ends_at?: string | null;
+    created_at?: string | null;
+  } | null | undefined,
 ): PlanLimits {
   return getEffectivePlan(est);
 }

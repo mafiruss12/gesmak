@@ -20,15 +20,19 @@ export function buildSubscriptionWhatsAppMessage(opts: {
   planLabel?: string;
   amount?: number;
   payerName?: string;
+  referenceCode?: string;
+  proofNote?: string;
 }): string {
   const amount = opts.amount ?? priceForMonths(opts.months);
   return [
     '*GESMAK — Confirmation paiement abonnement*',
+    opts.referenceCode ? `Code : ${opts.referenceCode}` : null,
     `Établissement : ${opts.establishmentName}`,
     opts.planLabel ? `Forfait : ${opts.planLabel}` : null,
     `Durée : ${opts.months} mois`,
     `Montant : ${amount.toLocaleString('fr-FR')} ${PLAN.currencyLabel}`,
     opts.payerName ? `Payé par : ${opts.payerName}` : null,
+    opts.proofNote ? `Réf / Note Wave : ${opts.proofNote}` : null,
     '',
     `J'ai effectué le paiement Wave sur le ${WAVE_NUMBER_DISPLAY}.`,
     'Merci de vérifier et d’activer mon abonnement.',
@@ -37,13 +41,14 @@ export function buildSubscriptionWhatsAppMessage(opts: {
     .join('\n');
 }
 
-export function openSubscriptionWhatsApp(opts: {
+export function getSubscriptionWhatsAppUrl(opts: {
   establishmentName: string;
   months: number;
   planLabel?: string;
   amount?: number;
   payerName?: string;
-}): void {
-  const msg = buildSubscriptionWhatsAppMessage(opts);
-  window.open(paymentWhatsAppLink(msg), '_blank', 'noopener,noreferrer');
+  referenceCode?: string;
+  proofNote?: string;
+}): string {
+  return paymentWhatsAppLink(buildSubscriptionWhatsAppMessage(opts));
 }

@@ -40,6 +40,8 @@ import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.Store
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Wallet
 import androidx.compose.material3.AlertDialog
@@ -81,22 +83,24 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.gesmak.app.BuildConfig
 import com.gesmak.app.R
+import com.gesmak.app.data.BizSpec
+import com.gesmak.app.data.BusinessTypes
 import com.gesmak.app.data.RemoteVersion
 import com.gesmak.app.data.SubscriptionPlans
 import com.gesmak.app.data.SupabaseApi
 import com.gesmak.app.data.SupabaseAuth
+import com.gesmak.app.ui.components.EstablishmentLogo
 import com.gesmak.app.ui.components.GesmakCard
 import com.gesmak.app.ui.components.StatusPill
 import com.gesmak.app.ui.theme.LocalGesmakColors
 import com.gesmak.app.ui.theme.roleLabelFr
 
-private val BIZ_TYPES = listOf(
-    "maquis" to "Maquis",
+private val COMPLEXE_SERVICE_OPTIONS = listOf(
+    "maquis" to "Maquis / Bar",
     "restaurant" to "Restaurant",
-    "complexe" to "Complexe",
-    "depot" to "Dépôt Boissons",
-    "location_event" to "Location Event",
-    "btp" to "BTP / Chantier",
+    "chambres" to "Chambres / Hébergement",
+    "location" to "Location événementielle",
+    "magasin" to "Boutique / Magasin",
 )
 
 @Composable
@@ -105,6 +109,8 @@ fun SettingsScreen(
     member: SupabaseApi.Member?,
     memberEmail: String,
     establishment: SupabaseApi.Establishment?,
+    allowedTypes: List<BizSpec> = emptyList(),
+    isPlatformAdmin: Boolean = false,
     pendingPaymentRequests: List<SupabaseApi.PaymentRequestRow> = emptyList(),
     isLightTheme: Boolean,
     orderSoundEnabled: Boolean,
@@ -119,9 +125,22 @@ fun SettingsScreen(
     onCheckUpdate: () -> Unit,
     onInstallUpdate: () -> Unit,
     onOpenUnknownAppsSettings: () -> Unit,
-    onSaveProfile: (fullName: String, cb: (String?) -> Unit) -> Unit,
+    onSaveProfile: (fullName: String, avatarUrl: String?, cb: (String?) -> Unit) -> Unit,
     onChangePassword: (currentPwd: String, newPwd: String, cb: (String?) -> Unit) -> Unit,
-    onSaveEstablishment: (name: String, address: String, phone: String, type: String, cb: (String?) -> Unit) -> Unit,
+    onSaveEstablishment: (
+        name: String,
+        address: String,
+        phone: String,
+        type: String?,
+        logoUrl: String?,
+        ownerEmail: String?,
+        ownerPhone: String?,
+        services: List<String>?,
+        cb: (String?) -> Unit,
+    ) -> Unit,
+    onSavePublicDepot: (visible: Boolean, zone: String, phone: String, cb: (String?) -> Unit) -> Unit = { _, _, _, cb -> cb(null) },
+    onPickEstLogo: (cb: (url: String?, err: String?) -> Unit) -> Unit = { cb -> cb(null, null) },
+    onPickProfilePhoto: (cb: (url: String?, err: String?) -> Unit) -> Unit = { cb -> cb(null, null) },
     onCreateEstablishment: (name: String, type: String, address: String, phone: String, cb: (String?) -> Unit) -> Unit,
     onCreatePaymentRequest: (
         planTier: String,
@@ -129,9 +148,13 @@ fun SettingsScreen(
         amountFcfa: Int,
         referenceCode: String,
         payerName: String,
+        waveTxRef: String,
         cb: (String?) -> Unit,
-    ) -> Unit = { _, _, _, _, _, cb -> cb(null) },
+    ) -> Unit = { _, _, _, _, _, _, cb -> cb(null) },
+    onRefreshStatus: () -> Unit = {},
     onCaptureGps: (cb: (String?) -> Unit) -> Unit,
+    onClearGps: (cb: (String?) -> Unit) -> Unit = { cb -> cb(null) },
+    onOpenPowers: () -> Unit = {},
     onRequestPermissions: () -> Unit,
     onOpenAppSystemSettings: () -> Unit,
     onLogout: () -> Unit,
@@ -141,6 +164,9 @@ fun SettingsScreen(
     val clipboard = LocalClipboardManager.current
     val role = member?.role?.lowercase().orEmpty()
     val canManageEst = role in setOf("super_admin", "admin", "owner", "propriétaire", "proprietaire")
+    val switchableSpecs = if (isPlatformAdmin) BusinessTypes.ALL else allowedTypes
+    val canSwitchEstType = isPlatformAdmin || switchableSpecs.size > 1
+    val canCreateNewEst = isPlatformAdmin || (member?.allowedTypes?.size ?: 0) > 1
 
     val subState = remember(establishment) { SubscriptionPlans.getSubscriptionState(establishment) }
     val activePlan = remember(establishment) { SubscriptionPlans.getEffectivePlan(establishment) }
@@ -151,6 +177,8 @@ fun SettingsScreen(
     var passwordModal by remember { mutableStateOf(false) }
     var estModal by remember { mutableStateOf(false) }
     var newEstModal by remember { mutableStateOf(false) }
+    var depotModal by remember { mutableStateOf(false) }
+    var gpsModal by remember { mutableStateOf(false) }
     var subModal by remember { mutableStateOf(false) }
     var aboutModal by remember { mutableStateOf(false) }
     var statusMsg by remember { mutableStateOf<String?>(null) }
@@ -165,6 +193,33 @@ fun SettingsScreen(
         item {
             Text("Paramètres", color = c.text, fontWeight = FontWeight.Bold, fontSize = 20.sp)
             Text("Compte, sécurité, établissement & mises à jour", color = c.muted, fontSize = 12.sp)
+        }
+
+        if (establishment != null) {
+            item {
+                GesmakCard(borderColor = c.accent.copy(alpha = 0.35f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        EstablishmentLogo(
+                            name = establishment.name,
+                            logoUrl = establishment.logoUrl,
+                            size = 44.dp,
+                            cornerRadius = 12.dp,
+                            accentColor = c.accent,
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("ÉTABLISSEMENT ACTIF", color = c.accentDeep, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Text(establishment.name, color = c.text, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                            Text(BusinessTypes.spec(establishment.type).label, color = c.muted, fontSize = 11.sp)
+                        }
+                        if (canManageEst) {
+                            TextButton(onClick = { estModal = true }) {
+                                Text("Modifier", color = c.accent, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         if (!statusMsg.isNullOrBlank()) {
@@ -347,17 +402,26 @@ fun SettingsScreen(
                     HorizontalDivider(color = c.border)
                     SettingNavRow(
                         icon = Icons.Default.Business,
-                        title = "Établissement & Activité",
-                        subtitle = "${establishment.name} (${establishment.type ?: "maquis"})",
+                        title = "Établissement, Logo & Contacts",
+                        subtitle = "${establishment.name} (${BusinessTypes.spec(establishment.type).label})",
                         onClick = { estModal = true },
                     )
                     HorizontalDivider(color = c.border)
                     SettingNavRow(
-                        icon = Icons.Default.Add,
-                        title = "Créer un nouvel établissement",
-                        subtitle = "Ajouter un 2ᵉ site / dépôt / restaurant",
-                        onClick = { newEstModal = true },
+                        icon = Icons.Default.Store,
+                        title = "Annuaire public (Dépôt / Vitrine)",
+                        subtitle = if (establishment.publicVisible) "Visible publiquement · ${establishment.publicZone ?: "Zone non définie"}" else "Masqué — Appuyer pour configurer",
+                        onClick = { depotModal = true },
                     )
+                    if (canCreateNewEst) {
+                        HorizontalDivider(color = c.border)
+                        SettingNavRow(
+                            icon = Icons.Default.Add,
+                            title = "Créer un nouvel établissement",
+                            subtitle = "Ajouter un 2ᵉ site parmi vos types attribués",
+                            onClick = { newEstModal = true },
+                        )
+                    }
                     HorizontalDivider(color = c.border)
                     SettingNavRow(
                         icon = Icons.Default.LocationOn,
@@ -365,13 +429,28 @@ fun SettingsScreen(
                         subtitle = if (establishment.latitude != null) {
                             "Enregistrée (${String.format("%.4f", establishment.latitude)}, ${String.format("%.4f", establishment.longitude)})"
                         } else {
-                            "Appuyer pour capturer la position GPS"
+                            "Appuyer pour enregistrer ou gérer le GPS"
                         },
-                        onClick = {
-                            onCaptureGps { m -> statusMsg = m }
-                        },
+                        onClick = { gpsModal = true },
                     )
                 }
+                HorizontalDivider(color = c.border)
+                SettingNavRow(
+                    icon = Icons.Default.Shield,
+                    title = "Rôles, Pouvoirs & Code PIN",
+                    subtitle = "Droits d'accès, code PIN manager et clôture",
+                    onClick = onOpenPowers,
+                )
+                HorizontalDivider(color = c.border)
+                SettingNavRow(
+                    icon = Icons.Default.Refresh,
+                    title = "Synchroniser les données",
+                    subtitle = "Actualiser le catalogue, stock et paramètres",
+                    onClick = {
+                        onRefreshStatus()
+                        statusMsg = "Synchronisation demandée…"
+                    },
+                )
                 HorizontalDivider(color = c.border)
                 SettingNavRow(
                     icon = Icons.Default.Security,
@@ -417,36 +496,89 @@ fun SettingsScreen(
 
     if (profileModal) {
         var name by remember { mutableStateOf(member?.fullName.orEmpty()) }
+        var avatarUrl by remember { mutableStateOf(member?.avatarUrl.orEmpty()) }
+        var photoMsg by remember { mutableStateOf<String?>(null) }
+        var uploading by remember { mutableStateOf(false) }
         var busy by remember { mutableStateOf(false) }
         AlertDialog(
-            onDismissRequest = { if (!busy) profileModal = false },
+            onDismissRequest = { if (!busy && !uploading) profileModal = false },
             containerColor = c.card,
             title = { Text("Modifier mon profil", color = c.text, fontWeight = FontWeight.Bold) },
             text = {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("Nom complet") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        EstablishmentLogo(
+                            name = name.ifBlank { "Profil" },
+                            logoUrl = avatarUrl.ifBlank { null },
+                            size = 56.dp,
+                            isCircle = true,
+                            accentColor = c.accent,
+                        )
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            OutlinedButton(
+                                enabled = !uploading && !busy,
+                                onClick = {
+                                    uploading = true
+                                    photoMsg = null
+                                    onPickProfilePhoto { url, err ->
+                                        uploading = false
+                                        if (err != null) photoMsg = err
+                                        else if (!url.isNullOrBlank()) {
+                                            avatarUrl = url
+                                            photoMsg = "Photo prête — appuyez sur Enregistrer"
+                                        }
+                                    }
+                                },
+                            ) {
+                                Text(if (uploading) "Envoi..." else "Choisir une photo", fontSize = 12.sp)
+                            }
+                            if (avatarUrl.isNotBlank()) {
+                                TextButton(onClick = { avatarUrl = "" }) {
+                                    Text("Retirer photo", color = c.rose, fontSize = 11.sp)
+                                }
+                            }
+                        }
+                    }
+                    if (!photoMsg.isNullOrBlank()) {
+                        Text(photoMsg!!, color = c.emerald, fontSize = 11.sp)
+                    }
+                    OutlinedTextField(
+                        value = avatarUrl,
+                        onValueChange = { avatarUrl = it },
+                        label = { Text("Photo (URL ou data URI)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        label = { Text("Nom complet") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
             },
             confirmButton = {
                 Button(
                     onClick = {
                         busy = true
-                        onSaveProfile(name) { err ->
+                        onSaveProfile(name, avatarUrl.trim().ifBlank { null }) { err ->
                             busy = false
                             statusMsg = err ?: "Profil enregistré"
                             profileModal = false
                         }
                     },
-                    enabled = !busy,
+                    enabled = !busy && !uploading,
                     colors = ButtonDefaults.buttonColors(containerColor = c.accent, contentColor = Color.White),
                 ) { Text("Enregistrer") }
             },
             dismissButton = {
-                TextButton(onClick = { profileModal = false }) { Text("Annuler", color = c.muted) }
+                TextButton(onClick = { profileModal = false }, enabled = !busy && !uploading) {
+                    Text("Annuler", color = c.muted)
+                }
             },
         )
     }
@@ -521,26 +653,131 @@ fun SettingsScreen(
         var eName by remember { mutableStateOf(establishment.name) }
         var eAddr by remember { mutableStateOf(establishment.address.orEmpty()) }
         var ePhone by remember { mutableStateOf(establishment.phone.orEmpty()) }
-        var eType by remember { mutableStateOf(establishment.type ?: "maquis") }
+        var eType by remember { mutableStateOf(BusinessTypes.normalize(establishment.type)) }
+        var eLogoUrl by remember { mutableStateOf(establishment.logoUrl.orEmpty()) }
+        var eOwnerEmail by remember { mutableStateOf(establishment.ownerEmail.orEmpty()) }
+        var eOwnerPhone by remember { mutableStateOf(establishment.ownerPhone.orEmpty()) }
+        var eServices by remember {
+            mutableStateOf(
+                establishment.services.ifEmpty { listOf("maquis") }.toSet(),
+            )
+        }
+        var logoUploading by remember { mutableStateOf(false) }
+        var logoMsg by remember { mutableStateOf<String?>(null) }
         var busy by remember { mutableStateOf(false) }
         AlertDialog(
-            onDismissRequest = { if (!busy) estModal = false },
+            onDismissRequest = { if (!busy && !logoUploading) estModal = false },
             containerColor = c.card,
-            title = { Text("Établissement", color = c.text, fontWeight = FontWeight.Bold) },
+            title = { Text("Établissement & Logo", color = c.text, fontWeight = FontWeight.Bold) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text("Logo / Photo de l'établissement", color = c.muted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        EstablishmentLogo(
+                            name = eName.ifBlank { establishment.name },
+                            logoUrl = eLogoUrl.ifBlank { null },
+                            size = 58.dp,
+                            cornerRadius = 14.dp,
+                            accentColor = c.accent,
+                        )
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            OutlinedButton(
+                                enabled = !logoUploading && !busy,
+                                onClick = {
+                                    logoUploading = true
+                                    logoMsg = null
+                                    onPickEstLogo { url, err ->
+                                        logoUploading = false
+                                        if (err != null) {
+                                            logoMsg = err
+                                        } else if (!url.isNullOrBlank()) {
+                                            eLogoUrl = url
+                                            logoMsg = "Logo prêt — appuyez sur Enregistrer"
+                                        }
+                                    }
+                                },
+                            ) {
+                                Text(if (logoUploading) "Envoi..." else "Choisir un logo", fontSize = 12.sp)
+                            }
+                            if (eLogoUrl.isNotBlank()) {
+                                TextButton(onClick = { eLogoUrl = ""; logoMsg = "Logo retiré (appuyez sur Enregistrer)" }) {
+                                    Text("Retirer le logo", color = c.rose, fontSize = 11.sp)
+                                }
+                            }
+                        }
+                    }
+                    if (!logoMsg.isNullOrBlank()) {
+                        Text(logoMsg!!, color = c.emerald, fontSize = 11.sp)
+                    }
+                    OutlinedTextField(
+                        value = eLogoUrl,
+                        onValueChange = { eLogoUrl = it },
+                        label = { Text("Logo (URL)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                     OutlinedTextField(value = eName, onValueChange = { eName = it }, label = { Text("Nom") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     OutlinedTextField(value = eAddr, onValueChange = { eAddr = it }, label = { Text("Adresse") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     OutlinedTextField(value = ePhone, onValueChange = { ePhone = it }, label = { Text("Téléphone") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    Text("Contacts propriétaire (rapports & alertes)", color = c.accentDeep, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    OutlinedTextField(
+                        value = eOwnerEmail,
+                        onValueChange = { eOwnerEmail = it },
+                        label = { Text("E-mail du propriétaire") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    OutlinedTextField(
+                        value = eOwnerPhone,
+                        onValueChange = { eOwnerPhone = it },
+                        label = { Text("WhatsApp du propriétaire") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                     Text("Type d'activité :", color = c.muted, fontSize = 11.sp)
-                    Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        BIZ_TYPES.forEach { (k, l) ->
-                            FilterChip(
-                                selected = eType == k,
-                                onClick = { eType = k },
-                                label = { Text(l, fontSize = 11.sp) },
-                                colors = FilterChipDefaults.filterChipColors(selectedContainerColor = c.accent, selectedLabelColor = Color.White),
-                            )
+                    if (canSwitchEstType) {
+                        Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            switchableSpecs.forEach { spec ->
+                                FilterChip(
+                                    selected = eType == spec.key,
+                                    onClick = { eType = spec.key },
+                                    label = { Text(spec.label, fontSize = 11.sp) },
+                                    colors = FilterChipDefaults.filterChipColors(selectedContainerColor = c.accent, selectedLabelColor = Color.White),
+                                )
+                            }
+                        }
+                    } else {
+                        StatusPill(
+                            label = "${BusinessTypes.spec(establishment.type).label} (attribué par l'admin)",
+                            color = c.accent,
+                        )
+                    }
+                    if (eType == "complexe") {
+                        Spacer(Modifier.height(4.dp))
+                        Text("Services du complexe multi-services :", color = c.muted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                        Row(
+                            modifier = Modifier.horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            COMPLEXE_SERVICE_OPTIONS.forEach { (id, label) ->
+                                val selected = eServices.contains(id)
+                                FilterChip(
+                                    selected = selected,
+                                    onClick = {
+                                        eServices = if (selected && eServices.size > 1) eServices - id else eServices + id
+                                    },
+                                    label = { Text(label, fontSize = 11.sp) },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = c.emerald,
+                                        selectedLabelColor = Color.White,
+                                    ),
+                                )
+                            }
                         }
                     }
                 }
@@ -549,10 +786,78 @@ fun SettingsScreen(
                 Button(
                     onClick = {
                         busy = true
-                        onSaveEstablishment(eName, eAddr, ePhone, eType) { err ->
+                        onSaveEstablishment(
+                            eName,
+                            eAddr,
+                            ePhone,
+                            if (canSwitchEstType) eType else null,
+                            eLogoUrl.trim().ifBlank { null },
+                            eOwnerEmail.trim().ifBlank { null },
+                            eOwnerPhone.trim().ifBlank { null },
+                            if (eType == "complexe") eServices.toList() else null,
+                        ) { err ->
                             busy = false
                             statusMsg = err ?: "Établissement mis à jour"
                             estModal = false
+                        }
+                    },
+                    enabled = !busy && !logoUploading,
+                    colors = ButtonDefaults.buttonColors(containerColor = c.accent, contentColor = Color.White),
+                ) { Text("Enregistrer") }
+            },
+            dismissButton = {
+                TextButton(onClick = { estModal = false }, enabled = !busy && !logoUploading) {
+                    Text("Annuler", color = c.muted)
+                }
+            },
+        )
+    }
+
+    if (depotModal && establishment != null) {
+        var pubVisible by remember { mutableStateOf(establishment.publicVisible) }
+        var pubZone by remember { mutableStateOf(establishment.publicZone.orEmpty()) }
+        var pubPhone by remember { mutableStateOf(establishment.publicPhone.orEmpty()) }
+        var busy by remember { mutableStateOf(false) }
+        AlertDialog(
+            onDismissRequest = { if (!busy) depotModal = false },
+            containerColor = c.card,
+            title = { Text("Annuaire public (Dépôt)", color = c.text, fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        "Opt-in : votre dépôt peut apparaître dans l'annuaire public sans exposer de données financières.",
+                        color = c.muted,
+                        fontSize = 12.sp,
+                    )
+                    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text("Visible publiquement", color = c.text, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                        Switch(checked = pubVisible, onCheckedChange = { pubVisible = it })
+                    }
+                    OutlinedTextField(
+                        value = pubZone,
+                        onValueChange = { pubZone = it },
+                        label = { Text("Zone couverte (ex. Abobo, Yopougon)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    OutlinedTextField(
+                        value = pubPhone,
+                        onValueChange = { pubPhone = it },
+                        label = { Text("Téléphone public") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        busy = true
+                        onSavePublicDepot(pubVisible, pubZone, pubPhone) { err ->
+                            busy = false
+                            statusMsg = err ?: "Annuaire public enregistré"
+                            depotModal = false
                         }
                     },
                     enabled = !busy,
@@ -560,16 +865,99 @@ fun SettingsScreen(
                 ) { Text("Enregistrer") }
             },
             dismissButton = {
-                TextButton(onClick = { estModal = false }) { Text("Annuler", color = c.muted) }
+                TextButton(onClick = { depotModal = false }, enabled = !busy) { Text("Annuler", color = c.muted) }
             },
         )
     }
 
-    if (newEstModal) {
+    if (gpsModal && establishment != null) {
+        var gpsBusy by remember { mutableStateOf(false) }
+        AlertDialog(
+            onDismissRequest = { if (!gpsBusy) gpsModal = false },
+            containerColor = c.card,
+            title = { Text("Position GPS", color = c.text, fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        "Enregistrez la position exacte pour l'assistance technique. Vous pouvez la mettre à jour ou arrêter le partage à tout moment.",
+                        color = c.muted,
+                        fontSize = 12.sp,
+                    )
+                    if (establishment.latitude != null && establishment.longitude != null) {
+                        Surface(shape = RoundedCornerShape(10.dp), color = c.cardAlt, modifier = Modifier.fillMaxWidth()) {
+                            Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(
+                                    "${String.format("%.5f", establishment.latitude)}, ${String.format("%.5f", establishment.longitude)}",
+                                    color = c.text,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp,
+                                )
+                                OutlinedButton(
+                                    onClick = {
+                                        val mapUrl = "https://www.google.com/maps?q=${establishment.latitude},${establishment.longitude}"
+                                        try {
+                                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(mapUrl)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                                        } catch (_: Exception) {
+                                            statusMsg = "Navigateur ou Google Maps introuvable."
+                                        }
+                                    },
+                                ) {
+                                    Text("Voir sur Google Maps", color = c.sky, fontSize = 12.sp)
+                                }
+                            }
+                        }
+                    } else {
+                        Text("Aucune position GPS enregistrée actuellement.", color = c.muted, fontSize = 12.sp)
+                    }
+                    Button(
+                        enabled = !gpsBusy,
+                        onClick = {
+                            gpsBusy = true
+                            onCaptureGps { msg ->
+                                gpsBusy = false
+                                statusMsg = msg
+                                gpsModal = false
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = c.accent, contentColor = Color.White),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(if (establishment.latitude != null) "Mettre à jour ma position GPS" else "Enregistrer ma position GPS")
+                    }
+                    if (establishment.latitude != null) {
+                        OutlinedButton(
+                            enabled = !gpsBusy,
+                            onClick = {
+                                gpsBusy = true
+                                onClearGps { msg ->
+                                    gpsBusy = false
+                                    statusMsg = msg ?: "Partage GPS désactivé"
+                                    gpsModal = false
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("Arrêter le partage GPS", color = c.rose)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { gpsModal = false }, enabled = !gpsBusy) { Text("Fermer", color = c.muted) }
+            },
+        )
+    }
+
+    if (newEstModal && canCreateNewEst) {
+        val creatableSpecs = if (isPlatformAdmin) {
+            BusinessTypes.ALL
+        } else {
+            BusinessTypes.allowedSpecs(member?.role, member?.allowedTypes.orEmpty())
+        }
         var name by remember { mutableStateOf("") }
         var addr by remember { mutableStateOf("") }
         var phone by remember { mutableStateOf("") }
-        var bizType by remember { mutableStateOf("maquis") }
+        var bizType by remember { mutableStateOf(creatableSpecs.firstOrNull()?.key ?: "maquis") }
         var err by remember { mutableStateOf<String?>(null) }
         var busy by remember { mutableStateOf(false) }
 
@@ -580,13 +968,13 @@ fun SettingsScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Nom du site") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                    Text("Activité :", color = c.muted, fontSize = 11.sp)
+                    Text("Activité attribuée :", color = c.muted, fontSize = 11.sp)
                     Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        BIZ_TYPES.forEach { (k, l) ->
+                        creatableSpecs.forEach { spec ->
                             FilterChip(
-                                selected = bizType == k,
-                                onClick = { bizType = k },
-                                label = { Text(l, fontSize = 11.sp) },
+                                selected = bizType == spec.key,
+                                onClick = { bizType = spec.key },
+                                label = { Text(spec.label, fontSize = 11.sp) },
                                 colors = FilterChipDefaults.filterChipColors(selectedContainerColor = c.accent, selectedLabelColor = Color.White),
                             )
                         }
@@ -639,6 +1027,7 @@ fun SettingsScreen(
         }
         var selectedMonths by remember { mutableIntStateOf(1) }
         var payerName by remember { mutableStateOf(member?.fullName.orEmpty()) }
+        var waveTxRef by remember { mutableStateOf("") }
         var copiedToast by remember { mutableStateOf(false) }
         var localRefCode by remember { mutableStateOf(pendingPaymentRequests.firstOrNull()?.referenceCode) }
         var payBusy by remember { mutableStateOf(false) }
@@ -791,6 +1180,13 @@ fun SettingsScreen(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
+                    OutlinedTextField(
+                        value = waveTxRef,
+                        onValueChange = { waveTxRef = it },
+                        label = { Text("ID / Référence transaction Wave (optionnel)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
 
                     Surface(
                         shape = RoundedCornerShape(12.dp),
@@ -865,7 +1261,7 @@ fun SettingsScreen(
                             payErr = null
                             payBusy = true
                             val refCode = SubscriptionPlans.generateReferenceCode()
-                            onCreatePaymentRequest(selectedTier, selectedMonths, totalAmount, refCode, payerName.trim()) { _ ->
+                            onCreatePaymentRequest(selectedTier, selectedMonths, totalAmount, refCode, payerName.trim(), waveTxRef.trim()) { _ ->
                                 payBusy = false
                                 localRefCode = refCode
                                 val waUrl = SubscriptionPlans.buildWhatsAppUrl(
@@ -874,6 +1270,7 @@ fun SettingsScreen(
                                     months = selectedMonths,
                                     payerName = payerName.trim(),
                                     referenceCode = refCode,
+                                    proofNote = waveTxRef.trim().ifBlank { null },
                                 )
                                 try {
                                     context.startActivity(
@@ -896,6 +1293,16 @@ fun SettingsScreen(
                             Spacer(Modifier.width(6.dp))
                             Text("J'ai payé sur Wave — WhatsApp", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                         }
+                    }
+
+                    OutlinedButton(
+                        onClick = { onRefreshStatus() },
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = null, tint = c.accent, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Vérifier l'activation", color = c.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
             },

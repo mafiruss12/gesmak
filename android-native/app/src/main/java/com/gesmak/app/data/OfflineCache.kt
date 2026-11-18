@@ -60,7 +60,9 @@ class OfflineCache(context: Context) {
                         .put("email", m.email ?: JSONObject.NULL)
                         .put("assigned_pole_code", m.assignedPoleCode ?: JSONObject.NULL)
                         .put("supervisor_user_id", m.supervisorUserId ?: JSONObject.NULL)
-                        .put("can_edit_stock", m.canEditStock),
+                        .put("can_edit_stock", m.canEditStock)
+                        .put("allowed_types", JSONArray(m.allowedTypes))
+                        .put("avatar_url", m.avatarUrl ?: JSONObject.NULL),
                 )
             }
 
@@ -81,14 +83,31 @@ class OfflineCache(context: Context) {
                         .put("longitude", e.longitude ?: JSONObject.NULL)
                         .put("location_updated_at", e.locationUpdatedAt ?: JSONObject.NULL)
                         .put("subscription_ends_at", e.subscriptionEndsAt ?: JSONObject.NULL)
-                        .put("last_payment_at", e.lastPaymentAt ?: JSONObject.NULL),
+                        .put("last_payment_at", e.lastPaymentAt ?: JSONObject.NULL)
+                        .put("created_at", e.createdAt ?: JSONObject.NULL)
+                        .put("allowed_types", JSONArray(e.allowedTypes))
+                        .put("logo_url", e.logoUrl ?: JSONObject.NULL)
+                        .put("owner_email", e.ownerEmail ?: JSONObject.NULL)
+                        .put("owner_phone", e.ownerPhone ?: JSONObject.NULL)
+                        .put("services", JSONArray(e.services))
+                        .put("public_visible", e.publicVisible)
+                        .put("public_zone", e.publicZone ?: JSONObject.NULL)
+                        .put("public_phone", e.publicPhone ?: JSONObject.NULL),
                 )
             }
 
             root.put(
                 "est_choices",
                 JSONArray().apply {
-                    s.estChoices.forEach { put(JSONObject().put("id", it.id).put("name", it.name)) }
+                    s.estChoices.forEach {
+                        put(
+                            JSONObject()
+                                .put("id", it.id)
+                                .put("name", it.name)
+                                .put("type", it.type ?: JSONObject.NULL)
+                                .put("logo_url", it.logoUrl ?: JSONObject.NULL),
+                        )
+                    }
                 },
             )
             root.put("poles", polesToJson(s.poles))
@@ -218,6 +237,8 @@ class OfflineCache(context: Context) {
                     assignedPoleCode = o.optStr("assigned_pole_code"),
                     supervisorUserId = o.optStr("supervisor_user_id"),
                     canEditStock = o.optBoolean("can_edit_stock", false),
+                    allowedTypes = o.optStrList("allowed_types"),
+                    avatarUrl = o.optStr("avatar_url"),
                 )
             }
             val eObj = root.optJSONObject("establishment")
@@ -237,13 +258,22 @@ class OfflineCache(context: Context) {
                     locationUpdatedAt = o.optStr("location_updated_at"),
                     subscriptionEndsAt = o.optStr("subscription_ends_at"),
                     lastPaymentAt = o.optStr("last_payment_at"),
+                    createdAt = o.optStr("created_at"),
+                    allowedTypes = o.optStrList("allowed_types"),
+                    logoUrl = o.optStr("logo_url"),
+                    ownerEmail = o.optStr("owner_email"),
+                    ownerPhone = o.optStr("owner_phone"),
+                    services = o.optStrList("services"),
+                    publicVisible = o.optBoolean("public_visible", false),
+                    publicZone = o.optStr("public_zone"),
+                    publicPhone = o.optStr("public_phone"),
                 )
             }
             val choices = buildList {
                 val arr = root.optJSONArray("est_choices") ?: JSONArray()
                 for (i in 0 until arr.length()) {
                     val o = arr.getJSONObject(i)
-                    add(EstChoice(o.optString("id"), o.optString("name")))
+                    add(EstChoice(o.optString("id"), o.optString("name"), o.optStr("type"), o.optStr("logo_url")))
                 }
             }
             val products = buildList {
@@ -414,4 +444,14 @@ class OfflineCache(context: Context) {
 
     private fun JSONObject.optStr(key: String): String? =
         if (isNull(key)) null else optString(key).ifBlank { null }
+
+    private fun JSONObject.optStrList(key: String): List<String> {
+        val arr = optJSONArray(key) ?: return emptyList()
+        return buildList {
+            for (i in 0 until arr.length()) {
+                val s = arr.optString(i).trim()
+                if (s.isNotBlank() && s != "null") add(s)
+            }
+        }
+    }
 }

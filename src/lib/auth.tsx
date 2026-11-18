@@ -4,6 +4,8 @@ import { supabase } from './supabase';
 import { toAuthEmail } from './login';
 import { isOnline, cacheAuthProfile, getCachedAuthProfile, prefetchForOffline } from './offline';
 import { getLoginLockRemaining, registerLoginFailure, registerLoginSuccess, isSafeLogin, safeErrorMessage, isStrongEnoughPassword, isPasswordBreached, serverLoginThrottle } from './security';
+import { getEffectivePlan } from './subscription';
+import { getAllowedBusinessTypes, type BusinessType } from './businessTypes';
 import type { Member, AccessRequest, Establishment } from './types';
 
 export interface MyEstablishment extends Establishment {
@@ -24,6 +26,9 @@ interface AuthContextValue {
   /** Établissements auxquels l'utilisateur est rattaché (phase 2) */
   myEstablishments: MyEstablishment[];
   activeEstablishment: MyEstablishment | null;
+  /** Types d'activité autorisés par l'administrateur pour le compte/site actif */
+  allowedBusinessTypes: BusinessType[];
+  isPlatformAdmin: boolean;
   switchEstablishment: (establishmentId: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: string | null }>;
@@ -170,7 +175,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const raw = localStorage.getItem('mm_active_est');
       if (!raw) return null;
       const p = JSON.parse(raw);
-      if (p?.id) return { id: p.id, name: p.name || '', type: p.type || 'maquis' } as MyEstablishment;
+      if (p?.id) {
+        return {
+          id: p.id,
+          name: p.name || '',
+          type: p.type || 'maquis',
+          subscription_status: p.subscription_status ?? null,
+          trial_ends_at: p.trial_ends_at ?? null,
+          subscription_ends_at: p.subscription_ends_at ?? null,
+          last_payment_at: p.last_payment_at ?? null,
+          plan_tier: p.plan_tier ?? null,
+          created_at: p.created_at ?? '',
+          services: Array.isArray(p.services) ? p.services : null,
+          allowed_types: Array.isArray(p.allowed_types) ? p.allowed_types : null,
+          logo_url: p.logo_url ?? null,
+        } as MyEstablishment;
+      }
     } catch { /* */ }
     return null;
   });
@@ -190,10 +210,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch { /* */ }
   }
 
-  function saveActiveEstForUser(userId: string | undefined, est: { id: string; type?: string; name?: string } | null) {
+  function saveActiveEstForUser(userId: string | undefined, est: Partial<MyEstablishment> | null) {
     try {
       if (!userId || !est?.id) return;
-      const payload = JSON.stringify({ id: est.id, type: est.type, name: est.name });
+      const payload = JSON.stringify({
+        id: est.id,
+        type: est.type,
+        name: est.name,
+        subscription_status: est.subscription_status ?? null,
+        trial_ends_at: est.trial_ends_at ?? null,
+        subscription_ends_at: est.subscription_ends_at ?? null,
+        last_payment_at: est.last_payment_at ?? null,
+        plan_tier: est.plan_tier ?? null,
+        created_at: est.created_at ?? null,
+        services: est.services ?? null,
+        allowed_types: est.allowed_types ?? null,
+        logo_url: est.logo_url ?? null,
+      });
       localStorage.setItem(`mm_active_est:${userId}`, payload);
       localStorage.setItem('mm_active_est', payload); // compat
     } catch { /* */ }
@@ -260,7 +293,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (raw) {
             const c = JSON.parse(raw);
             if (c?.id === currentMember.establishment_id) {
-              active = { ...active, name: c.name || active.name, type: c.type || active.type };
+              active = {
+                ...active,
+                name: c.name || active.name,
+                type: c.type || active.type,
+                subscription_status: c.subscription_status ?? active.subscription_status,
+                trial_ends_at: c.trial_ends_at ?? active.trial_ends_at,
+                subscription_ends_at: c.subscription_ends_at ?? active.subscription_ends_at,
+                last_payment_at: c.last_payment_at ?? active.last_payment_at,
+                plan_tier: c.plan_tier ?? active.plan_tier,
+                created_at: c.created_at ?? active.created_at,
+                services: Array.isArray(c.services) ? c.services : active.services,
+                allowed_types: Array.isArray(c.allowed_types) ? c.allowed_types : active.allowed_types,
+                logo_url: c.logo_url ?? active.logo_url,
+              };
             }
           }
         } catch { /* */ }
@@ -312,18 +358,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Palier : multi-sites / max établissements
     const primary = myEstablishments[0];
     const plan = getEffectivePlan(primary as any);
-    if (!plan.multiSite && establishmentId !== (member.establishment_id || primary?.id)) {
-      alert(
-        `Offre ${plan.label} : un seul établissement. Passez en Pro pour gérer plusieurs sites.`,
-      );
-      return;
+    if (!plan.multiSite && establishmentId !== (member.establishment_id || primary?.id) && member.role !== 'super_admin' && member.role !== 'admin') {
+      throw new Error(`Offre ${plan.label} : un seul établissement. Passez en Pro pour gérer plusieurs sites.`);
     }
     if (myEstablishments.length > plan.maxEstablishments && establishmentId !== member.establishment_id) {
-      // si déjà trop de sites liés, on autorise le switch mais on a prévenu à la création
       const allowedIds = myEstablishments.slice(0, plan.maxEstablishments).map((e) => e.id);
       if (!allowedIds.includes(establishmentId) && member.role !== 'super_admin' && member.role !== 'admin') {
-        alert(`Offre ${plan.label} : maximum ${plan.maxEstablishments} établissement(s).`);
-        return;
+        throw new Error(`Offre ${plan.label} : maximum ${plan.maxEstablishments} établissement(s).`);
       }
     }
 
@@ -401,24 +442,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // Charger établissement actif + propriétaire (created_by)
+      // Charger établissement complet
       if (m.establishment_id) {
         const { data: est } = await supabase
           .from('establishments')
-          .select('id, name, type, created_by, owner_user_id, owner_email, owner_phone')
+          .select('*')
           .eq('id', m.establishment_id)
           .maybeSingle();
         if (est) {
+          saveActiveEstForUser(currentUser.id, est as Partial<MyEstablishment>);
           try {
-            localStorage.setItem(
-              'mm_active_est',
-              JSON.stringify({
-                id: est.id,
-                type: est.type,
-                name: est.name,
-                owner_user_id: est.owner_user_id || est.created_by,
-              })
-            );
             localStorage.setItem('mm_est_ids', JSON.stringify([est.id]));
           } catch { /* */ }
           setActiveEstablishment({
@@ -437,11 +470,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function loadMemberData(currentUser: User): Promise<Member> {
     const fallback = buildFallbackMember(currentUser);
     try {
-      // 1) RPC SECURITY DEFINER : fiable mobile (bypass RLS race session)
+      // 1) RPC SECURITY DEFINER : fiable mobile (bypass RLS race session), suivie de loadMyEstablishments pour charger tous les sites et champs complets
       try {
         const { data: boot, error: bootErr } = await supabase.rpc('bootstrap_my_session');
         if (!bootErr && boot && typeof boot === 'object') {
-          const payload = boot as { member?: Member; establishment?: { id: string; name?: string; type?: string } | null; error?: string };
+          const payload = boot as {
+            member?: Member;
+            establishment?: Partial<Establishment> & { id: string } | null;
+            error?: string;
+          };
           if (payload.member && payload.member.user_id) {
             const m = payload.member as Member;
             setMember(m);
@@ -449,21 +486,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setNeedsAccess(false);
             if (payload.establishment?.id) {
               const est = {
-                id: payload.establishment.id,
+                ...(payload.establishment as Establishment),
                 name: payload.establishment.name || 'Mon établissement',
                 type: payload.establishment.type || 'maquis',
                 member_role: m.role,
               } as MyEstablishment;
               setActiveEstablishment(est);
-              setMyEstablishments([est]);
-              try {
-                saveActiveEstForUser(currentUser.id, est);
-                localStorage.setItem('mm_est_ids', JSON.stringify([est.id]));
-                localStorage.setItem(`mm_est_ids:${currentUser.id}`, JSON.stringify([est.id]));
-              } catch { /* */ }
-            } else if (m.establishment_id) {
-              try { await loadMyEstablishments(currentUser, m); } catch { /* */ }
+              setMyEstablishments((prev) => (prev.length > 1 ? prev : [est]));
+              saveActiveEstForUser(currentUser.id, est);
             }
+            // Toujours charger les établissements complets (abonnement, trial_ends_at, multi-sites)
+            try { await loadMyEstablishments(currentUser, m); } catch { /* */ }
             try { await cacheAuthProfile({ userId: currentUser.id, member: m }); } catch { /* */ }
             return m;
           }
@@ -1234,6 +1267,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [user?.id]);
 
+  const isPlatformAdmin = member?.role === 'super_admin' || member?.role === 'admin';
+  const allowedBusinessTypes = getAllowedBusinessTypes(
+    effectiveRole || member?.role,
+    member?.allowed_types,
+    activeEstablishment?.allowed_types,
+    activeEstablishment?.type,
+  );
+
 return (
     <AuthContext.Provider
       value={{
@@ -1248,6 +1289,8 @@ return (
         setViewAsRole,
         myEstablishments,
         activeEstablishment,
+        allowedBusinessTypes,
+        isPlatformAdmin,
         switchEstablishment,
         signIn,
         signUp,

@@ -7,11 +7,11 @@ export const BUSINESS_TYPES: BusinessType[] = ['maquis', 'restaurant', 'location
 export const BUSINESS_TYPES_SELECTABLE: BusinessType[] = BUSINESS_TYPES;
 
 export const BUSINESS_LABELS: Record<BusinessType, string> = {
-  maquis: 'Maquis',
+  maquis: 'Maquis / Bar',
   restaurant: 'Restaurant',
   depot: 'Grossiste / Dépôt',
   location_event: 'Location événementielle',
-  complexe: 'Établissement',
+  complexe: 'Hôtel & Complexe',
 };
 
 export const BUSINESS_DESCRIPTIONS: Record<BusinessType, string> = {
@@ -70,7 +70,7 @@ export const MENU_BY_TYPE: Record<BusinessType, string[]> = {
     '/inventory', '/inventory/scan', '/guide', '/menu-qr', '/kits', '/stock-transfer',
     '/purchases', '/suppliers', '/customers', '/point-manuel', '/documents',
     '/expenses', '/mes-employes', '/calendar', '/daily-report', '/cloture', '/patron',
-    '/statistics', '/reports', '/accounting', '/ai', '/ai-train', '/chat',
+    '/rapports-financiers', '/statistics', '/reports', '/accounting', '/ai', '/ai-train', '/chat',
     '/notifications', '/subscription', '/settings',
   ],
   restaurant: [
@@ -78,21 +78,21 @@ export const MENU_BY_TYPE: Record<BusinessType, string[]> = {
     '/pos', '/print-qr', '/menu-qr', '/mon-service',
     '/inventory', '/inventory/scan', '/purchases', '/customers',
     '/expenses', '/mes-employes', '/calendar', '/daily-report', '/cloture',
-    '/statistics', '/reports', '/accounting', '/ai', '/chat',
+    '/rapports-financiers', '/statistics', '/reports', '/accounting', '/ai', '/chat',
     '/notifications', '/subscription', '/settings', '/guide',
   ],
   depot: [
     '/dashboard', '/pouvoirs', '/depot/clients', '/depot/deliveries', '/depot/tours',
     '/depot/creances', '/depot/tracking', '/depot/consignes', '/depot/prices',
     '/inventory', '/inventory/scan', '/purchases', '/suppliers',
-    '/expenses', '/mes-employes', '/daily-report', '/statistics', '/reports', '/accounting',
+    '/expenses', '/mes-employes', '/daily-report', '/rapports-financiers', '/statistics', '/reports', '/accounting',
     '/ai', '/chat', '/notifications', '/subscription', '/settings', '/guide',
   ],
   location_event: [
     '/dashboard', '/pouvoirs', '/rent/equipment', '/rent/clients', '/rent/orders',
     '/rent/movements', '/rent/payments', '/rent/calendar', '/rent/packs',
     '/rent/invoices', '/guide', '/mes-employes', '/daily-report', '/cloture',
-    '/ai', '/ai-train', '/chat', '/notifications', '/subscription', '/settings',
+    '/rapports-financiers', '/ai', '/ai-train', '/chat', '/notifications', '/subscription', '/settings',
   ],
   complexe: [
     '/hotel', '/hotel/rooms', '/hotel/reservations', '/hotel/guests',
@@ -101,7 +101,7 @@ export const MENU_BY_TYPE: Record<BusinessType, string[]> = {
     '/dashboard', '/pouvoirs', '/pos', '/live-sales', '/tables', '/print-qr', '/orders', '/kitchen', '/mon-service',
     '/inventory', '/inventory/scan', '/guide', '/menu-qr', '/purchases', '/customers',
     '/expenses', '/mes-employes', '/calendar', '/daily-report', '/cloture',
-    '/statistics', '/reports', '/accounting', '/ai', '/chat',
+    '/rapports-financiers', '/statistics', '/reports', '/accounting', '/ai', '/chat',
     '/notifications', '/subscription', '/settings',
   ],
 };
@@ -109,16 +109,9 @@ export const MENU_BY_TYPE: Record<BusinessType, string[]> = {
 /** Services cochés pour un type « Établissement » */
 export type EstablishmentServiceId = 'maquis' | 'restaurant' | 'chambres' | 'location' | 'magasin';
 
-const SERVICE_TO_MENU_TYPE: Record<string, BusinessType> = {
-  maquis: 'maquis',
-  restaurant: 'maquis', // menus F&B proches maquis + routes resto via filtre services
-  magasin: 'maquis',
-  location: 'location_event',
-};
-
 const COMPLEXE_CORE_ROUTES = [
   '/dashboard', '/pouvoirs', '/daily-report', '/expenses', '/mes-employes', '/calendar',
-  '/statistics', '/reports', '/accounting', '/ai', '/chat', '/notifications',
+  '/rapports-financiers', '/statistics', '/reports', '/accounting', '/ai', '/chat', '/notifications',
   '/subscription', '/settings', '/guide', '/customers', '/purchases', '/inventory', '/inventory/scan', '/pos',
 ];
 
@@ -273,7 +266,8 @@ export function orderWord(type: BusinessType): string {
   return 'Commande';
 }
 
-export function isCommerceType(_type: BusinessType): boolean {
+export function isCommerceType(_type?: BusinessType): boolean {
+  void _type;
   return false;
 }
 
@@ -328,7 +322,8 @@ export function isLocationEvent(type: string | null | undefined): boolean {
   return normalizeBusinessType(type) === 'location_event';
 }
 
-export function isBtp(_type: string | null | undefined): boolean {
+export function isBtp(_type?: string | null): boolean {
+  void _type;
   return false;
 }
 
@@ -348,6 +343,47 @@ export function applyBusinessTheme(type: BusinessType) {
 
 export function canManageEstablishments(role: Role | undefined): boolean {
   return !!role && ['super_admin', 'admin', 'owner'].includes(role);
+}
+
+/**
+ * Retourne exclusivement les types d'activité autorisés pour ce compte/établissement :
+ * - Admin / Super Admin : tous les types
+ * - Propriétaire : uniquement ceux attribués par l'administrateur (`allowed_types`) + le type courant de l'établissement
+ * - Aucun type attribué sans établissement : tableau vide (en attente d'attribution admin)
+ */
+export function getAllowedBusinessTypes(
+  role: string | null | undefined,
+  memberAllowed?: string[] | null,
+  estAllowed?: string[] | null,
+  currentType?: string | null,
+): BusinessType[] {
+  const r = (role || '').toLowerCase().trim();
+  if (r === 'super_admin' || r === 'admin') {
+    return [...BUSINESS_TYPES];
+  }
+
+  const out = new Set<BusinessType>();
+  const addAll = (arr?: string[] | null) => {
+    if (!Array.isArray(arr)) return;
+    for (const raw of arr) {
+      if (typeof raw === 'string' && raw.trim()) {
+        out.add(normalizeBusinessType(raw));
+      }
+    }
+  };
+
+  addAll(estAllowed);
+  addAll(memberAllowed);
+
+  if (currentType && currentType.trim()) {
+    const cur = normalizeBusinessType(currentType);
+    if (out.size === 0) {
+      return [cur];
+    }
+    out.add(cur);
+  }
+
+  return BUSINESS_TYPES.filter((t) => out.has(t));
 }
 
 export function buildWhatsAppLink(phone: string | null | undefined, message: string): string {

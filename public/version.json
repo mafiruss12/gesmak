@@ -1,1 +1,5 @@
-{"version":"1.4.1","git":"trial-1-month-auto-block","build":"2026-11-17","notes":"Essai strict 1 mois dès création du compte, puis blocage automatique jusqu au paiement."}
+{
+  "version": "1.4.0",
+  "build": "market-release-financial-reports",
+  "notes": "Nouvelle page Rapports Financiers (bénéfices nets & charges consolidées), affichage du logo et de l'établissement actif, paramètres complets et optimisations de lancement."
+}

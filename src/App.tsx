@@ -58,6 +58,7 @@ const Reservations = lazy(() => import('@/pages/restaurant/Reservations'));
 const Orders = lazy(() => import('@/pages/Orders'));
 const Kitchen = lazy(() => import('@/pages/Kitchen'));
 const Accounting = lazy(() => import('@/pages/Accounting'));
+const FinancialReports = lazy(() => import('@/pages/FinancialReports'));
 const Statistics = lazy(() => import('@/pages/Statistics'));
 const Reports = lazy(() => import('@/pages/Reports'));
 const Notifications = lazy(() => import('@/pages/Notifications'));
@@ -221,6 +222,7 @@ function ProtectedRoutes() {
         <Route path="/suppliers" element={<Suppliers />} />
         <Route path="/purchases" element={<Purchases />} />
         <Route path="/accounting" element={<Accounting />} />
+        <Route path="/rapports-financiers" element={<FinancialReports />} />
         <Route path="/statistics" element={<PlanGate feature="advancedReports" label="Statistiques avancees"><Statistics /></PlanGate>} />
         <Route path="/reports" element={<Navigate to="/daily-report" replace />} />
         <Route path="/daily-report" element={<DailyReportSafe />} />

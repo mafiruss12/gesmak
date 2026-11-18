@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -42,6 +43,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -50,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
+import com.gesmak.app.R
 import com.gesmak.app.data.ProductImages
 import com.gesmak.app.data.SupabaseApi
 import com.gesmak.app.ui.theme.LocalGesmakColors
@@ -156,6 +159,91 @@ fun ProductThumb(
                     }
                 },
             )
+        }
+    }
+}
+
+@Composable
+fun EstablishmentLogo(
+    name: String,
+    logoUrl: String?,
+    modifier: Modifier = Modifier,
+    size: Dp = 40.dp,
+    cornerRadius: Dp = 12.dp,
+    isCircle: Boolean = false,
+    accentColor: Color = LocalGesmakColors.current.accent,
+) {
+    val c = LocalGesmakColors.current
+    val ctx = LocalContext.current
+    val cleanUrl = logoUrl?.trim().orEmpty()
+    val decodedBitmap = remember(cleanUrl) {
+        if (cleanUrl.startsWith("data:image", ignoreCase = true)) {
+            try {
+                val comma = cleanUrl.indexOf(',')
+                if (comma > 0) {
+                    val bytes = Base64.decode(cleanUrl.substring(comma + 1).trim(), Base64.DEFAULT)
+                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+                } else {
+                    null
+                }
+            } catch (_: Exception) {
+                null
+            }
+        } else {
+            null
+        }
+    }
+    val shape = if (isCircle) CircleShape else RoundedCornerShape(cornerRadius)
+    Surface(
+        modifier = modifier.size(size),
+        shape = shape,
+        color = c.cardAlt,
+        border = BorderStroke(1.dp, accentColor.copy(alpha = 0.45f)),
+    ) {
+        when {
+            decodedBitmap != null -> {
+                Image(
+                    bitmap = decodedBitmap,
+                    contentDescription = name,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+            cleanUrl.startsWith("http://", ignoreCase = true) || cleanUrl.startsWith("https://", ignoreCase = true) -> {
+                SubcomposeAsyncImage(
+                    model = ImageRequest.Builder(ctx)
+                        .data(cleanUrl)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = name,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                    loading = {
+                        Box(
+                            modifier = Modifier.fillMaxSize().background(c.accentSoft),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(size / 2.2f), strokeWidth = 2.dp, color = accentColor)
+                        }
+                    },
+                    error = {
+                        Image(
+                            painter = painterResource(id = R.drawable.logo_circle),
+                            contentDescription = name,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    },
+                )
+            }
+            else -> {
+                Image(
+                    painter = painterResource(id = R.drawable.logo_circle),
+                    contentDescription = name,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
         }
     }
 }

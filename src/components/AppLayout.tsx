@@ -1,6 +1,6 @@
 import { type ReactNode, useState, useEffect , useRef} from 'react';
 import { NavLink, useNavigate, useLocation, Navigate } from 'react-router-dom';
-import { LayoutDashboard, ShoppingCart, Package, Camera, ClipboardCheck, QrCode, Users, Building2, Beer, LogOut, RefreshCw, Menu, X, ChevronsUpDown, Check, UserCog, ClipboardList, Calculator, BarChart3, Truck, UserCircle, Calendar, CalendarDays, UtensilsCrossed, Bell, Settings, Sparkles, Receipt, Wallet, MessageCircle, FileText, Crown, Brain, Sun, Moon, Wrench, ShieldCheck } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Package, Camera, ClipboardCheck, QrCode, Users, Building2, Beer, LogOut, RefreshCw, Menu, X, ChevronsUpDown, Check, UserCog, ClipboardList, Calculator, BarChart3, Truck, UserCircle, Calendar, CalendarDays, UtensilsCrossed, Bell, Settings, Sparkles, Receipt, Wallet, MessageCircle, FileText, Crown, Brain, Sun, Moon, Wrench, ShieldCheck, TrendingUp } from 'lucide-react';
 import DailyReportGate from '@/components/DailyReportGate';
 import OrderRealtimeAlert from '@/components/OrderRealtimeAlert';
 import { registerPushToken } from '@/lib/push';
@@ -93,6 +93,7 @@ const NAV_SECTIONS: NavSection[] = [
   {
     label: 'Finances',
     items: [
+      { to: '/rapports-financiers', label: 'Rapports Financiers', icon: <TrendingUp size={20} />, roles: ['super_admin', 'admin', 'owner'] },
       { to: '/expenses', label: 'Dépenses', icon: <Wallet size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager'] },
       { to: '/suppliers', label: 'Fournisseurs', icon: <Truck size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager'] },
       { to: '/purchases', label: 'Achats', icon: <ShoppingCart size={20} />, roles: ['super_admin', 'admin', 'owner'] },
@@ -211,7 +212,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [estSwitchOpen, setEstSwitchOpen] = useState(false);
-  const [typeChangeBusy, setTypeChangeBusy] = useState(false);
   const [estSwitchBusy, setEstSwitchBusy] = useState(false);
   const [estSwitchError, setEstSwitchError] = useState<string | null>(null);
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => getStoredTheme());
@@ -599,19 +599,32 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div className="flex items-center gap-2 px-5 py-4 border-b border-stone-800 shrink-0">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center shrink-0 overflow-hidden">
+        <div className="flex items-center gap-2.5 px-5 py-4 border-b border-stone-800 shrink-0">
+          <div
+            className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 overflow-hidden shadow-sm"
+            style={{ background: `linear-gradient(135deg, ${theme.primary}, ${theme.accent})` }}
+          >
             {estLogo ? (
               <img src={estLogo} alt="" className="w-full h-full object-cover" />
             ) : (
               <Beer size={20} className="text-white" />
             )}
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="font-bold font-display text-stone-100 text-sm truncate">
               {estName || 'GESMAK'}
             </p>
-            <p className="text-xs text-stone-500 truncate">{member ? ROLE_LABELS[member.role] : ''}</p>
+            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+              <span
+                className="inline-block px-1.5 py-0.5 rounded-md text-[10px] font-bold tracking-wide truncate max-w-full"
+                style={{ background: theme.primarySoft, color: theme.primary }}
+              >
+                {BUSINESS_LABELS[bizType]}
+              </span>
+              {member && (
+                <span className="text-[10px] text-stone-500 truncate">{ROLE_LABELS[member.role]}</span>
+              )}
+            </div>
           </div>
         </div>
 
@@ -685,30 +698,44 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           })}
         </nav>
 
-        {/* Sélecteur d'activité — établissements attribués uniquement */}
+        {/* Sélecteur d'activité — menu déroulant custom (mobile-friendly) */}
         {member &&
-          ['super_admin', 'admin', 'owner'].includes(member.role) &&
+          canManageEstablishments(member.role) &&
           myEstablishments.length >= 1 && (
           <div className="px-3 pb-3 relative z-20">
-            <p className="text-[10px] uppercase tracking-wide text-violet-300/90 px-1 flex items-center gap-1 mb-1.5">
+            <p
+              className="text-[10px] uppercase tracking-wide px-1 flex items-center gap-1 mb-1.5 font-semibold"
+              style={{ color: theme.primary }}
+            >
               <span className="nav-section-emoji text-sm">🎯</span> Activité
               {myEstablishments.length > 1 && (
-                <span className="ml-auto text-[10px] font-semibold text-violet-200/80 normal-case tracking-normal">
-                  {myEstablishments.length} site{myEstablishments.length > 1 ? 's' : ''}
+                <span className="ml-auto text-[10px] font-semibold opacity-90 normal-case tracking-normal">
+                  {myEstablishments.length} sites
                 </span>
               )}
             </p>
 
             {myEstablishments.length === 1 ? (
-              <div
-                className="w-full rounded-xl border border-stone-700 bg-stone-900/80 px-3 py-2.5 text-left"
-                style={{ borderColor: (theme?.primary || '#8b5cf6') + '55' }}
+              <button
+                type="button"
+                onClick={() => {
+                  setSidebarOpen(false);
+                  navigate('/dashboard');
+                }}
+                className="w-full rounded-xl border bg-stone-900/80 px-3 py-2.5 text-left hover:bg-stone-800/80 transition"
+                style={{ borderColor: `${theme.primary}55` }}
               >
                 <p className="text-sm font-semibold text-stone-100 truncate">{myEstablishments[0].name}</p>
-                <p className="text-[11px] text-stone-500 truncate">
-                  {BUSINESS_LABELS[normalizeBusinessType(myEstablishments[0].type)] || myEstablishments[0].type}
-                </p>
-              </div>
+                <div className="flex items-center justify-between gap-2 mt-1">
+                  <span
+                    className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold truncate"
+                    style={{ background: theme.primarySoft, color: theme.primary }}
+                  >
+                    {BUSINESS_LABELS[normalizeBusinessType(myEstablishments[0].type)] || myEstablishments[0].type}
+                  </span>
+                  <span className="text-[10px] text-stone-400 shrink-0">Changer →</span>
+                </div>
+              </button>
             ) : (
               <div className="relative">
                 <button
@@ -716,7 +743,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                   disabled={estSwitchBusy}
                   onClick={() => setEstSwitchOpen((v) => !v)}
                   className="w-full flex items-center gap-2 rounded-xl border bg-stone-900 px-3 py-2.5 text-left hover:bg-stone-800 active:scale-[0.99] transition disabled:opacity-60"
-                  style={{ borderColor: (theme?.primary || '#8b5cf6') + '66' }}
+                  style={{ borderColor: `${theme.primary}66` }}
                   aria-haspopup="listbox"
                   aria-expanded={estSwitchOpen}
                 >
@@ -726,11 +753,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                         || myEstablishments.find((e) => e.id === member?.establishment_id)?.name
                         || 'Choisir un établissement'}
                     </p>
-                    <p className="text-[11px] text-stone-500 truncate">
-                      Appuyer pour changer de site
+                    <p className="text-[11px] truncate" style={{ color: theme.primary }}>
+                      {BUSINESS_LABELS[bizType]} · changer de site
                     </p>
                   </div>
-                  <ChevronsUpDown size={18} className="text-violet-300 shrink-0" />
+                  <ChevronsUpDown size={18} className="shrink-0" style={{ color: theme.primary }} />
                 </button>
 
                 {estSwitchOpen && (
@@ -748,6 +775,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                       {myEstablishments.map((e) => {
                         const selected =
                           (activeEstablishment?.id || member?.establishment_id) === e.id;
+                        const eType = normalizeBusinessType(e.type);
+                        const eTheme = BUSINESS_THEMES[eType];
                         return (
                           <li key={e.id}>
                             <button
@@ -755,11 +784,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                               role="option"
                               aria-selected={selected}
                               disabled={estSwitchBusy || selected}
-                              className={`w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm transition ${
-                                selected
-                                  ? 'bg-violet-500/20 text-violet-100'
-                                  : 'text-stone-200 hover:bg-stone-800 active:bg-stone-800'
-                              } disabled:opacity-80`}
+                              className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm transition text-stone-200 hover:bg-stone-800 active:bg-stone-800 disabled:opacity-90"
+                              style={selected ? { background: eTheme.primarySoft } : undefined}
                               onClick={async () => {
                                 if (selected) {
                                   setEstSwitchOpen(false);
@@ -780,11 +806,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                             >
                               <div className="flex-1 min-w-0">
                                 <p className="font-semibold truncate">{e.name}</p>
-                                <p className="text-[11px] text-stone-500 truncate">
-                                  {BUSINESS_LABELS[normalizeBusinessType(e.type)] || e.type}
+                                <p className="text-[11px] truncate" style={{ color: eTheme.primary }}>
+                                  {BUSINESS_LABELS[eType] || e.type}
                                 </p>
                               </div>
-                              {selected && <Check size={16} className="text-violet-300 shrink-0" />}
+                              {selected && <Check size={16} className="shrink-0" style={{ color: eTheme.primary }} />}
                             </button>
                           </li>
                         );
@@ -794,79 +820,12 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 )}
               </div>
             )}
-
-            {/* Type d'activité — uniquement pour l'établissement actif attribué */}
-            {activeEstablishment?.id &&
-              ['owner', 'admin', 'super_admin'].includes(String(member?.role || '')) && (
-              <div className="mt-2 rounded-xl border border-stone-700 bg-stone-900/60 px-3 py-2.5 space-y-1.5">
-                <p className="text-[10px] uppercase tracking-wide text-stone-500">Type d&apos;activité</p>
-                <select
-                  className="w-full rounded-lg border border-stone-600 bg-stone-950 text-stone-100 text-sm px-2.5 py-2 disabled:opacity-50"
-                  disabled={typeChangeBusy}
-                  value={normalizeBusinessType(activeEstablishment.type)}
-                  onChange={async (e) => {
-                    const next = e.target.value;
-                    if (!next || next === normalizeBusinessType(activeEstablishment.type)) return;
-                    const label =
-                      (BUSINESS_LABELS as Record<string, string>)[next] || next;
-                    if (
-                      !confirm(
-                        'Changer le type en « ' +
-                          label +
-                          ' » ? Le menu et le tableau de bord seront mis à jour.'
-                      )
-                    ) {
-                      e.target.value = normalizeBusinessType(activeEstablishment.type);
-                      return;
-                    }
-                    setTypeChangeBusy(true);
-                    try {
-                      const { error } = await supabase
-                        .from('establishments')
-                        .update({ type: next } as any)
-                        .eq('id', activeEstablishment.id);
-                      if (error) throw error;
-                      try {
-                        localStorage.setItem(
-                          'mm_active_est',
-                          JSON.stringify({
-                            id: activeEstablishment.id,
-                            type: next,
-                            name: activeEstablishment.name,
-                          })
-                        );
-                      } catch {
-                        /* */
-                      }
-                      await refresh();
-                      window.location.assign(
-                        '/dashboard?type_switch=' + encodeURIComponent(next)
-                      );
-                    } catch (err: any) {
-                      alert(err?.message || 'Impossible de changer le type');
-                      setTypeChangeBusy(false);
-                    }
-                  }}
-                >
-                  <option value="maquis">Maquis / Bar</option>
-                  <option value="restaurant">Restaurant</option>
-                  <option value="depot">Grossiste / Dépôt</option>
-                  <option value="location_event">Location événementielle</option>
-                  <option value="complexe">Établissement (multi-services)</option>
-                </select>
-                <p className="text-[10px] text-stone-500">
-                  Uniquement les établissements attribués par l&apos;admin.
-                </p>
-              </div>
-            )}
-
             {estSwitchError && (
               <p className="mt-1.5 text-[11px] text-red-300 px-1">{estSwitchError}</p>
             )}
           </div>
         )}
-
-<div className="p-3 border-t border-stone-800 shrink-0">
+        <div className="p-3 border-t border-stone-800 shrink-0">
           <div className="px-3 pb-2 flex items-center gap-1.5 opacity-70">
             <img src="/logo-circle.png" alt="" className="w-4 h-4 rounded-full object-cover" />
             <span className="text-[10px] font-semibold tracking-wide text-stone-500">GESMAK</span>
@@ -899,17 +858,29 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           </button>
           <div className="flex items-center gap-2 min-w-0 flex-1 justify-center px-1">
             <span className="relative inline-flex h-10 w-10 shrink-0 items-center justify-center">
-              <span className="absolute inset-0 rounded-full border border-amber-400/40 border-t-blue-400/60 opacity-90" aria-hidden />
+              <span
+                className="absolute inset-0 rounded-full border opacity-90"
+                style={{ borderColor: `${theme.primary}88` }}
+                aria-hidden
+              />
               <img
-                src="/logo-circle.png"
-                alt="GESMAK"
+                src={estLogo || '/logo-circle.png'}
+                alt={estName || 'GESMAK'}
                 className="relative z-[1] h-9 w-9 rounded-full object-cover border border-orange-200/40 bg-white"
                 onError={(e) => { (e.target as HTMLImageElement).src = '/logo-gesmak-icon.png'; }}
               />
             </span>
-            <span className="font-display font-bold text-stone-100 truncate text-sm">
-              {estName || 'GESMAK'}
-            </span>
+            <div className="min-w-0 flex flex-col items-start">
+              <span className="font-display font-bold text-stone-100 truncate text-sm max-w-[155px]">
+                {estName || 'GESMAK'}
+              </span>
+              <span
+                className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide truncate"
+                style={{ background: theme.primarySoft, color: theme.primary }}
+              >
+                Actif · {BUSINESS_LABELS[bizType]}
+              </span>
+            </div>
           </div>
 
           <div className="flex items-center gap-1">
@@ -965,26 +936,62 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <UpdateBanner />
       <BrandFooter />
       
-      {/* Barre bas mobile — identique à l'App mobile native */}
+      {/* Barre bas mobile — adaptée dynamiquement au type d'activité */}
       <nav data-no-print className="bottom-nav-maquis lg:hidden fixed bottom-0 inset-x-0 z-50 border-t border-stone-800 bg-stone-900/95 backdrop-blur-md pb-[env(safe-area-inset-bottom)]">
         <div className="flex overflow-x-auto no-scrollbar max-w-lg mx-auto">
-          {[
-            { to: '/dashboard', label: 'Accueil', icon: <LayoutDashboard size={20} /> },
-            { to: '/inventory', label: 'Stock', icon: <Package size={20} /> },
-            { to: '/inventory/scan', label: 'Arrivage', icon: <Camera size={20} /> },
-            { to: '/orders', label: 'Commandes', icon: <Receipt size={20} /> },
-            { to: '/pos', label: 'Caisse', icon: <ShoppingCart size={20} /> },
-            { to: '/daily-report', label: 'CA', icon: <BarChart3 size={20} /> },
-            { to: '/menu-qr', label: 'QR', icon: <QrCode size={20} /> },
-          ].map((item) => (
+          {(bizType === 'location_event'
+            ? [
+                { to: '/dashboard', label: 'Accueil', icon: <LayoutDashboard size={20} /> },
+                { to: '/rent/equipment', label: 'Matériel', icon: <Package size={20} /> },
+                { to: '/rent/orders', label: 'Location', icon: <Receipt size={20} /> },
+                { to: '/rent/calendar', label: 'Calendrier', icon: <Calendar size={20} /> },
+                { to: '/rent/clients', label: 'Clients', icon: <UserCircle size={20} /> },
+              ]
+            : bizType === 'complexe'
+              ? [
+                  { to: '/hotel', label: 'Hôtel', icon: <Building2 size={20} /> },
+                  { to: '/hotel/rooms', label: 'Chambres', icon: <Building2 size={20} /> },
+                  { to: '/hotel/reservations', label: 'Résas', icon: <Calendar size={20} /> },
+                  { to: '/pos', label: 'Caisse', icon: <ShoppingCart size={20} /> },
+                  { to: '/dashboard', label: 'Global', icon: <LayoutDashboard size={20} /> },
+                ]
+              : bizType === 'depot'
+                ? [
+                    { to: '/dashboard', label: 'Accueil', icon: <LayoutDashboard size={20} /> },
+                    { to: '/inventory', label: 'Stock gros', icon: <Package size={20} /> },
+                    { to: '/depot/deliveries', label: 'Livraisons', icon: <Truck size={20} /> },
+                    { to: '/depot/clients', label: 'Clients', icon: <Users size={20} /> },
+                    { to: '/depot/creances', label: 'Créances', icon: <Wallet size={20} /> },
+                    { to: '/daily-report', label: 'CA', icon: <BarChart3 size={20} /> },
+                  ]
+                : bizType === 'restaurant'
+                  ? [
+                      { to: '/dashboard', label: 'Accueil', icon: <LayoutDashboard size={20} /> },
+                      { to: '/tables', label: 'Salle', icon: <LayoutDashboard size={20} /> },
+                      { to: '/orders', label: 'Commandes', icon: <Receipt size={20} /> },
+                      { to: '/kitchen', label: 'Cuisine', icon: <UtensilsCrossed size={20} /> },
+                      { to: '/pos', label: 'Caisse', icon: <ShoppingCart size={20} /> },
+                      { to: '/menu-carte', label: 'Carte', icon: <FileText size={20} /> },
+                    ]
+                  : [
+                      { to: '/dashboard', label: 'Accueil', icon: <LayoutDashboard size={20} /> },
+                      { to: '/inventory', label: 'Stock', icon: <Package size={20} /> },
+                      { to: '/inventory/scan', label: 'Arrivage', icon: <Camera size={20} /> },
+                      { to: '/orders', label: 'Commandes', icon: <Receipt size={20} /> },
+                      { to: '/pos', label: 'Caisse', icon: <ShoppingCart size={20} /> },
+                      { to: '/daily-report', label: 'CA', icon: <BarChart3 size={20} /> },
+                      { to: '/menu-qr', label: 'QR', icon: <QrCode size={20} /> },
+                    ]
+          ).map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
-              end={item.to === '/dashboard'}
+              end={item.to === '/dashboard' || item.to === '/hotel'}
               onClick={() => setSidebarOpen(false)}
+              style={({ isActive }) => (isActive ? { color: theme.primary } : undefined)}
               className={({ isActive }) =>
                 `flex-1 min-w-[52px] flex flex-col items-center justify-center gap-0.5 py-2 min-h-[56px] text-[10px] font-semibold transition-colors ${
-                  isActive ? 'text-amber-400' : 'text-stone-400'
+                  isActive ? '' : 'text-stone-400'
                 }`
               }
             >

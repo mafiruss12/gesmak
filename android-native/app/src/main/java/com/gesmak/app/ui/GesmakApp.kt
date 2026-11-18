@@ -5,6 +5,8 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.location.Location
 import android.location.LocationManager
 import android.net.Uri
@@ -12,7 +14,6 @@ import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -28,7 +29,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -58,6 +58,8 @@ import androidx.compose.material.icons.filled.Store
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.TableRestaurant
 import androidx.compose.material.icons.filled.TrendingDown
+import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.DrawerValue
@@ -91,25 +93,25 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.gesmak.app.BuildConfig
-import com.gesmak.app.R
+import com.gesmak.app.data.BusinessTypes
 import com.gesmak.app.data.LocalSalesStore
 import com.gesmak.app.data.NotifyHelper
 import com.gesmak.app.data.OfflineCache
 import com.gesmak.app.data.OfflineQueue
 import com.gesmak.app.data.RemoteVersion
 import com.gesmak.app.data.SessionStore
+import com.gesmak.app.data.SubscriptionPlans
 import com.gesmak.app.data.SupabaseApi
 import com.gesmak.app.data.SupabaseAuth
 import com.gesmak.app.data.UpdateChecker
+import com.gesmak.app.ui.components.EstablishmentLogo
 import com.gesmak.app.ui.components.StatusPill
 import com.gesmak.app.ui.screens.AppRoute
 import com.gesmak.app.ui.screens.ArrivalScreen
@@ -119,6 +121,7 @@ import com.gesmak.app.ui.screens.CrmSupplyScreen
 import com.gesmak.app.ui.screens.EstChoice
 import com.gesmak.app.ui.screens.ExpensesScreen
 import com.gesmak.app.ui.screens.FinancePatronScreen
+import com.gesmak.app.ui.screens.FinancialReportsScreen
 import com.gesmak.app.ui.screens.HomeDashboard
 import com.gesmak.app.ui.screens.InventoryScreen
 import com.gesmak.app.ui.screens.KitsPromosScreen
@@ -134,6 +137,7 @@ import com.gesmak.app.ui.screens.SalesScreen
 import com.gesmak.app.ui.screens.SettingsScreen
 import com.gesmak.app.ui.screens.SplashScreen
 import com.gesmak.app.ui.screens.StockTransferScreen
+import com.gesmak.app.ui.screens.SubscriptionLockScreen
 import com.gesmak.app.ui.screens.TablesKitchenScreen
 import com.gesmak.app.ui.screens.TeamScreen
 import com.gesmak.app.ui.theme.GesmakTheme
@@ -147,6 +151,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -195,6 +200,7 @@ fun GesmakApp() {
     var audits by remember { mutableStateOf<List<SupabaseApi.AuditRow>>(emptyList()) }
     var todaySalesList by remember { mutableStateOf<List<SupabaseApi.SaleSummaryRow>>(emptyList()) }
     var sales30d by remember { mutableStateOf<List<SupabaseApi.SaleSummaryRow>>(emptyList()) }
+    var sales90d by remember { mutableStateOf<List<SupabaseApi.SaleSummaryRow>>(emptyList()) }
     var customers by remember { mutableStateOf<List<SupabaseApi.CustomerRow>>(emptyList()) }
     var suppliers by remember { mutableStateOf<List<SupabaseApi.SupplierRow>>(emptyList()) }
     var purchases by remember { mutableStateOf<List<SupabaseApi.PurchaseRow>>(emptyList()) }
@@ -249,6 +255,40 @@ fun GesmakApp() {
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
     ) { }
+
+    var pendingImagePickCallback by remember { mutableStateOf<((String?, String?) -> Unit)?>(null) }
+    var pendingImagePickPrefix by remember { mutableStateOf("logo") }
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent(),
+    ) { uri ->
+        val cb = pendingImagePickCallback
+        pendingImagePickCallback = null
+        if (uri == null || cb == null) {
+            cb?.invoke(null, null)
+            return@rememberLauncherForActivityResult
+        }
+        val s = session
+        val folderId = estIdResolved ?: s?.userId ?: "misc"
+        if (s == null) {
+            cb(null, "Session expirée")
+            return@rememberLauncherForActivityResult
+        }
+        scope.launch {
+            try {
+                val bytes = withContext(Dispatchers.IO) { compressImageUri(context, uri) }
+                if (bytes == null || bytes.isEmpty()) {
+                    cb(null, "Impossible de lire l'image sélectionnée")
+                } else {
+                    val uploadedUrl = withContext(Dispatchers.IO) {
+                        api.uploadImageToVitrine(s.accessToken, folderId, pendingImagePickPrefix, bytes)
+                    }
+                    cb(uploadedUrl, null)
+                }
+            } catch (e: Exception) {
+                cb(null, e.message ?: "Erreur upload image")
+            }
+        }
+    }
 
     fun requestAppPermissions() {
         val perms = buildList {
@@ -430,12 +470,13 @@ fun GesmakApp() {
                     }
                     if (m != null) member = m
                     val links = api.fetchAllEstablishmentLinks(activeToken, s.userId)
-                    val ids = links.map { it.establishmentId }.toMutableList()
+                    val ownedIds = api.fetchOwnedEstablishmentIds(activeToken, s.userId)
+                    val ids = (links.map { it.establishmentId } + ownedIds).toMutableList()
                     (m ?: member)?.establishmentId?.let { if (it !in ids) ids.add(0, it) }
                     val choices = mutableListOf<EstChoice>()
                     for (id in ids.distinct()) {
                         val est = api.fetchEstablishment(activeToken, id)
-                        if (est != null) choices.add(EstChoice(est.id, est.name))
+                        if (est != null) choices.add(EstChoice(est.id, est.name, est.type, est.logoUrl))
                     }
                     if (choices.isNotEmpty()) estChoices = choices
 
@@ -486,13 +527,16 @@ fun GesmakApp() {
                         todaySalesList = todaySales
                         caDay = todaySales.sumOf { it.total }
                         cashSalesDay = todaySales.filter { it.paymentMethod == "cash" }.sumOf { it.total }
-                        val allSales30 = api.fetchSalesSince(activeToken, eid, isoDaysAgo(30))
+                        val cutoff30 = isoDaysAgo(30)
+                        val allSales90 = api.fetchSalesSince(activeToken, eid, isoDaysAgo(90))
+                        sales90d = allSales90
+                        val allSales30 = allSales90.filter { it.createdAt >= cutoff30 }
                         sales30d = allSales30
                         caWeek = api.fetchSalesTotal(activeToken, eid, isoDaysAgo(7))
                         caMonth = allSales30.sumOf { it.total }
                         recentSales = api.fetchRecentSales(activeToken, eid, 40)
 
-                        val expList = api.fetchExpenses(activeToken, eid, 60)
+                        val expList = api.fetchExpenses(activeToken, eid, 200)
                         expenses = expList
                         val todayPrefix = todayStr
                         val monthPrefix = todayStr.take(7)
@@ -524,8 +568,8 @@ fun GesmakApp() {
                         if (roleLower in setOf("owner", "propriétaire", "proprietaire", "admin", "super_admin", "manager", "gérant", "gerant")) {
                             audits = api.fetchOperationAudit(activeToken, eid, 25)
                             suppliers = api.fetchSuppliers(activeToken, eid)
-                            purchases = api.fetchPurchases(activeToken, eid, 60)
-                            dailyReports = api.fetchDailyReportsRange(activeToken, eid, isoDateDaysAgo(30))
+                            purchases = api.fetchPurchases(activeToken, eid, 200)
+                            dailyReports = api.fetchDailyReportsRange(activeToken, eid, isoDateDaysAgo(90))
                         } else {
                             audits = emptyList()
                             suppliers = emptyList()
@@ -577,6 +621,7 @@ fun GesmakApp() {
                         audits = emptyList()
                         todaySalesList = emptyList()
                         sales30d = emptyList()
+                        sales90d = emptyList()
                         customers = emptyList()
                         suppliers = emptyList()
                         purchases = emptyList()
@@ -667,7 +712,7 @@ fun GesmakApp() {
         }
     }
 
-    GesmakTheme(isLight = isLightTheme) {
+    GesmakTheme(isLight = isLightTheme, businessType = establishment?.type) {
         val c = LocalGesmakColors.current
 
         if (!splashDone) {
@@ -702,12 +747,74 @@ fun GesmakApp() {
         }
 
         val roleLower = member?.role?.lowercase().orEmpty()
+        val isPlatformAdmin = roleLower in setOf("super_admin", "admin")
         val isOwner = roleLower in setOf("owner", "propriétaire", "proprietaire", "admin", "super_admin")
         val isManager = roleLower in setOf("manager", "gérant", "gerant")
         val isCashierOnly = roleLower in setOf("cashier", "caissier", "caissière", "caissiere")
         val canEditStock = isOwner || isManager || (member?.canEditStock == true)
         val canManageTeam = isOwner || isManager
         val lockedPole = if (isCashierOnly || isManager) member?.assignedPoleCode else null
+
+        val bizSpec = BusinessTypes.spec(establishment?.type)
+        val allowedBizSpecs = remember(member, establishment, isPlatformAdmin) {
+            BusinessTypes.allowedSpecs(
+                role = member?.role,
+                memberAllowed = member?.allowedTypes.orEmpty(),
+                estAllowed = establishment?.allowedTypes.orEmpty(),
+                currentType = establishment?.type,
+            )
+        }
+        val subState = remember(establishment) { SubscriptionPlans.getSubscriptionState(establishment) }
+        val isSubBlocked = !isPlatformAdmin && establishment != null && subState.blocked
+        val allowedWhenBlocked = activeRoute in setOf(AppRoute.SETTINGS, AppRoute.CHAT, AppRoute.NOTIFICATIONS)
+
+        if (isSubBlocked && !allowedWhenBlocked && establishment != null) {
+            SubscriptionLockScreen(
+                establishment = establishment!!,
+                subState = subState,
+                isOwner = isOwner,
+                memberName = member?.fullName?.ifBlank { SupabaseAuth.displayLogin(session?.email.orEmpty()) }
+                    ?: SupabaseAuth.displayLogin(session?.email.orEmpty()),
+                establishments = estChoices,
+                pendingPaymentRequests = pendingPaymentRequests,
+                loading = loadingData,
+                onSelectEst = { id ->
+                    estIdResolved = id
+                    knownOrderIds = emptySet()
+                    scope.launch { store.setActiveEstId(id) }
+                    refreshData()
+                },
+                onCreatePaymentRequest = { tier, months, amountFcfa, refCode, payerName, waveTxRef, cb ->
+                    val s = session ?: return@SubscriptionLockScreen
+                    val eid = estIdResolved ?: return@SubscriptionLockScreen
+                    val proof = listOfNotNull(
+                        payerName.trim().takeIf { it.isNotBlank() }?.let { "Payeur: $it" },
+                        waveTxRef.trim().takeIf { it.isNotBlank() }?.let { "Réf Wave: $it" },
+                    ).joinToString(" | ").ifBlank { null }
+                    scope.launch {
+                        val err = withContext(Dispatchers.IO) {
+                            api.createPaymentRequest(
+                                accessToken = s.accessToken,
+                                estId = eid,
+                                userId = s.userId,
+                                planTier = tier,
+                                months = months,
+                                amountFcfa = amountFcfa,
+                                referenceCode = refCode,
+                                proofNote = proof,
+                            )
+                        }
+                        cb(err)
+                        if (err == null) refreshData()
+                    }
+                },
+                onRefreshStatus = { refreshData() },
+                onOpenNotifications = { activeRoute = AppRoute.NOTIFICATIONS },
+                onOpenChat = { activeRoute = AppRoute.CHAT },
+                onLogout = { scope.launch { store.clear() } },
+            )
+            return@GesmakTheme
+        }
 
         val drawerState = rememberDrawerState(DrawerValue.Closed)
         val pendingCount = orders.count { it.status == "pending" }
@@ -716,14 +823,14 @@ fun GesmakApp() {
         val drawerSections = listOf(
             "Principal" to buildList {
                 add(DrawerNavItem(AppRoute.HOME, "Tableau de bord", Icons.Default.Home))
-                add(DrawerNavItem(AppRoute.POS, "Ma Caisse (POS)", Icons.Default.ShoppingCart))
-                add(DrawerNavItem(AppRoute.ORDERS, "Commandes & Cuisine", Icons.Default.ReceiptLong))
-                add(DrawerNavItem(AppRoute.TABLES, "Tables, Carte & Résa", Icons.Default.TableRestaurant))
+                add(DrawerNavItem(AppRoute.POS, bizSpec.posLabel, Icons.Default.ShoppingCart))
+                add(DrawerNavItem(AppRoute.ORDERS, bizSpec.ordersLabel, Icons.Default.ReceiptLong))
+                add(DrawerNavItem(AppRoute.TABLES, bizSpec.tablesLabel, Icons.Default.TableRestaurant))
                 add(DrawerNavItem(AppRoute.CLOTURE, "Clôture Z", Icons.Default.PointOfSale))
             },
             "Gestion & Stocks" to buildList {
-                add(DrawerNavItem(AppRoute.INVENTORY, "Stock & Catalogue", Icons.Default.Inventory2))
-                add(DrawerNavItem(AppRoute.ARRIVAL, "Arrivages & Casiers", Icons.Default.LocalShipping))
+                add(DrawerNavItem(AppRoute.INVENTORY, bizSpec.inventoryLabel, Icons.Default.Inventory2))
+                add(DrawerNavItem(AppRoute.ARRIVAL, bizSpec.arrivalsLabel, Icons.Default.LocalShipping))
                 if (canEditStock) add(DrawerNavItem(AppRoute.POINT_MANUEL, "Point Manuel (Inventaire)", Icons.Default.CheckCircle))
                 if (estChoices.size > 1 && canManageTeam) add(DrawerNavItem(AppRoute.TRANSFERS, "Transfert Inter-Sites", Icons.Default.SwapHoriz))
                 if (canManageTeam) add(DrawerNavItem(AppRoute.KITS, "Kits & Promotions", Icons.Default.LocalOffer))
@@ -734,6 +841,7 @@ fun GesmakApp() {
                 if (canManageTeam) add(DrawerNavItem(AppRoute.TEAM, "Équipe, Accès & RH", Icons.Default.Groups))
                 add(DrawerNavItem(AppRoute.POWERS, "Rôles & Pouvoirs", Icons.Default.Shield))
                 if (isOwner) {
+                    add(DrawerNavItem(AppRoute.FINANCIAL_REPORTS, "Rapports Financiers", Icons.Default.TrendingUp))
                     add(DrawerNavItem(AppRoute.FINANCE, "Compta, Stats & Mode Patron", Icons.Default.Analytics))
                     add(DrawerNavItem(AppRoute.REPORTS, "Rapports CA", Icons.Default.Assessment))
                 }
@@ -743,7 +851,7 @@ fun GesmakApp() {
                 add(DrawerNavItem(AppRoute.CHAT, "Chat Interne", Icons.Default.Chat))
                 add(DrawerNavItem(AppRoute.NOTIFICATIONS, if (unreadNotifs > 0) "Notifications ($unreadNotifs)" else "Notifications", Icons.Default.Notifications))
                 add(DrawerNavItem(AppRoute.QR, "QR Code Tables", Icons.Default.QrCode2))
-                add(DrawerNavItem(AppRoute.SETTINGS, "Paramètres & Mise à jour", Icons.Default.Settings))
+                add(DrawerNavItem(AppRoute.SETTINGS, "Paramètres & Abonnement", Icons.Default.Settings))
             },
         )
 
@@ -760,29 +868,32 @@ fun GesmakApp() {
                             .verticalScroll(rememberScrollState())
                             .padding(14.dp),
                     ) {
-                        // En-tête drawer
+                        // En-tête drawer avec logo et établissement actif
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Image(
-                                painter = painterResource(id = R.drawable.logo_circle),
-                                contentDescription = "GESMAK",
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.size(44.dp).clip(CircleShape),
+                            EstablishmentLogo(
+                                name = establishment?.name ?: "GESMAK",
+                                logoUrl = establishment?.logoUrl,
+                                size = 46.dp,
+                                cornerRadius = 12.dp,
+                                accentColor = c.accent,
                             )
                             Spacer(Modifier.width(10.dp))
                             Column(modifier = Modifier.weight(1f)) {
-                                Text("GESMAK", color = c.accent, fontWeight = FontWeight.Black, fontSize = 18.sp)
+                                Text("ÉTABLISSEMENT ACTIF", color = c.accentDeep, fontWeight = FontWeight.Bold, fontSize = 10.sp)
                                 Text(
                                     establishment?.name ?: "Mon Établissement",
                                     color = c.text,
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                 )
+                                Text("GESMAK", color = c.muted, fontSize = 10.sp)
                             }
                         }
                         Spacer(Modifier.height(10.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            StatusPill(label = bizSpec.shortLabel, color = c.accent)
                             StatusPill(label = roleLabelFr(member?.role), color = c.sky)
                             val p = lockedPole ?: activePole
                             if (!p.isNullOrBlank()) {
@@ -849,11 +960,12 @@ fun GesmakApp() {
                                 IconButton(onClick = { scope.launch { drawerState.open() } }) {
                                     Icon(Icons.Default.Menu, contentDescription = "Menu", tint = c.text)
                                 }
-                                Image(
-                                    painter = painterResource(id = R.drawable.logo_circle),
-                                    contentDescription = "GESMAK",
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.size(30.dp).clip(CircleShape),
+                                EstablishmentLogo(
+                                    name = establishment?.name ?: "GESMAK",
+                                    logoUrl = establishment?.logoUrl,
+                                    size = 34.dp,
+                                    cornerRadius = 10.dp,
+                                    accentColor = c.accent,
                                 )
                                 Spacer(Modifier.width(8.dp))
                                 Column(modifier = Modifier.weight(1f)) {
@@ -866,10 +978,12 @@ fun GesmakApp() {
                                         overflow = TextOverflow.Ellipsis,
                                     )
                                     Text(
-                                        poleLabelFr(lockedPole ?: activePole),
-                                        color = c.muted,
+                                        "Actif · ${bizSpec.shortLabel} · ${poleLabelFr(lockedPole ?: activePole)}",
+                                        color = c.accent,
                                         fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold,
                                         maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
                                     )
                                 }
                                 StatusPill(
@@ -892,6 +1006,27 @@ fun GesmakApp() {
                                         imageVector = if (isLightTheme) Icons.Default.DarkMode else Icons.Default.LightMode,
                                         contentDescription = "Thème",
                                         tint = c.accent,
+                                    )
+                                }
+                            }
+                            if (!isSubBlocked && establishment != null && (subState.status == "past_due" || (subState.daysLeft != null && subState.daysLeft <= 7))) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(if (subState.status == "past_due") c.rose else c.accentDeep)
+                                        .clickable { activeRoute = AppRoute.SETTINGS }
+                                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Icon(Icons.Default.Warning, contentDescription = null, tint = Color.White, modifier = Modifier.size(15.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        "${subState.label} · ${subState.message} — Appuyer pour payer",
+                                        color = Color.White,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
                                     )
                                 }
                             }
@@ -924,10 +1059,10 @@ fun GesmakApp() {
                     ) {
                         val navItems = listOf(
                             Triple(AppRoute.HOME, "Accueil", Icons.Default.Home),
-                            Triple(AppRoute.POS, "Caisse", Icons.Default.ShoppingCart),
-                            Triple(AppRoute.ORDERS, "Commandes", Icons.Default.ReceiptLong),
+                            Triple(AppRoute.POS, bizSpec.posLabel, Icons.Default.ShoppingCart),
+                            Triple(AppRoute.ORDERS, bizSpec.ordersLabel, Icons.Default.ReceiptLong),
                             Triple(AppRoute.CLOTURE, "Clôturer", Icons.Default.PointOfSale),
-                            Triple(AppRoute.INVENTORY, "Stock", Icons.Default.Inventory2),
+                            Triple(AppRoute.INVENTORY, bizSpec.inventoryLabel, Icons.Default.Inventory2),
                         )
                         navItems.forEach { (route, label, icon) ->
                             NavigationBarItem(
@@ -977,6 +1112,8 @@ fun GesmakApp() {
                         establishments = estChoices,
                         currentEstId = estIdResolved,
                         activePoleCode = lockedPole ?: activePole,
+                        allowedTypes = allowedBizSpecs,
+                        isPlatformAdmin = isPlatformAdmin,
                         loading = loadingData,
                         error = dataError,
                         updateLabel = remoteUpdate?.let { "Mise à jour prête · v${it.versionName}" },
@@ -986,6 +1123,25 @@ fun GesmakApp() {
                             knownOrderIds = emptySet()
                             scope.launch { store.setActiveEstId(id) }
                             refreshData()
+                        },
+                        onSwitchBusinessType = { newType ->
+                            if (!isPlatformAdmin && allowedBizSpecs.none { it.key == newType }) {
+                                dataError = "Ce type d'activité n'est pas attribué à votre compte par l'administrateur."
+                                return@HomeDashboard
+                            }
+                            val s = session ?: return@HomeDashboard
+                            val eid = estIdResolved ?: return@HomeDashboard
+                            establishment = establishment?.copy(type = newType)
+                            estChoices = estChoices.map { if (it.id == eid) it.copy(type = newType) else it }
+                            scope.launch {
+                                val err = withContext(Dispatchers.IO) {
+                                    api.updateEstablishmentType(s.accessToken, eid, newType)
+                                }
+                                if (err != null) {
+                                    dataError = err
+                                }
+                                refreshData()
+                            }
                         },
                         onRefresh = { refreshData() },
                         onToggleServiceDay = {
@@ -1895,6 +2051,18 @@ fun GesmakApp() {
                         },
                     )
 
+                    AppRoute.FINANCIAL_REPORTS -> FinancialReportsScreen(
+                        mod = pageMod,
+                        establishment = establishment,
+                        products = products,
+                        sales = sales90d,
+                        expenses = expenses,
+                        purchases = purchases,
+                        dailyReports = dailyReports,
+                        employees = employees,
+                        onRefresh = { refreshData() },
+                    )
+
                     AppRoute.CHAT -> ChatScreen(
                         mod = pageMod,
                         myUserId = session?.userId.orEmpty(),
@@ -2104,6 +2272,8 @@ fun GesmakApp() {
                         member = member,
                         memberEmail = SupabaseAuth.displayLogin(session?.email.orEmpty()),
                         establishment = establishment,
+                        allowedTypes = allowedBizSpecs,
+                        isPlatformAdmin = isPlatformAdmin,
                         pendingPaymentRequests = pendingPaymentRequests,
                         isLightTheme = isLightTheme,
                         orderSoundEnabled = orderSound,
@@ -2118,11 +2288,13 @@ fun GesmakApp() {
                         onCheckUpdate = { checkUpdates(manual = true) },
                         onInstallUpdate = { downloadAndInstallUpdate() },
                         onOpenUnknownAppsSettings = { updateChecker.openInstallPermissionSettings() },
-                        onSaveProfile = { fullName, cb ->
+                        onSaveProfile = { fullName, avatarUrl, cb ->
                             val s = session ?: return@SettingsScreen
                             val mId = member?.id ?: return@SettingsScreen
                             scope.launch {
-                                val err = withContext(Dispatchers.IO) { api.updateMemberProfile(s.accessToken, mId, fullName) }
+                                val err = withContext(Dispatchers.IO) {
+                                    api.updateMemberProfile(s.accessToken, mId, fullName, avatarUrl, updateAvatar = true)
+                                }
                                 cb(err)
                                 if (err == null) refreshData()
                             }
@@ -2137,18 +2309,57 @@ fun GesmakApp() {
                                 cb(err)
                             }
                         },
-                        onSaveEstablishment = { name, addr, phone, type, cb ->
+                        onSaveEstablishment = { name, addr, phone, type, logoUrl, ownerEmail, ownerPhone, services, cb ->
                             val s = session ?: return@SettingsScreen
                             val eid = estIdResolved ?: return@SettingsScreen
                             scope.launch {
                                 val err = withContext(Dispatchers.IO) {
-                                    api.updateEstablishmentDetails(s.accessToken, eid, name, addr, phone, type)
+                                    api.updateEstablishmentExtended(
+                                        accessToken = s.accessToken,
+                                        estId = eid,
+                                        name = name,
+                                        address = addr,
+                                        phone = phone,
+                                        type = type,
+                                        logoUrl = logoUrl,
+                                        updateLogo = true,
+                                        ownerEmail = ownerEmail,
+                                        ownerPhone = ownerPhone,
+                                        updateOwnerContacts = true,
+                                        services = services,
+                                    )
                                 }
                                 cb(err)
                                 if (err == null) refreshData()
                             }
                         },
+                        onSavePublicDepot = { visible, zone, pubPhone, cb ->
+                            val s = session ?: return@SettingsScreen
+                            val eid = estIdResolved ?: return@SettingsScreen
+                            scope.launch {
+                                val err = withContext(Dispatchers.IO) {
+                                    api.updateEstablishmentPublicDepot(s.accessToken, eid, visible, zone, pubPhone)
+                                }
+                                cb(err)
+                                if (err == null) refreshData()
+                            }
+                        },
+                        onPickEstLogo = { cb ->
+                            pendingImagePickPrefix = "logo"
+                            pendingImagePickCallback = cb
+                            imagePickerLauncher.launch("image/*")
+                        },
+                        onPickProfilePhoto = { cb ->
+                            pendingImagePickPrefix = "avatar"
+                            pendingImagePickCallback = cb
+                            imagePickerLauncher.launch("image/*")
+                        },
                         onCreateEstablishment = { name, type, addr, phone, cb ->
+                            val memberAllows = member?.allowedTypes?.any { BusinessTypes.normalize(it) == BusinessTypes.normalize(type) } == true
+                            if (!isPlatformAdmin && !memberAllows) {
+                                cb("Seul un administrateur peut créer et attribuer un établissement sur demande.")
+                                return@SettingsScreen
+                            }
                             val s = session ?: return@SettingsScreen
                             scope.launch {
                                 val (newId, err) = withContext(Dispatchers.IO) {
@@ -2163,9 +2374,13 @@ fun GesmakApp() {
                                 cb(err)
                             }
                         },
-                        onCreatePaymentRequest = { tier, months, amountFcfa, refCode, payerName, cb ->
+                        onCreatePaymentRequest = { tier, months, amountFcfa, refCode, payerName, waveTxRef, cb ->
                             val s = session ?: return@SettingsScreen
                             val eid = estIdResolved ?: return@SettingsScreen
+                            val proof = listOfNotNull(
+                                payerName.trim().takeIf { it.isNotBlank() }?.let { "Payeur: $it" },
+                                waveTxRef.trim().takeIf { it.isNotBlank() }?.let { "Réf Wave: $it" },
+                            ).joinToString(" | ").ifBlank { null }
                             scope.launch {
                                 val err = withContext(Dispatchers.IO) {
                                     api.createPaymentRequest(
@@ -2176,13 +2391,14 @@ fun GesmakApp() {
                                         months = months,
                                         amountFcfa = amountFcfa,
                                         referenceCode = refCode,
-                                        proofNote = "Payeur: $payerName",
+                                        proofNote = proof,
                                     )
                                 }
                                 cb(err)
                                 if (err == null) refreshData()
                             }
                         },
+                        onRefreshStatus = { refreshData() },
                         onCaptureGps = { cb ->
                             val s = session ?: return@SettingsScreen
                             val eid = estIdResolved ?: return@SettingsScreen
@@ -2210,6 +2426,18 @@ fun GesmakApp() {
                                 }
                             }
                         },
+                        onClearGps = { cb ->
+                            val s = session ?: return@SettingsScreen
+                            val eid = estIdResolved ?: return@SettingsScreen
+                            scope.launch {
+                                val err = withContext(Dispatchers.IO) {
+                                    api.updateEstablishmentGps(s.accessToken, eid, null, null, false)
+                                }
+                                cb(err)
+                                if (err == null) refreshData()
+                            }
+                        },
+                        onOpenPowers = { activeRoute = AppRoute.POWERS },
                         onRequestPermissions = { requestAppPermissions() },
                         onOpenAppSystemSettings = {
                             val intent = Intent(
@@ -2223,6 +2451,29 @@ fun GesmakApp() {
                 }
             }
         }
+    }
+}
+
+private fun compressImageUri(context: Context, uri: Uri, maxDim: Int = 512): ByteArray? {
+    return try {
+        val rawBitmap = context.contentResolver.openInputStream(uri)?.use { stream ->
+            BitmapFactory.decodeStream(stream)
+        } ?: return null
+        val w = rawBitmap.width
+        val h = rawBitmap.height
+        val targetBitmap = if (w > maxDim || h > maxDim) {
+            val scale = maxDim.toFloat() / maxOf(w, h).toFloat()
+            val nw = (w * scale).toInt().coerceAtLeast(1)
+            val nh = (h * scale).toInt().coerceAtLeast(1)
+            Bitmap.createScaledBitmap(rawBitmap, nw, nh, true)
+        } else {
+            rawBitmap
+        }
+        val out = ByteArrayOutputStream()
+        targetBitmap.compress(Bitmap.CompressFormat.JPEG, 82, out)
+        out.toByteArray()
+    } catch (_: Exception) {
+        null
     }
 }
 

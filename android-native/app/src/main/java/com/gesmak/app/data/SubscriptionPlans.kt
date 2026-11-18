@@ -119,18 +119,31 @@ object SubscriptionPlans {
 
     fun getPlan(tier: String?): PlanInfo = PLANS[normalizeTier(tier)] ?: PLANS.getValue("starter")
 
+    private fun resolveTrialEndMs(est: SupabaseApi.Establishment?): Long? {
+        val explicit = parseIsoMillis(est?.trialEndsAt)
+        if (explicit != null) return explicit
+        val created = parseIsoMillis(est?.createdAt)
+        return created?.plus(TRIAL_DAYS * 86_400_000L)
+    }
+
     fun isOnTrial(est: SupabaseApi.Establishment?): Boolean {
-        val s = est?.subscriptionStatus?.trim()?.lowercase().orEmpty()
-        return s == "trial" || s.isBlank()
+        if (est == null) return false
+        val s = est.subscriptionStatus?.trim()?.lowercase().orEmpty()
+        if (s != "trial" && s.isNotBlank()) return false
+        val endMs = resolveTrialEndMs(est)
+        if (endMs != null && endMs < System.currentTimeMillis()) return false
+        return true
     }
 
     fun getEffectivePlan(est: SupabaseApi.Establishment?): PlanInfo {
+        val st = getSubscriptionState(est)
+        if (st.blocked) return PLANS.getValue("starter")
         return if (isOnTrial(est)) PLANS.getValue("pro") else getPlan(est?.planTier)
     }
 
     fun getPlanDisplayTitle(est: SupabaseApi.Establishment?): String {
         if (est == null) return "—"
-        return if (isOnTrial(est)) "Essai Pro" else getEffectivePlan(est).label
+        return if (isOnTrial(est)) "Essai Pro" else getPlan(est.planTier).label
     }
 
     fun priceForMonths(tier: String, months: Int): Int {
@@ -232,6 +245,27 @@ object SubscriptionPlans {
         }
 
         if (status == "past_due") {
+            val refEndMs = parseIsoMillis(est.subscriptionEndsAt) ?: resolveTrialEndMs(est)
+            if (refEndMs != null) {
+                val graceEnd = refEndMs + GRACE_DAYS * 86_400_000L
+                if (now > graceEnd) {
+                    return SubState(
+                        status = "suspended",
+                        blocked = true,
+                        label = "Suspendu",
+                        daysLeft = 0,
+                        message = "Période de grâce expirée. Réglez votre forfait sur Wave $WAVE_NUMBER_DISPLAY puis confirmez sur WhatsApp.",
+                    )
+                }
+                val left = max(0, ceil((graceEnd - now) / 86_400_000.0).toInt())
+                return SubState(
+                    status = "past_due",
+                    blocked = false,
+                    label = "Paiement requis",
+                    daysLeft = left,
+                    message = "Régularisez sous $left j via Wave $WAVE_NUMBER_DISPLAY (dès $essentialMonthly F/mois).",
+                )
+            }
             return SubState(
                 status = "past_due",
                 blocked = false,
@@ -242,7 +276,7 @@ object SubscriptionPlans {
         }
 
         // Trial
-        val trialEndMs = parseIsoMillis(est.trialEndsAt)
+        val trialEndMs = resolveTrialEndMs(est)
         if (trialEndMs != null && trialEndMs < now) {
             val graceEnd = trialEndMs + GRACE_DAYS * 86_400_000L
             if (now <= graceEnd) {
@@ -287,6 +321,7 @@ object SubscriptionPlans {
         months: Int,
         payerName: String?,
         referenceCode: String?,
+        proofNote: String? = null,
     ): String {
         val plan = getPlan(tier)
         val amount = priceForMonths(tier, months)
@@ -298,6 +333,7 @@ object SubscriptionPlans {
             add("Durée : $months mois")
             add("Montant : ${formatSpaced(amount)} $CURRENCY_LABEL")
             if (!payerName.isNullOrBlank()) add("Payé par : $payerName")
+            if (!proofNote.isNullOrBlank()) add("Réf Wave : $proofNote")
             add("")
             add("J'ai effectué le paiement Wave sur le $WAVE_NUMBER_DISPLAY.")
             add("Merci de vérifier et d'activer mon abonnement.")

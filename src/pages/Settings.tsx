@@ -1,6 +1,5 @@
-import { newEstablishmentTrialFields } from '@/lib/subscription';
 import { DEFAULT_BRANDING, type BtpBranding } from '@/lib/btp';
-import { isBtp } from '@/lib/businessTypes';
+import { isBtp, applyBusinessTheme, BUSINESS_LABELS, getAllowedBusinessTypes, normalizeBusinessType } from '@/lib/businessTypes';
 import { getStoredTheme, applyTheme, type ThemeMode } from '@/lib/theme';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Building2, User, Save, CheckCircle2, Camera, Plus, Lock, KeyRound, RefreshCw, Download, Shield, MapPin, Loader2, Navigation, Fingerprint, CreditCard, LogOut, Palette, ChevronRight, Bell, Info } from 'lucide-react';
@@ -19,7 +18,6 @@ import { registerPushToken, isPushConfigured } from '@/lib/push';
 import { seedDefaultStockForEstablishment } from '@/lib/seedDefaultStock';
 import { useAuth } from '@/lib/auth';
 import { PLAN, PLANS, getSubscriptionState, getEffectivePlan, getPlanLimits, getPlanDisplayTitle, getActivePlanLimits, formatPlanLimitsLine, isOnTrial, paymentInstructions, paymentWhatsAppLink } from '@/lib/subscription';
-// trial fields via newEstablishmentTrialFields;
 import { APP_VERSION, fetchLatestRelease, fetchRemoteWebVersion, forceAppUpdate, isNewerVersion, WEB_APP_URL } from '@/lib/appVersion';
 import type { Establishment } from '@/lib/types';
 import { ROLE_LABELS } from '@/lib/types';
@@ -76,9 +74,20 @@ export default function SettingsPage() {
   const [btpBranding, setBtpBranding] = useState<BtpBranding>({ ...DEFAULT_BRANDING });
   const [brandingSaved, setBrandingSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [apkDownloadUrl, setApkDownloadUrl] = useState<string | null>(null);
   const [openPanel, setOpenPanel] = useState<string | null>(null);
 
   const canManageEst = member && ['super_admin', 'admin', 'owner'].includes(member.role);
+  const isPlatformAdmin = member?.role === 'super_admin' || member?.role === 'admin';
+  const estAllowedTypes = getAllowedBusinessTypes(
+    member?.role,
+    member?.allowed_types,
+    est?.allowed_types ?? activeEstablishment?.allowed_types,
+    est ? est.type : null,
+  );
+  const canSwitchEstType = isPlatformAdmin || estAllowedTypes.length > 1;
+  const canCreateNewEst = isPlatformAdmin || (member?.allowed_types?.length ?? 0) > 1;
 
   useEffect(() => {
     (async () => {
@@ -299,26 +308,35 @@ async function saveProfile() {
     setError(null);
 
     if (est) {
+      const updatePayload: Record<string, unknown> = {
+        name: form.name,
+        address: form.address || null,
+        phone: form.phone || null,
+        logo_url: form.logo_url || null,
+        owner_email: form.owner_email || null,
+        owner_phone: form.owner_phone || null,
+        owner_user_id: member.user_id,
+      };
+      if (canSwitchEstType) {
+        updatePayload.type = form.type;
+      }
       const { error: err } = await supabase
         .from('establishments')
-        .update({
-          name: form.name,
-          type: form.type,
-          address: form.address || null,
-          phone: form.phone || null,
-          logo_url: form.logo_url || null,
-          owner_email: form.owner_email || null,
-          owner_phone: form.owner_phone || null,
-          owner_user_id: member.user_id,
-        } as any)
+        .update(updatePayload as any)
         .eq('id', est.id);
       if (err) setError(err.message);
       else {
         setSaved(true);
+        applyBusinessTheme((canSwitchEstType ? form.type : est.type) as any);
         setTimeout(() => setSaved(false), 2500);
         await refresh();
       }
     } else if (canManageEst) {
+      if (!isPlatformAdmin && !(member.allowed_types || []).includes(form.type)) {
+        setError("La création d'un établissement est attribuée uniquement par l'administrateur sur demande.");
+        setSaving(false);
+        return;
+      }
       // Créer l'établissement et rattacher le membre
       const { data: newEst, error: err } = await supabase
         .from('establishments')
@@ -328,7 +346,7 @@ async function saveProfile() {
           address: form.address || null,
           phone: form.phone || null,
           logo_url: form.logo_url || null,
-          created_by: member.user_id, ...newEstablishmentTrialFields(),
+          created_by: member.user_id, subscription_status: 'trial', trial_ends_at: new Date(Date.now()+30*86400000).toISOString(),
         } as any)
         .select()
         .single();
@@ -617,7 +635,8 @@ async function saveProfile() {
               onClick={() => {
                 const muted = localStorage.getItem('mm_order_sound_ok') === '0';
                 setOrderSoundEnabled(muted);
-                window.alert(muted ? 'Son des commandes activé' : 'Son des commandes coupé (la popup reste affichée)');
+                setError(null);
+                setNotice(muted ? 'Son des commandes activé' : 'Son des commandes coupé (la popup reste affichée)');
               }}
             />
             <SettingsRow
@@ -626,12 +645,17 @@ async function saveProfile() {
               subtitle="Activer les alertes même hors de l’app"
               onClick={async () => {
                 const uid = member?.user_id;
-                if (!uid) { window.alert('Connectez-vous d’abord'); return; }
+                if (!uid) { setError('Connectez-vous d’abord'); return; }
                 const r = await registerPushToken({
                   userId: uid,
                   establishmentId: activeEstablishment?.id || member?.establishment_id,
                 });
-                window.alert(r.ok ? 'Notifications push activées' : (r.error || 'Échec — configurez Firebase / FCM'));
+                if (r.ok) {
+                  setError(null);
+                  setNotice('Notifications push activées');
+                } else {
+                  setError(r.error || 'Échec — configurez Firebase / FCM');
+                }
               }}
             />
           </div>
@@ -682,6 +706,11 @@ async function saveProfile() {
       {error && (
         <div className="mb-4 bg-error-500/10 border border-error-500/30 rounded-xl p-3 text-sm text-error-300">
           {error}
+        </div>
+      )}
+      {notice && (
+        <div className="mb-4 bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3 text-sm text-emerald-300">
+          {notice}
         </div>
       )}
 
@@ -967,18 +996,21 @@ async function saveProfile() {
                 />
               </div>
               <div>
-                <label className="label">Type</label>
-                <p className="input-field bg-stone-800/50 text-stone-300 cursor-default">
-                  {{
-                    maquis: 'Maquis / Bar',
-                    restaurant: 'Restaurant',
-                    depot: 'Grossiste / Dépôt',
-                    location_event: 'Location événementielle',
-                    complexe: 'Établissement (multi-services)',
-                  }[form.type] || form.type || '—'}
-                </p>
+                <label className="label">Type d&apos;activité</label>
+                <select
+                  value={form.type}
+                  onChange={(e) => setForm({ ...form, type: e.target.value })}
+                  className="input-field"
+                  disabled={!canManageEst || !canSwitchEstType}
+                >
+                  {(estAllowedTypes.length > 0 ? estAllowedTypes : [normalizeBusinessType(form.type)]).map((t) => (
+                    <option key={t} value={t}>{BUSINESS_LABELS[t]}</option>
+                  ))}
+                </select>
                 <p className="text-xs text-stone-500 mt-1">
-                  Pour changer le type d&apos;activité, utilisez le menu <strong className="text-stone-400">Activité</strong> (barre latérale).
+                  {canSwitchEstType
+                    ? 'Change le menu, le thème et le tableau de bord.'
+                    : "Type attribué par l'administrateur (modifiable uniquement sur demande)."}
                 </p>
               </div>
               <div>
@@ -1089,17 +1121,22 @@ async function saveProfile() {
                       <><Plus size={18} /> Créer mon établissement</>
                     )}
                   </button>
-                  {est && (
+                  {est && canCreateNewEst && (
                     <button
                       type="button"
                       className="btn-secondary w-full flex items-center justify-center gap-2 mt-2"
                       onClick={() => {
                         setEst(null);
-                        setForm({ name: '', type: 'maquis', address: '', phone: '', logo_url: '', owner_email: '', owner_phone: '' });
+                        setForm({ name: '', type: estAllowedTypes[0] || 'maquis', address: '', phone: '', logo_url: '', owner_email: '', owner_phone: '' });
                       }}
                     >
                       <Plus size={18} /> Ajouter une autre activité
                     </button>
+                  )}
+                  {est && !canCreateNewEst && (
+                    <p className="text-xs text-stone-500 text-center mt-2">
+                      Pour ouvrir un autre établissement ou demander un nouveau type d&apos;activité, contactez l&apos;administrateur.
+                    </p>
                   )}
                 </>
               )}
@@ -1141,22 +1178,34 @@ async function saveProfile() {
             type="button"
             className="btn-secondary w-full flex items-center justify-center gap-2 text-sm"
             onClick={async () => {
+              setError(null);
+              setNotice(null);
+              setApkDownloadUrl(null);
               const latest = await fetchLatestRelease();
               if (!latest) {
-                alert('Impossible de vérifier les APK sur GitHub pour le moment.');
+                setError('Impossible de vérifier les APK sur GitHub pour le moment.');
                 return;
               }
               if (isNewerVersion(latest.tag)) {
-                if (confirm(`Nouvelle APK v${latest.tag} disponible. Télécharger ?`)) {
-                  window.open(latest.apkUrl || latest.htmlUrl, '_blank');
-                }
+                setNotice(`Nouvelle APK v${latest.tag} disponible.`);
+                setApkDownloadUrl(latest.apkUrl || latest.htmlUrl);
               } else {
-                alert(`APK à jour (v${APP_VERSION}). Pour le contenu : utilise « Mettre à jour ».`);
+                setNotice(`APK à jour (v${APP_VERSION}). Pour le contenu : utilisez « Mettre à jour ».`);
               }
             }}
           >
             <Download size={16} /> Vérifier nouvelle APK
           </button>
+          {apkDownloadUrl && (
+            <a
+              href={apkDownloadUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-primary w-full flex items-center justify-center gap-2 text-sm"
+            >
+              <Download size={16} /> Télécharger l&apos;APK maintenant
+            </a>
+          )}
           <p className="text-[11px] text-stone-600">
             Site : {WEB_APP_URL}
           </p>
@@ -1175,7 +1224,12 @@ async function saveProfile() {
             className="btn-primary w-full"
             onClick={async () => {
               const r = await requestMicrophone();
-              alert(r.ok ? 'Microphone autorisé ✓' : `Micro : ${r.detail}`);
+              if (r.ok) {
+                setError(null);
+                setNotice('Microphone autorisé ✓');
+              } else {
+                setError(`Micro : ${r.detail}`);
+              }
             }}
           >
             Autoriser le microphone

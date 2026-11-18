@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { getDashboardStats, listHotelServices, formatFcfa, isHotelComplex } from '@/lib/hotel';
+import OwnerSitesBar from '@/components/OwnerSitesBar';
 
 export default function HotelDashboard() {
   const { activeEstablishment, member } = useAuth();
@@ -141,6 +142,7 @@ export default function HotelDashboard() {
 
   return (
     <div className="space-y-5 max-w-5xl mx-auto">
+      <OwnerSitesBar />
       <div>
         <h1 className="text-xl font-bold text-stone-900 dark:text-stone-100">
           Dashboard — Complexe hôtelier

@@ -33,6 +33,8 @@ class SupabaseApi(
         val assignedPoleCode: String?,
         val supervisorUserId: String?,
         val canEditStock: Boolean,
+        val allowedTypes: List<String> = emptyList(),
+        val avatarUrl: String? = null,
     )
 
     data class Establishment(
@@ -50,6 +52,15 @@ class SupabaseApi(
         val locationUpdatedAt: String?,
         val subscriptionEndsAt: String? = null,
         val lastPaymentAt: String? = null,
+        val createdAt: String? = null,
+        val allowedTypes: List<String> = emptyList(),
+        val logoUrl: String? = null,
+        val ownerEmail: String? = null,
+        val ownerPhone: String? = null,
+        val services: List<String> = emptyList(),
+        val publicVisible: Boolean = false,
+        val publicZone: String? = null,
+        val publicPhone: String? = null,
     )
 
     data class PaymentRequestRow(
@@ -248,6 +259,8 @@ class SupabaseApi(
         val mobileMoney: Double,
         val notes: String?,
         val sentAt: String?,
+        val losses: Double = 0.0,
+        val broken: Double = 0.0,
     )
 
     data class MenuCategoryRow(
@@ -388,6 +401,16 @@ class SupabaseApi(
 
     private fun enc(value: String): String = URLEncoder.encode(value, "UTF-8")
 
+    private fun parseStringList(o: JSONObject, key: String): List<String> {
+        val arr = o.optJSONArray(key) ?: return emptyList()
+        return buildList {
+            for (i in 0 until arr.length()) {
+                val s = arr.optString(i).trim()
+                if (s.isNotBlank() && s != "null") add(s)
+            }
+        }
+    }
+
     private fun parseMember(o: JSONObject): Member = Member(
         id = o.optString("id"),
         userId = o.optString("user_id"),
@@ -399,11 +422,13 @@ class SupabaseApi(
         assignedPoleCode = o.optString("assigned_pole_code").ifBlank { null },
         supervisorUserId = o.optString("supervisor_user_id").ifBlank { null },
         canEditStock = o.optBoolean("can_edit_stock", false),
+        allowedTypes = parseStringList(o, "allowed_types"),
+        avatarUrl = if (o.isNull("avatar_url")) null else o.optString("avatar_url").ifBlank { null },
     )
 
     fun fetchMember(accessToken: String, userId: String): Member? {
         val url =
-            "/rest/v1/members?user_id=eq.$userId&select=id,user_id,full_name,role,status,establishment_id,email,assigned_pole_code,supervisor_user_id,can_edit_stock&limit=1"
+            "/rest/v1/members?user_id=eq.$userId&select=id,user_id,full_name,role,status,establishment_id,email,assigned_pole_code,supervisor_user_id,can_edit_stock,allowed_types,avatar_url&limit=1"
         client.newCall(get(url, accessToken)).execute().use { resp ->
             if (!resp.isSuccessful) return null
             val arr = JSONArray(resp.body?.string().orEmpty())
@@ -412,9 +437,18 @@ class SupabaseApi(
         }
     }
 
-    fun updateMemberProfile(accessToken: String, memberId: String, fullName: String): String? {
-        val body = JSONObject().put("full_name", fullName.trim()).toString()
-        client.newCall(patch("/rest/v1/members?id=eq.$memberId", accessToken, body)).execute().use { resp ->
+    fun updateMemberProfile(
+        accessToken: String,
+        memberId: String,
+        fullName: String,
+        avatarUrl: String? = null,
+        updateAvatar: Boolean = false,
+    ): String? {
+        val obj = JSONObject().put("full_name", fullName.trim())
+        if (updateAvatar) {
+            obj.put("avatar_url", avatarUrl?.trim()?.ifBlank { null } ?: JSONObject.NULL)
+        }
+        client.newCall(patch("/rest/v1/members?id=eq.$memberId", accessToken, obj.toString())).execute().use { resp ->
             return if (resp.isSuccessful) null else "Profil non mis à jour (${resp.code})"
         }
     }
@@ -446,9 +480,28 @@ class SupabaseApi(
     fun fetchLinkedEstablishmentId(accessToken: String, userId: String): String? =
         fetchAllEstablishmentLinks(accessToken, userId).firstOrNull()?.establishmentId
 
+    fun fetchOwnedEstablishmentIds(accessToken: String, userId: String): List<String> {
+        val url =
+            "/rest/v1/establishments?or=(owner_user_id.eq.$userId,created_by.eq.$userId)&select=id&limit=50"
+        return try {
+            client.newCall(get(url, accessToken)).execute().use { resp ->
+                if (!resp.isSuccessful) return emptyList()
+                val arr = JSONArray(resp.body?.string().orEmpty())
+                buildList {
+                    for (i in 0 until arr.length()) {
+                        val id = arr.getJSONObject(i).optString("id")
+                        if (id.isNotBlank()) add(id)
+                    }
+                }
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
     fun fetchEstablishment(accessToken: String, id: String): Establishment? {
         val url =
-            "/rest/v1/establishments?id=eq.$id&select=id,name,type,business_type,slug,address,phone,subscription_status,trial_ends_at,subscription_ends_at,last_payment_at,plan_tier,latitude,longitude,location_updated_at&limit=1"
+            "/rest/v1/establishments?id=eq.$id&select=id,name,type,business_type,slug,address,phone,subscription_status,trial_ends_at,subscription_ends_at,last_payment_at,plan_tier,latitude,longitude,location_updated_at,created_at,allowed_types,logo_url,owner_email,owner_phone,services,public_visible,public_zone,public_phone&limit=1"
         client.newCall(get(url, accessToken)).execute().use { resp ->
             if (!resp.isSuccessful) return null
             val arr = JSONArray(resp.body?.string().orEmpty())
@@ -471,6 +524,15 @@ class SupabaseApi(
                 locationUpdatedAt = o.optString("location_updated_at").ifBlank { null },
                 subscriptionEndsAt = o.optString("subscription_ends_at").ifBlank { null },
                 lastPaymentAt = o.optString("last_payment_at").ifBlank { null },
+                createdAt = o.optString("created_at").ifBlank { null },
+                allowedTypes = parseStringList(o, "allowed_types"),
+                logoUrl = if (o.isNull("logo_url")) null else o.optString("logo_url").ifBlank { null },
+                ownerEmail = if (o.isNull("owner_email")) null else o.optString("owner_email").ifBlank { null },
+                ownerPhone = if (o.isNull("owner_phone")) null else o.optString("owner_phone").ifBlank { null },
+                services = parseStringList(o, "services"),
+                publicVisible = o.optBoolean("public_visible", false),
+                publicZone = if (o.isNull("public_zone")) null else o.optString("public_zone").ifBlank { null },
+                publicPhone = if (o.isNull("public_phone")) null else o.optString("public_phone").ifBlank { null },
             )
         }
     }
@@ -482,6 +544,28 @@ class SupabaseApi(
         address: String,
         phone: String,
         type: String? = null,
+    ): String? = updateEstablishmentExtended(
+        accessToken = accessToken,
+        estId = estId,
+        name = name,
+        address = address,
+        phone = phone,
+        type = type,
+    )
+
+    fun updateEstablishmentExtended(
+        accessToken: String,
+        estId: String,
+        name: String,
+        address: String,
+        phone: String,
+        type: String? = null,
+        logoUrl: String? = null,
+        updateLogo: Boolean = false,
+        ownerEmail: String? = null,
+        ownerPhone: String? = null,
+        updateOwnerContacts: Boolean = false,
+        services: List<String>? = null,
     ): String? {
         val obj = JSONObject()
             .put("name", name.trim())
@@ -490,8 +574,73 @@ class SupabaseApi(
         if (!type.isNullOrBlank()) {
             obj.put("type", type.trim())
         }
+        if (updateLogo) {
+            obj.put("logo_url", logoUrl?.trim()?.ifBlank { null } ?: JSONObject.NULL)
+        }
+        if (updateOwnerContacts) {
+            obj.put("owner_email", ownerEmail?.trim()?.ifBlank { null } ?: JSONObject.NULL)
+            obj.put("owner_phone", ownerPhone?.trim()?.ifBlank { null } ?: JSONObject.NULL)
+        }
+        if (services != null) {
+            obj.put("services", JSONArray(services))
+        }
         client.newCall(patch("/rest/v1/establishments?id=eq.$estId", accessToken, obj.toString())).execute().use { resp ->
             return if (resp.isSuccessful) null else "Mise à jour refusée (${resp.code})"
+        }
+    }
+
+    fun updateEstablishmentPublicDepot(
+        accessToken: String,
+        estId: String,
+        visible: Boolean,
+        zone: String?,
+        publicPhone: String?,
+    ): String? {
+        val obj = JSONObject()
+            .put("public_visible", visible)
+            .put("public_zone", zone?.trim()?.ifBlank { null } ?: JSONObject.NULL)
+            .put("public_phone", publicPhone?.trim()?.ifBlank { null } ?: JSONObject.NULL)
+        client.newCall(patch("/rest/v1/establishments?id=eq.$estId", accessToken, obj.toString())).execute().use { resp ->
+            return if (resp.isSuccessful) null else "Annuaire dépôt non mis à jour (${resp.code})"
+        }
+    }
+
+    fun uploadImageToVitrine(
+        accessToken: String,
+        folderId: String,
+        prefix: String,
+        jpegBytes: ByteArray,
+    ): String {
+        val cleanFolder = folderId.trim().ifBlank { "misc" }
+        val filePath = "$cleanFolder/$prefix-${System.currentTimeMillis()}.jpg"
+        try {
+            val req = Request.Builder()
+                .url("$baseUrl/storage/v1/object/public-vitrine/$filePath")
+                .addHeader("apikey", anonKey)
+                .addHeader("Authorization", "Bearer $accessToken")
+                .addHeader("x-upsert", "true")
+                .addHeader("Content-Type", "image/jpeg")
+                .post(jpegBytes.toRequestBody("image/jpeg".toMediaType()))
+                .build()
+            client.newCall(req).execute().use { resp ->
+                if (resp.isSuccessful) {
+                    return "$baseUrl/storage/v1/object/public/public-vitrine/$filePath"
+                }
+            }
+        } catch (_: Exception) {
+        }
+        return "data:image/jpeg;base64," + android.util.Base64.encodeToString(jpegBytes, android.util.Base64.NO_WRAP)
+    }
+
+    fun updateEstablishmentType(
+        accessToken: String,
+        estId: String,
+        type: String,
+    ): String? {
+        val clean = type.trim().ifBlank { return "Type invalide" }
+        val obj = JSONObject().put("type", clean)
+        client.newCall(patch("/rest/v1/establishments?id=eq.$estId", accessToken, obj.toString())).execute().use { resp ->
+            return if (resp.isSuccessful) null else "Changement d'activité refusé (${resp.code})"
         }
     }
 
@@ -735,7 +884,7 @@ class SupabaseApi(
 
     fun fetchTeamMembers(accessToken: String, estId: String): List<Member> {
         val url =
-            "/rest/v1/members?establishment_id=eq.$estId&select=id,user_id,full_name,role,status,establishment_id,email,assigned_pole_code,supervisor_user_id,can_edit_stock&order=created_at.desc&limit=100"
+            "/rest/v1/members?establishment_id=eq.$estId&select=id,user_id,full_name,role,status,establishment_id,email,assigned_pole_code,supervisor_user_id,can_edit_stock,avatar_url&order=created_at.desc&limit=100"
         client.newCall(get(url, accessToken)).execute().use { resp ->
             if (!resp.isSuccessful) return emptyList()
             val arr = JSONArray(resp.body?.string().orEmpty())
@@ -2246,7 +2395,7 @@ class SupabaseApi(
 
     fun fetchDailyReportsRange(accessToken: String, estId: String, fromDate: String): List<DailyReportRow> {
         val url =
-            "/rest/v1/daily_reports?establishment_id=eq.$estId&date=gte.${enc(fromDate)}&select=id,date,total_sales,total_expenses,cash,mobile_money,notes,sent_at&order=date.desc&limit=120"
+            "/rest/v1/daily_reports?establishment_id=eq.$estId&date=gte.${enc(fromDate)}&select=id,date,total_sales,total_expenses,cash,mobile_money,notes,sent_at,losses,broken&order=date.desc&limit=120"
         client.newCall(get(url, accessToken)).execute().use { resp ->
             if (!resp.isSuccessful) return emptyList()
             val arr = JSONArray(resp.body?.string().orEmpty())
@@ -2263,6 +2412,8 @@ class SupabaseApi(
                             mobileMoney = o.optDouble("mobile_money", 0.0),
                             notes = o.optString("notes").ifBlank { null },
                             sentAt = o.optString("sent_at").ifBlank { null },
+                            losses = o.optDouble("losses", 0.0),
+                            broken = o.optDouble("broken", 0.0),
                         ),
                     )
                 }

@@ -35,7 +35,7 @@ function DashLink({ to, children, className = '' }: { to: string; children: Reac
   return (
     <Link
       to={to}
-      className={`block rounded-2xl transition-all hover:ring-2 hover:ring-amber-500/40 hover:scale-[1.01] active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-amber-400/50 ${className}`}
+      className={`block rounded-2xl transition-all hover:ring-2 hover:ring-white/15 hover:scale-[1.01] active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-white/25 ${className}`}
     >
       {children}
     </Link>
@@ -357,7 +357,6 @@ export default function Dashboard() {
 
   // Établissement : cache local immédiat (évite écran « Chargement… » permanent)
   let cachedEstId: string | null = null;
-  let cachedEstName: string | null = null;
   try {
     const uid = member?.user_id;
     const raw =
@@ -367,7 +366,6 @@ export default function Dashboard() {
       const parsed = JSON.parse(raw);
       if (parsed?.id) {
         cachedEstId = String(parsed.id);
-        cachedEstName = parsed.name || null;
       }
     }
   } catch { /* */ }
@@ -492,7 +490,7 @@ export default function Dashboard() {
             <h2 className="text-lg font-semibold text-stone-100">Comptabilité</h2>
             <p className="text-xs text-stone-500">Chiffres de gestion — appuyez sur une carte pour ouvrir</p>
           </div>
-          <Link to="/accounting" className="text-sm text-amber-400 hover:underline">
+          <Link to="/accounting" className="text-sm font-medium hover:underline" style={{ color: theme.primary }}>
             Voir détail →
           </Link>
         </div>
@@ -536,7 +534,7 @@ export default function Dashboard() {
               Calcul auto : rapports du jour + ventes caisse × (prix vente − prix achat)
             </p>
           </div>
-          <Link to="/daily-report" className="text-sm text-amber-400 hover:underline">
+          <Link to="/daily-report" className="text-sm font-medium hover:underline" style={{ color: theme.primary }}>
             Rapport du jour →
           </Link>
         </div>
@@ -621,21 +619,8 @@ export default function Dashboard() {
         <StatCard title="Équipe" value={String(data.employeeCount)} icon={<Users size={20} />} />
           </>
         )}
-        {(false || false) && (
-          <StatCard title="Commandes actives" value={String(data.activeOrders)} icon={<Receipt size={20} />} />
-        )}
-        {false && (
-          <StatCard title="Tables" value={`${data.occupiedTables}/${data.occupiedTables + data.freeTables}`} icon={<LayoutDashboard size={20} />} />
-        )}
-        {(bizType === 'maquis' || bizType === 'magasin') && (
-          <StatCard title={ui.stockAlert} value={String(data.lowStockCount)} icon={<AlertTriangle size={20} />} />
-        )}
-        {bizType === 'magasin' && (
-          <StatCard title="Employés" value={String(data.employeeCount)} icon={<Users size={20} />} />
-        )}
-        {bizType === 'maquis' && (
-          <StatCard title="Résultat jour" value={formatFCFA(data.todayProfit)} icon={<TrendingUp size={20} />} />
-        )}
+        <StatCard title="Alertes stock" value={String(data.lowStockCount)} icon={<AlertTriangle size={20} />} />
+        <StatCard title="Équipe active" value={String(data.employeeCount)} icon={<Users size={20} />} />
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">

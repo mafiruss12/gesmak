@@ -1,7 +1,6 @@
 import { useState } from 'react';
-import { Beer, CalendarDays, Loader2, Check, Building2, UtensilsCrossed, Warehouse, LogOut } from 'lucide-react';
+import { Beer, CalendarDays, Loader2, Check, Building2, UtensilsCrossed, Warehouse, LogOut, RefreshCw, ShieldAlert } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { newEstablishmentTrialFields } from '@/lib/subscription';
 import { useAuth } from '@/lib/auth';
 import { seedDefaultStockForEstablishment } from '@/lib/seedDefaultStock';
 import { ensureDefaultHotelServices, HOTEL_SERVICE_PRESETS } from '@/lib/hotel';
@@ -10,6 +9,7 @@ import {
   BUSINESS_LABELS,
   BUSINESS_DESCRIPTIONS,
   BUSINESS_THEMES,
+  getAllowedBusinessTypes,
   type BusinessType,
 } from '@/lib/businessTypes';
 
@@ -49,13 +49,23 @@ function friendlyCreateError(raw: string): string {
 }
 
 export default function TypePicker({ mode, onDone, defaultName = '' }: Props) {
-  const { member, user, refresh, signOut } = useAuth();
+  const { member, user, refresh, signOut, isPlatformAdmin } = useAuth();
   const [selected, setSelected] = useState<BusinessType | null>(null);
   const [selectedServices, setSelectedServices] = useState<string[]>(['maquis']);
   const [name, setName] = useState(defaultName);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const memberAllowedTypes = getAllowedBusinessTypes(
+    member?.role,
+    member?.allowed_types,
+    null,
+  );
+  const selectableTypes = isPlatformAdmin
+    ? BUSINESS_TYPES_SELECTABLE
+    : BUSINESS_TYPES_SELECTABLE.filter((t) => memberAllowedTypes.includes(t));
 
   async function submit() {
     if (!selected || !user) {
@@ -80,7 +90,8 @@ export default function TypePicker({ mode, onDone, defaultName = '' }: Props) {
             name: name.trim(),
             type: selected,
             created_by: user.id,
-            ...newEstablishmentTrialFields(),
+            subscription_status: 'trial',
+            trial_ends_at: new Date(Date.now() + 30 * 86400000).toISOString(),
           })
           .select()
           .single();
@@ -190,6 +201,52 @@ export default function TypePicker({ mode, onDone, defaultName = '' }: Props) {
     window.location.assign('/');
   }
 
+  if (selectableTypes.length === 0) {
+    return (
+      <div className="min-h-[70vh] flex items-center justify-center p-4">
+        <div className="w-full max-w-md rounded-2xl border border-stone-800 bg-stone-900/90 p-6 text-center space-y-4">
+          <div className="w-12 h-12 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center mx-auto text-amber-400">
+            <ShieldAlert size={24} />
+          </div>
+          <h1 className="text-xl font-bold font-display text-stone-100">
+            Établissement en attente d&apos;attribution
+          </h1>
+          <p className="text-sm text-stone-400 leading-relaxed">
+            Votre compte est actif, mais aucun type d&apos;établissement n&apos;a encore été créé ni attribué à votre espace.
+            Contactez l&apos;administrateur GESMAK pour qu&apos;il crée et vous affecte votre établissement à la demande.
+          </p>
+          <div className="space-y-2 pt-2">
+            <button
+              type="button"
+              disabled={refreshing || signingOut}
+              onClick={async () => {
+                setRefreshing(true);
+                try {
+                  await refresh();
+                } finally {
+                  setRefreshing(false);
+                }
+              }}
+              className="btn-primary w-full flex items-center justify-center gap-2"
+            >
+              <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
+              {refreshing ? 'Vérification...' : 'Actualiser mon accès'}
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleSignOut()}
+              disabled={signingOut || refreshing}
+              className="btn-secondary w-full flex items-center justify-center gap-2"
+            >
+              {signingOut ? <Loader2 className="animate-spin" size={16} /> : <LogOut size={16} />}
+              Se déconnecter
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-[70vh] flex items-center justify-center p-4 relative overflow-hidden">
       <div className="pointer-events-none absolute inset-0 opacity-40" aria-hidden
@@ -207,7 +264,7 @@ export default function TypePicker({ mode, onDone, defaultName = '' }: Props) {
           {mode === 'create' ? 'Créer votre activité' : 'Quel type d’activité ?'}
         </h1>
         <p className="text-stone-400 text-sm text-center mb-6">
-          Le menu, les couleurs et le tableau de bord s’adaptent à votre choix.
+          Seuls les types d&apos;activité attribués par l&apos;administrateur apparaissent ci-dessous.
         </p>
 
         {mode === 'create' && (
@@ -223,7 +280,7 @@ export default function TypePicker({ mode, onDone, defaultName = '' }: Props) {
         )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
-          {BUSINESS_TYPES_SELECTABLE.map((t) => {
+          {selectableTypes.map((t) => {
             const Icon = ICONS[t];
             const theme = BUSINESS_THEMES[t];
             const active = selected === t;

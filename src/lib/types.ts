@@ -19,6 +19,11 @@ export interface Establishment {
   trial_ends_at?: string | null;
   subscription_ends_at?: string | null;
   last_payment_at?: string | null;
+  plan_tier?: string | null;
+  services?: string[] | null;
+  /** Types d'activité autorisés à la demande par l'administrateur */
+  allowed_types?: string[] | null;
+  owner_user_id?: string | null;
   /** GPS — position partagée avec consentement */
   latitude?: number | null;
   longitude?: number | null;
@@ -53,6 +58,8 @@ export interface Member {
   assigned_pole_code?: string | null;
   /** Manager superviseur direct (pour une caissière) */
   supervisor_user_id?: string | null;
+  /** Types d'activité attribués sur demande par l'administrateur */
+  allowed_types?: string[] | null;
 }
 
 export interface Product {

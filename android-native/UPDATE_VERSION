@@ -1,4 +1,4 @@
-versionCode=114
-versionName=2.4.0-native
+versionCode=117
+versionName=2.6.0-native
 apkUrl=https://github.com/mafiruss12/gesmak/releases/download/apk-latest/GESMAK-native.apk
-notes=Décodage instantané images produits Base64/Coil, Abonnement 100% aligné Web (Essentiel/Pro/Business + Wave 05 02 01 20 11), Commandes Pro (SLA, encaissement/scission addition, serveur, +tour, motif annulation, reçu), anti-erreur réseau brute
+notes=Rapports Financiers (benefices nets et charges consolidees), logo et etablissement actif visibles partout, parametres mobiles complets (logo, contacts proprio, services complexe, annuaire depot, GPS, photo profil)

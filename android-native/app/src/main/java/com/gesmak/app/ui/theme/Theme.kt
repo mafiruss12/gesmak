@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
+import com.gesmak.app.data.BusinessTypes
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -95,9 +96,21 @@ private val DarkScheme = darkColorScheme(
 @Composable
 fun GesmakTheme(
     isLight: Boolean = true,
+    businessType: String? = null,
     content: @Composable () -> Unit,
 ) {
-    val palette = if (isLight) LightGesmakPalette else DarkGesmakPalette
+    val bizSpec = BusinessTypes.spec(businessType)
+    val basePalette = if (isLight) LightGesmakPalette else DarkGesmakPalette
+    val palette = basePalette.copy(
+        accent = bizSpec.accent(isLight),
+        accentDeep = bizSpec.deep(isLight),
+        accentSoft = bizSpec.soft(isLight),
+    )
+    val scheme = if (isLight) {
+        LightScheme.copy(primary = palette.accent, secondary = palette.accentDeep)
+    } else {
+        DarkScheme.copy(primary = palette.accent, secondary = palette.accentDeep)
+    }
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
@@ -114,7 +127,7 @@ fun GesmakTheme(
     }
     CompositionLocalProvider(LocalGesmakColors provides palette) {
         MaterialTheme(
-            colorScheme = if (isLight) LightScheme else DarkScheme,
+            colorScheme = scheme,
             content = content,
         )
     }

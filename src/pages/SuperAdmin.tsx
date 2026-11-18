@@ -26,6 +26,7 @@ import { seedDefaultStockForEstablishment } from '@/lib/seedDefaultStock';
 import {
   BUSINESS_TYPES_SELECTABLE,
   BUSINESS_LABELS,
+  normalizeBusinessType,
   type BusinessType,
 } from '@/lib/businessTypes';
 import {
@@ -98,7 +99,9 @@ function SuperAdminInner() {
     full_name: '',
     role: 'employee' as Role,
     establishment_id: '',
-    status: 'active' as 'active' | 'suspended' });
+    status: 'active' as 'active' | 'suspended',
+    allowed_types: [] as string[],
+  });
   /** Liens multi-établissements du membre en cours d'édition (member_establishments) */
   const [memberLinks, setMemberLinks] = useState<
     { establishment_id: string; role: string; status: string }[]
@@ -114,7 +117,9 @@ function SuperAdminInner() {
     name: '',
     type: 'maquis',
     address: '',
-    phone: '' });
+    phone: '',
+    allowed_types: [] as string[],
+  });
 
   async function loadData() {
     setLoading(true);
@@ -321,7 +326,9 @@ function SuperAdminInner() {
         full_name: memberEditForm.full_name || null,
         role: memberEditForm.role,
         status: memberEditForm.status,
-        establishment_id: memberEditForm.establishment_id || null };
+        establishment_id: memberEditForm.establishment_id || null,
+        allowed_types: memberEditForm.allowed_types.length > 0 ? memberEditForm.allowed_types : null,
+      };
       // Ne pas rétrograder le super_admin courant
       if (editMember.role === 'super_admin') {
         payload.role = 'super_admin';
@@ -515,7 +522,9 @@ function SuperAdminInner() {
           name: estEditForm.name,
           type: estEditForm.type,
           address: estEditForm.address || null,
-          phone: estEditForm.phone || null })
+          phone: estEditForm.phone || null,
+          allowed_types: estEditForm.allowed_types.length > 0 ? estEditForm.allowed_types : null,
+        })
         .eq('id', editEst.id);
       if (err) {
         setError(err.message);
@@ -605,6 +614,7 @@ function SuperAdminInner() {
       role: m.role,
       establishment_id: m.establishment_id || '',
       status: m.status === 'suspended' ? 'suspended' : 'active',
+      allowed_types: Array.isArray(m.allowed_types) ? m.allowed_types : [],
     });
     void loadMemberLinks(m.user_id);
   }
@@ -725,9 +735,11 @@ function SuperAdminInner() {
     setEditEst(est);
     setEstEditForm({
       name: est.name,
-      type: est.type || 'maquis',
+      type: normalizeBusinessType(est.type || 'maquis'),
       address: est.address || '',
-      phone: est.phone || '' });
+      phone: est.phone || '',
+      allowed_types: Array.isArray(est.allowed_types) ? est.allowed_types : [],
+    });
   }
 
 
@@ -1726,9 +1738,11 @@ function SuperAdminInner() {
               onChange={(e) => setEstForm({ ...estForm, type: e.target.value })}
               className="input-field"
             >
-              <option value="maquis">Maquis</option>
-                                          <option value="location_event">Location événementielle</option>
-              <option value="complexe">Établissement</option>
+              {BUSINESS_TYPES_SELECTABLE.map((t) => (
+                <option key={t} value={t}>
+                  {BUSINESS_LABELS[t]}
+                </option>
+              ))}
             </select>
           </div>
           <div>
@@ -1829,6 +1843,7 @@ function SuperAdminInner() {
                             )}
                           </p>
                           <p className="text-[11px] text-stone-500">
+                            {est ? `${BUSINESS_LABELS[normalizeBusinessType(est.type)]} · ` : ''}
                             {(ROLE_LABELS as Record<string, string>)[link.role] || link.role}
                             {link.status !== 'active' ? ` · ${link.status}` : ''}
                           </p>
@@ -1873,7 +1888,7 @@ function SuperAdminInner() {
                       .filter((est) => !memberLinks.some((l) => l.establishment_id === est.id))
                       .map((est) => (
                         <option key={est.id} value={est.id}>
-                          {est.name}
+                          {est.name} ({BUSINESS_LABELS[normalizeBusinessType(est.type)]})
                         </option>
                       ))}
                   </select>
@@ -1892,6 +1907,47 @@ function SuperAdminInner() {
                 </p>
               </div>
             </div>
+
+            {memberEditForm.role === 'owner' && (
+              <div className="rounded-xl border border-stone-700/80 bg-stone-900/60 p-3 space-y-2">
+                <p className="text-sm font-medium text-stone-200">
+                  Types d&apos;activité attribués (à la demande)
+                </p>
+                <p className="text-[11px] text-stone-400 leading-snug">
+                  Par défaut (aucun coché), ce propriétaire ne peut utiliser que les établissements créés et rattachés ci-dessus, sans changer librement de type. Cochez uniquement les types demandés.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1">
+                  {BUSINESS_TYPES_SELECTABLE.map((t) => {
+                    const checked = memberEditForm.allowed_types.includes(t);
+                    return (
+                      <label
+                        key={t}
+                        className={`flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs cursor-pointer transition ${
+                          checked
+                            ? 'border-amber-500/60 bg-amber-500/10 text-amber-200'
+                            : 'border-stone-700 bg-stone-800/50 text-stone-300'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          className="accent-amber-500"
+                          checked={checked}
+                          onChange={() =>
+                            setMemberEditForm((f) => ({
+                              ...f,
+                              allowed_types: checked
+                                ? f.allowed_types.filter((x) => x !== t)
+                                : [...f.allowed_types, t],
+                            }))
+                          }
+                        />
+                        <span>{BUSINESS_LABELS[t]}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             <div>
               <label className="label">Statut</label>
@@ -2009,15 +2065,56 @@ function SuperAdminInner() {
               />
             </div>
             <div>
-              <label className="label">Type</label>
+              <label className="label">Type principal attribué</label>
               <select
                 value={estEditForm.type}
                 onChange={(e) => setEstEditForm({ ...estEditForm, type: e.target.value })}
                 className="input-field"
               >
-                <option value="maquis">Maquis</option>
-                                                <option value="magasin">Magasin</option>
+                {BUSINESS_TYPES_SELECTABLE.map((t) => (
+                  <option key={t} value={t}>
+                    {BUSINESS_LABELS[t]}
+                  </option>
+                ))}
               </select>
+            </div>
+            <div className="rounded-xl border border-stone-700/80 bg-stone-900/60 p-3 space-y-2">
+              <p className="text-xs font-medium text-stone-200">
+                Types commutables autorisés sur cet établissement (sur demande)
+              </p>
+              <p className="text-[11px] text-stone-500">
+                Laissez vide pour verrouiller strictement sur le type principal ci-dessus.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                {BUSINESS_TYPES_SELECTABLE.map((t) => {
+                  const checked = estEditForm.allowed_types.includes(t);
+                  return (
+                    <label
+                      key={t}
+                      className={`flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs cursor-pointer transition ${
+                        checked
+                          ? 'border-sky-500/60 bg-sky-500/10 text-sky-200'
+                          : 'border-stone-700 bg-stone-800/50 text-stone-300'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        className="accent-sky-500"
+                        checked={checked}
+                        onChange={() =>
+                          setEstEditForm((f) => ({
+                            ...f,
+                            allowed_types: checked
+                              ? f.allowed_types.filter((x) => x !== t)
+                              : [...f.allowed_types, t],
+                          }))
+                        }
+                      />
+                      <span>{BUSINESS_LABELS[t]}</span>
+                    </label>
+                  );
+                })}
+              </div>
             </div>
             <div>
               <label className="label">Adresse</label>
@@ -2121,6 +2218,7 @@ function DirectAccessForm({ establishments, onDone }: { establishments: Establis
   const [estId, setEstId] = useState('');
   const [newEstName, setNewEstName] = useState('');
   const [newEstType, setNewEstType] = useState<BusinessType>('maquis');
+  const [allowedTypes, setAllowedTypes] = useState<BusinessType[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<{ login: string; password: string } | null>(null);
@@ -2264,6 +2362,7 @@ function DirectAccessForm({ establishments, onDone }: { establishments: Establis
         establishment_id: targetEstId,
         status: 'active' as const,
         email: authEmail,
+        allowed_types: role === 'owner' && allowedTypes.length > 0 ? allowedTypes : null,
       };
 
       if (existing) {
@@ -2486,6 +2585,44 @@ function DirectAccessForm({ establishments, onDone }: { establishments: Establis
                 </option>
               ))}
             </select>
+          </div>
+        </div>
+      )}
+
+      {role === 'owner' && (
+        <div className="rounded-xl border border-stone-700/80 bg-stone-900/60 p-3 space-y-2">
+          <p className="text-xs font-medium text-stone-200">
+            Types supplémentaires autorisés (optionnel — sur demande)
+          </p>
+          <p className="text-[11px] text-stone-500">
+            Laissez vide pour limiter ce propriétaire uniquement à l&apos;établissement sélectionné ci-dessus.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+            {BUSINESS_TYPES_SELECTABLE.map((t) => {
+              const checked = allowedTypes.includes(t);
+              return (
+                <label
+                  key={t}
+                  className={`flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs cursor-pointer transition ${
+                    checked
+                      ? 'border-amber-500/60 bg-amber-500/10 text-amber-200'
+                      : 'border-stone-700 bg-stone-800/50 text-stone-300'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    className="accent-amber-500"
+                    checked={checked}
+                    onChange={() =>
+                      setAllowedTypes((prev) =>
+                        checked ? prev.filter((x) => x !== t) : [...prev, t],
+                      )
+                    }
+                  />
+                  <span>{BUSINESS_LABELS[t]}</span>
+                </label>
+              );
+            })}
           </div>
         </div>
       )}

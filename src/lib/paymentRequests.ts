@@ -71,11 +71,13 @@ export async function createPaymentRequest(opts: {
   months: number;
   paymentMethod: string;
   establishmentName: string;
+  proofNote?: string;
 }): Promise<{ ok: boolean; request?: PaymentRequest; waUrl: string; error?: string }> {
   const months = Math.max(1, Math.floor(opts.months));
   const amount = amountForPlanMonths(opts.planTier, months);
   const reference_code = randomCode();
   const planLabel = PLANS[opts.planTier].label;
+  const cleanNote = opts.proofNote?.trim() || undefined;
 
   const waMsg = [
     '*GESMAK — Demande d’activation*',
@@ -85,9 +87,12 @@ export async function createPaymentRequest(opts: {
     `Durée : ${months} mois`,
     `Montant : ${amount.toLocaleString('fr-FR')} F CFA`,
     `Moyen : ${opts.paymentMethod}`,
+    cleanNote ? `Note / Réf Wave : ${cleanNote}` : null,
     '',
     'Je confirme le paiement Mobile Money. Merci d’activer mon abonnement.',
-  ].join('\n');
+  ]
+    .filter(Boolean)
+    .join('\n');
   const waUrl = paymentWhatsAppLink(waMsg);
 
   try {
@@ -101,6 +106,7 @@ export async function createPaymentRequest(opts: {
         amount_fcfa: amount,
         payment_method: opts.paymentMethod,
         reference_code,
+        proof_note: cleanNote ?? null,
         status: 'pending',
       })
       .select('*')
@@ -121,6 +127,7 @@ export async function createPaymentRequest(opts: {
           amount_fcfa: amount,
           payment_method: opts.paymentMethod,
           reference_code,
+          proof_note: cleanNote ?? null,
           status: 'pending',
           created_at: new Date().toISOString(),
         },

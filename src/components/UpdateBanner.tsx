@@ -60,7 +60,6 @@ export default function UpdateBanner() {
     check();
     const t = setInterval(() => check(), 1000 * 60 * 30);
     return () => clearInterval(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function dismiss() {
@@ -73,10 +72,7 @@ export default function UpdateBanner() {
     await forceAppUpdate();
   }
 
-  function downloadApk() {
-    const url = release?.apkUrl || release?.htmlUrl;
-    if (url) window.open(url, '_blank', 'noopener,noreferrer');
-  }
+  const apkDownloadHref = release?.apkUrl || release?.htmlUrl || '';
 
   if (!visible) return null;
 
@@ -110,14 +106,15 @@ export default function UpdateBanner() {
                 {updating ? 'Mise à jour…' : 'Mettre à jour'}
               </button>
             )}
-            {release && (
-              <button
-                type="button"
-                onClick={downloadApk}
+            {release && apkDownloadHref && (
+              <a
+                href={apkDownloadHref}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="btn-secondary text-xs py-2 px-3 flex items-center gap-1.5"
               >
                 <Download size={14} /> Télécharger APK
-              </button>
+              </a>
             )}
             <button
               type="button"

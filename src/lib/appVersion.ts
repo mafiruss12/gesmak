@@ -1,6 +1,6 @@
 /** Version affichée dans l'app (incrémenter à chaque release notable) */
-export const APP_VERSION = '1.4.1';
-export const APP_VERSION_CODE = 12;
+export const APP_VERSION = '1.4.0';
+export const APP_VERSION_CODE = 11;
 
 export const GITHUB_OWNER = 'mafiruss12';
 export const GITHUB_REPO = 'gesmak';
@@ -95,12 +95,19 @@ export async function forceAppUpdate(): Promise<void> {
     /* */
   }
 
-  // Toujours recharger depuis le site web live (même source que le navigateur)
-  // pour que l'APK / WebView Capacitor reçoive les mêmes fichiers que gesmak.vercel.app
-  const target = WEB_APP_URL.replace(/\/$/, '') + '/?_v=' + Date.now() + '&updated=1';
+  // Capacitor WebView : essayer de recharger depuis le site live si possible
   try {
-    window.location.replace(target);
+    const Cap = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
+    if (Cap?.isNativePlatform?.()) {
+      // Recharge l'URL actuelle (assets locaux ou serveur)
+      window.location.href = WEB_APP_URL + '/?_v=' + Date.now();
+      return;
+    }
   } catch {
-    window.location.href = target;
+    /* */
   }
+
+  const url = new URL(window.location.href);
+  url.searchParams.set('_v', String(Date.now()));
+  window.location.replace(url.toString());
 }
