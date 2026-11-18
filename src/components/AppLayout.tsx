@@ -211,6 +211,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [estSwitchOpen, setEstSwitchOpen] = useState(false);
+  const [typeChangeBusy, setTypeChangeBusy] = useState(false);
   const [estSwitchBusy, setEstSwitchBusy] = useState(false);
   const [estSwitchError, setEstSwitchError] = useState<string | null>(null);
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => getStoredTheme());
@@ -684,7 +685,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           })}
         </nav>
 
-        {/* Sélecteur d'activité — menu déroulant custom (mobile-friendly) */}
+        {/* Sélecteur d'activité — établissements attribués uniquement */}
         {member &&
           ['super_admin', 'admin', 'owner'].includes(member.role) &&
           myEstablishments.length >= 1 && (
@@ -693,7 +694,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               <span className="nav-section-emoji text-sm">🎯</span> Activité
               {myEstablishments.length > 1 && (
                 <span className="ml-auto text-[10px] font-semibold text-violet-200/80 normal-case tracking-normal">
-                  {myEstablishments.length} sites
+                  {myEstablishments.length} site{myEstablishments.length > 1 ? 's' : ''}
                 </span>
               )}
             </p>
@@ -793,12 +794,79 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 )}
               </div>
             )}
+
+            {/* Type d'activité — uniquement pour l'établissement actif attribué */}
+            {activeEstablishment?.id &&
+              ['owner', 'admin', 'super_admin'].includes(String(member?.role || '')) && (
+              <div className="mt-2 rounded-xl border border-stone-700 bg-stone-900/60 px-3 py-2.5 space-y-1.5">
+                <p className="text-[10px] uppercase tracking-wide text-stone-500">Type d&apos;activité</p>
+                <select
+                  className="w-full rounded-lg border border-stone-600 bg-stone-950 text-stone-100 text-sm px-2.5 py-2 disabled:opacity-50"
+                  disabled={typeChangeBusy}
+                  value={normalizeBusinessType(activeEstablishment.type)}
+                  onChange={async (e) => {
+                    const next = e.target.value;
+                    if (!next || next === normalizeBusinessType(activeEstablishment.type)) return;
+                    const label =
+                      (BUSINESS_LABELS as Record<string, string>)[next] || next;
+                    if (
+                      !confirm(
+                        'Changer le type en « ' +
+                          label +
+                          ' » ? Le menu et le tableau de bord seront mis à jour.'
+                      )
+                    ) {
+                      e.target.value = normalizeBusinessType(activeEstablishment.type);
+                      return;
+                    }
+                    setTypeChangeBusy(true);
+                    try {
+                      const { error } = await supabase
+                        .from('establishments')
+                        .update({ type: next } as any)
+                        .eq('id', activeEstablishment.id);
+                      if (error) throw error;
+                      try {
+                        localStorage.setItem(
+                          'mm_active_est',
+                          JSON.stringify({
+                            id: activeEstablishment.id,
+                            type: next,
+                            name: activeEstablishment.name,
+                          })
+                        );
+                      } catch {
+                        /* */
+                      }
+                      await refresh();
+                      window.location.assign(
+                        '/dashboard?type_switch=' + encodeURIComponent(next)
+                      );
+                    } catch (err: any) {
+                      alert(err?.message || 'Impossible de changer le type');
+                      setTypeChangeBusy(false);
+                    }
+                  }}
+                >
+                  <option value="maquis">Maquis / Bar</option>
+                  <option value="restaurant">Restaurant</option>
+                  <option value="depot">Grossiste / Dépôt</option>
+                  <option value="location_event">Location événementielle</option>
+                  <option value="complexe">Établissement (multi-services)</option>
+                </select>
+                <p className="text-[10px] text-stone-500">
+                  Uniquement les établissements attribués par l&apos;admin.
+                </p>
+              </div>
+            )}
+
             {estSwitchError && (
               <p className="mt-1.5 text-[11px] text-red-300 px-1">{estSwitchError}</p>
             )}
           </div>
         )}
-        <div className="p-3 border-t border-stone-800 shrink-0">
+
+<div className="p-3 border-t border-stone-800 shrink-0">
           <div className="px-3 pb-2 flex items-center gap-1.5 opacity-70">
             <img src="/logo-circle.png" alt="" className="w-4 h-4 rounded-full object-cover" />
             <span className="text-[10px] font-semibold tracking-wide text-stone-500">GESMAK</span>
