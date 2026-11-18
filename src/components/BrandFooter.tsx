@@ -45,8 +45,9 @@ export default function BrandFooter({
               <span className={`${titleStrong} font-semibold`}>GESMAK</span>
             </p>
             <p className={`text-xs font-bold ${powered} leading-tight`}>
-              App créée par Kevin Akoh de Kevin Tech Pro
+              App créée par Akoh Ago Armand Kevin de Kevin Tech Pro
             </p>
+            <p className={`text-[10px] ${titleMuted}`}>Tél : 0502012011 / 0711163661</p>
           </div>
         </div>
         {!compact && (
@@ -63,15 +64,29 @@ export default function BrandFooter({
                   {s.label}
                 </a>
               ))}
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new Event('gesmak-open-privacy'))}
+                className={`${social} underline-offset-2 hover:underline`}
+              >
+                Confidentialité &amp; Cookies
+              </button>
             </div>
             <p className={`text-[10px] ${copy}`}>
-              © {new Date().getFullYear()} Kevin Akoh — Kevin Tech Pro
+              © {new Date().getFullYear()} Akoh Ago Armand Kevin — Kevin Tech Pro
             </p>
           </>
         )}
         {compact && light && (
           <p className={`text-[10px] ${copy}`}>
-            © {new Date().getFullYear()} Kevin Akoh — Kevin Tech Pro
+            © {new Date().getFullYear()} Akoh Ago Armand Kevin — Kevin Tech Pro ·{' '}
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new Event('gesmak-open-privacy'))}
+              className="underline"
+            >
+              Confidentialité &amp; Cookies
+            </button>
           </p>
         )}
       </div>

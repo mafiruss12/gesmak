@@ -264,7 +264,7 @@ fun SplashScreen(onFinished: () -> Unit) {
         }
 
         Text(
-            text = "App créée par Kevin Akoh · Kevin Tech Pro",
+            text = "App créée par Akoh Ago Armand Kevin · Kevin Tech Pro",
             color = Color(0xFF475569),
             fontSize = 11.sp,
             modifier = Modifier

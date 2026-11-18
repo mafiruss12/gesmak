@@ -24,9 +24,11 @@ import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Chat
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.LocalOffer
@@ -136,6 +138,7 @@ fun HomeDashboard(
     updateBusy: Boolean,
     onSelectEst: (String) -> Unit,
     onSwitchBusinessType: (String) -> Unit = {},
+    onEditEstablishment: () -> Unit = {},
     onRefresh: () -> Unit,
     onToggleServiceDay: () -> Unit,
     onNavigate: (Int) -> Unit,
@@ -354,6 +357,62 @@ fun HomeDashboard(
                         }
                     }
                 }
+                if (establishment != null) {
+                    Spacer(Modifier.height(10.dp))
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = c.cardAlt,
+                        border = BorderStroke(1.dp, c.border),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            val ownerDisplay = member?.fullName?.ifBlank { null } ?: cleanLogin
+                            Text("Propriétaire : $ownerDisplay", color = c.text, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                            val phones = listOfNotNull(
+                                establishment.phone?.ifBlank { null },
+                                establishment.ownerPhone?.ifBlank { null }?.let { "WhatsApp: $it" },
+                            ).distinct().joinToString(" · ")
+                            if (phones.isNotBlank()) {
+                                Text("Tél : $phones", color = c.muted, fontSize = 11.sp)
+                            }
+                            if (!establishment.ownerEmail.isNullOrBlank()) {
+                                Text("E-mail : ${establishment.ownerEmail}", color = c.muted, fontSize = 11.sp)
+                            }
+                            val locParts = buildList {
+                                if (!establishment.address.isNullOrBlank()) add(establishment.address)
+                                if (establishment.latitude != null && establishment.longitude != null) {
+                                    add("GPS ${String.format("%.4f", establishment.latitude)}, ${String.format("%.4f", establishment.longitude)}")
+                                }
+                            }
+                            Text(
+                                "Localisation : ${if (locParts.isNotEmpty()) locParts.joinToString(" · ") else "Non renseignée"}",
+                                color = c.muted,
+                                fontSize = 11.sp,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            if (canSeeFinance) {
+                                Spacer(Modifier.height(4.dp))
+                                OutlinedButton(
+                                    onClick = onEditEstablishment,
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    Icon(Icons.Default.Edit, contentDescription = null, tint = c.accent, modifier = Modifier.size(15.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        "Modifier établissement, logo, propriétaire & localisation",
+                                        color = c.accent,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -401,44 +460,81 @@ fun HomeDashboard(
             }
         }
 
-        // Sélecteur multi-sites (Propriétaire)
-        if (establishments.size > 1) {
+        // Sélecteur multi-sites (Propriétaire) aligné sur la vue Web (captures d'écran)
+        if (establishments.isNotEmpty() && (canSeeFinance || establishments.size > 1)) {
             item {
-                Column {
-                    Text("Mes Établissements", color = c.muted, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                    Spacer(Modifier.height(6.dp))
+                GesmakCard(borderColor = c.accent.copy(alpha = 0.45f)) {
                     Row(
-                        modifier = Modifier.horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
+                        Icon(Icons.Default.Store, contentDescription = null, tint = c.accent, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            "MES ÉTABLISSEMENTS",
+                            color = c.accentDeep,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.weight(1f),
+                        )
+                        StatusPill(label = "${establishments.size} site${if (establishments.size > 1) "s" else ""}", color = c.accent)
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         establishments.forEach { est ->
                             val selected = est.id == currentEstId
                             val spec = BusinessTypes.spec(est.type)
-                            FilterChip(
-                                selected = selected,
-                                onClick = { onSelectEst(est.id) },
-                                leadingIcon = {
+                            val specColor = spec.accent(c.isLight)
+                            Surface(
+                                shape = RoundedCornerShape(14.dp),
+                                color = if (selected) specColor.copy(alpha = 0.14f) else c.cardAlt,
+                                border = BorderStroke(
+                                    width = if (selected) 1.5.dp else 1.dp,
+                                    color = if (selected) specColor else c.border,
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { if (!selected) onSelectEst(est.id) },
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
                                     EstablishmentLogo(
                                         name = est.name,
                                         logoUrl = est.logoUrl,
-                                        size = 20.dp,
-                                        cornerRadius = 6.dp,
-                                        accentColor = spec.accent(c.isLight),
+                                        size = 38.dp,
+                                        cornerRadius = 10.dp,
+                                        accentColor = specColor,
                                     )
-                                },
-                                label = {
-                                    Text(
-                                        "${est.name} · ${spec.shortLabel}",
-                                        maxLines = 1,
-                                    )
-                                },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = spec.accent(c.isLight),
-                                    selectedLabelColor = Color.White,
-                                    containerColor = c.card,
-                                    labelColor = c.text,
-                                ),
-                            )
+                                    Spacer(Modifier.width(10.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            if (selected) {
+                                                Icon(
+                                                    Icons.Default.Check,
+                                                    contentDescription = "Actif",
+                                                    tint = specColor,
+                                                    modifier = Modifier.size(15.dp),
+                                                )
+                                                Spacer(Modifier.width(4.dp))
+                                            }
+                                            Text(
+                                                est.name,
+                                                color = c.text,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 14.sp,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                        }
+                                        Text(spec.label, color = c.muted, fontSize = 11.sp)
+                                    }
+                                    if (!selected) {
+                                        Text("Basculer →", color = specColor, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
                         }
                     }
                 }

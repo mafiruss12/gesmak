@@ -5,6 +5,7 @@ import android.util.Base64
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,20 +15,28 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -350,3 +359,192 @@ fun parseHexColor(hex: String?, fallback: Color): Color {
 
 @Suppress("UNUSED_PARAMETER")
 fun unusedHelperCheck(p: SupabaseApi.Product) = Unit
+
+@Composable
+fun PrivacyCookiesDialog(
+    alreadyAccepted: Boolean,
+    acceptedAt: String?,
+    onAccept: (includePreferences: Boolean) -> Unit,
+    onDismiss: (() -> Unit)? = null,
+) {
+    val c = LocalGesmakColors.current
+    var checkedPolicy by remember(alreadyAccepted) { mutableStateOf(alreadyAccepted) }
+    var prefCookies by remember { mutableStateOf(true) }
+    var showFullText by remember(alreadyAccepted) { mutableStateOf(alreadyAccepted) }
+    var errorMsg by remember { mutableStateOf<String?>(null) }
+
+    AlertDialog(
+        onDismissRequest = {
+            if (alreadyAccepted && onDismiss != null) onDismiss()
+        },
+        containerColor = c.card,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.VerifiedUser, contentDescription = null, tint = c.accent, modifier = Modifier.size(22.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "Politique de confidentialité & Cookies",
+                    color = c.text,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp,
+                )
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 420.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text(
+                    "GESMAK — App créée par Akoh Ago Armand Kevin de Kevin Tech Pro (Tél : 0502012011 / 0711163661).",
+                    color = c.accentDeep,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 11.sp,
+                )
+                Text(
+                    "Pour fonctionner (connexion sécurisée, sauvegarde hors-ligne, établissement actif et alertes commandes), GESMAK utilise des cookies techniques et du stockage local sur cet appareil.",
+                    color = c.muted,
+                    fontSize = 12.sp,
+                )
+
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = c.cardAlt,
+                    border = BorderStroke(1.dp, c.border),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Stockage & cookies essentiels", color = c.text, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                                Text("Session, sécurité, panier, file hors-ligne.", color = c.muted, fontSize = 11.sp)
+                            }
+                            StatusPill(label = "Obligatoire", color = c.emerald)
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Préférences & confort", color = c.text, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                                Text("Thème jour/nuit, sonnerie, site actif mémorisé.", color = c.muted, fontSize = 11.sp)
+                            }
+                            Switch(checked = prefCookies, onCheckedChange = { prefCookies = it })
+                        }
+                    }
+                }
+
+                TextButton(onClick = { showFullText = !showFullText }) {
+                    Text(
+                        if (showFullText) "Masquer le détail complet" else "Lire la politique complète",
+                        color = c.accent,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+
+                if (showFullText) {
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = c.bg,
+                        border = BorderStroke(1.dp, c.border),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(
+                                "1. Éditeur : Kevin Tech Pro — Akoh Ago Armand Kevin (0502012011 / 0711163661).",
+                                color = c.text,
+                                fontSize = 11.sp,
+                            )
+                            Text(
+                                "2. Données collectées : identifiant, nom du propriétaire/membre, téléphone, e-mail, nom/logo/adresse/GPS volontaire de l'établissement, stocks, ventes, dépenses et rapports.",
+                                color = c.muted,
+                                fontSize = 11.sp,
+                            )
+                            Text(
+                                "3. Sécurité & confidentialité : vos données sont isolées par établissement via chiffrement HTTPS et ne sont jamais vendues à des tiers.",
+                                color = c.muted,
+                                fontSize = 11.sp,
+                            )
+                            Text(
+                                "4. Vos droits : vous pouvez modifier vos infos, retirer le logo ou arrêter le partage GPS à tout moment depuis Paramètres.",
+                                color = c.muted,
+                                fontSize = 11.sp,
+                            )
+                        }
+                    }
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            checkedPolicy = !checkedPolicy
+                            if (checkedPolicy) errorMsg = null
+                        },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Checkbox(
+                        checked = checkedPolicy,
+                        onCheckedChange = {
+                            checkedPolicy = it
+                            if (it) errorMsg = null
+                        },
+                    )
+                    Text(
+                        "J'ai lu et j'accepte la politique de confidentialité et les cookies / stockage local de GESMAK.",
+                        color = c.text,
+                        fontSize = 12.sp,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+
+                if (alreadyAccepted && !acceptedAt.isNullOrBlank()) {
+                    Text(
+                        "Déjà acceptée ($acceptedAt)",
+                        color = c.emerald,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+
+                if (!errorMsg.isNullOrBlank()) {
+                    Text(errorMsg!!, color = c.rose, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (!checkedPolicy) {
+                        errorMsg = "Cochez la case ci-dessus pour accepter la politique."
+                    } else {
+                        onAccept(prefCookies)
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = c.accent, contentColor = Color.White),
+            ) {
+                Text("Accepter et continuer", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                OutlinedButton(
+                    onClick = {
+                        if (!checkedPolicy) {
+                            errorMsg = "Cochez la case ci-dessus pour accepter la politique."
+                        } else {
+                            onAccept(false)
+                        }
+                    },
+                ) {
+                    Text("Essentiel", color = c.text, fontSize = 11.sp)
+                }
+                if (alreadyAccepted && onDismiss != null) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Fermer", color = c.muted, fontSize = 11.sp)
+                    }
+                }
+            }
+        },
+    )
+}

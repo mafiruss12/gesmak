@@ -9,6 +9,7 @@ import { isLocationEvent, isBtp } from '@/lib/businessTypes';
 import { isHotelComplex } from '@/lib/hotel';
 import AppLayout from '@/components/AppLayout';
 import ErrorBoundary from '@/components/ErrorBoundary';
+import PrivacyCookieConsent from '@/components/PrivacyCookieConsent';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 
 const AuthCallback = lazy(() => import('@/pages/AuthCallback'));
@@ -297,6 +298,7 @@ function AppWithSplash() {
       <AuthProvider>
         <ErrorBoundary>
           <PublicOrApp />
+          <PrivacyCookieConsent />
         </ErrorBoundary>
       </AuthProvider>
     </BrowserRouter>

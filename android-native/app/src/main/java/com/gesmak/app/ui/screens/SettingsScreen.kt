@@ -43,6 +43,7 @@ import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Store
 import androidx.compose.material.icons.filled.SystemUpdate
+import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material.icons.filled.Wallet
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -61,6 +62,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -133,11 +135,17 @@ fun SettingsScreen(
         phone: String,
         type: String?,
         logoUrl: String?,
+        ownerName: String?,
         ownerEmail: String?,
         ownerPhone: String?,
         services: List<String>?,
         cb: (String?) -> Unit,
     ) -> Unit,
+    openEstEditInitially: Boolean = false,
+    onEstEditConsumed: () -> Unit = {},
+    privacyAccepted: Boolean = false,
+    privacyAcceptedAt: String? = null,
+    onOpenPrivacyPolicy: () -> Unit = {},
     onSavePublicDepot: (visible: Boolean, zone: String, phone: String, cb: (String?) -> Unit) -> Unit = { _, _, _, cb -> cb(null) },
     onPickEstLogo: (cb: (url: String?, err: String?) -> Unit) -> Unit = { cb -> cb(null, null) },
     onPickProfilePhoto: (cb: (url: String?, err: String?) -> Unit) -> Unit = { cb -> cb(null, null) },
@@ -182,6 +190,13 @@ fun SettingsScreen(
     var subModal by remember { mutableStateOf(false) }
     var aboutModal by remember { mutableStateOf(false) }
     var statusMsg by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(openEstEditInitially) {
+        if (openEstEditInitially && canManageEst && establishment != null) {
+            estModal = true
+            onEstEditConsumed()
+        }
+    }
 
     LazyColumn(
         modifier = mod
@@ -467,9 +482,20 @@ fun SettingsScreen(
                 )
                 HorizontalDivider(color = c.border)
                 SettingNavRow(
+                    icon = Icons.Default.VerifiedUser,
+                    title = "Confidentialité & Cookies",
+                    subtitle = if (privacyAccepted) {
+                        "Acceptée${privacyAcceptedAt?.let { " ($it)" } ?: ""} · Consulter"
+                    } else {
+                        "Politique de confidentialité et cookies à accepter"
+                    },
+                    onClick = onOpenPrivacyPolicy,
+                )
+                HorizontalDivider(color = c.border)
+                SettingNavRow(
                     icon = Icons.Default.Info,
                     title = "À propos de GESMAK",
-                    subtitle = "Kevin Akoh · Kevin Tech Pro",
+                    subtitle = "Akoh Ago Armand Kevin · Kevin Tech Pro · 0502012011 / 0711163661",
                     onClick = { aboutModal = true },
                 )
             }
@@ -651,6 +677,7 @@ fun SettingsScreen(
 
     if (estModal && establishment != null) {
         var eName by remember { mutableStateOf(establishment.name) }
+        var eOwnerName by remember { mutableStateOf(member?.fullName.orEmpty()) }
         var eAddr by remember { mutableStateOf(establishment.address.orEmpty()) }
         var ePhone by remember { mutableStateOf(establishment.phone.orEmpty()) }
         var eType by remember { mutableStateOf(BusinessTypes.normalize(establishment.type)) }
@@ -664,11 +691,13 @@ fun SettingsScreen(
         }
         var logoUploading by remember { mutableStateOf(false) }
         var logoMsg by remember { mutableStateOf<String?>(null) }
+        var inlineGpsBusy by remember { mutableStateOf(false) }
+        var inlineGpsMsg by remember { mutableStateOf<String?>(null) }
         var busy by remember { mutableStateOf(false) }
         AlertDialog(
-            onDismissRequest = { if (!busy && !logoUploading) estModal = false },
+            onDismissRequest = { if (!busy && !logoUploading && !inlineGpsBusy) estModal = false },
             containerColor = c.card,
-            title = { Text("Établissement & Logo", color = c.text, fontWeight = FontWeight.Bold) },
+            title = { Text("Établissement, Propriétaire & Localisation", color = c.text, fontWeight = FontWeight.Bold, fontSize = 15.sp) },
             text = {
                 Column(
                     modifier = Modifier.verticalScroll(rememberScrollState()),
@@ -719,9 +748,16 @@ fun SettingsScreen(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
-                    OutlinedTextField(value = eName, onValueChange = { eName = it }, label = { Text("Nom") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(value = eAddr, onValueChange = { eAddr = it }, label = { Text("Adresse") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(value = ePhone, onValueChange = { ePhone = it }, label = { Text("Téléphone") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = eName, onValueChange = { eName = it }, label = { Text("Nom de l'établissement") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = eOwnerName, onValueChange = { eOwnerName = it }, label = { Text("Nom du propriétaire") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(
+                        value = ePhone,
+                        onValueChange = { ePhone = it },
+                        label = { Text("Téléphone de l'établissement") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                     Text("Contacts propriétaire (rapports & alertes)", color = c.accentDeep, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                     OutlinedTextField(
                         value = eOwnerEmail,
@@ -734,11 +770,81 @@ fun SettingsScreen(
                     OutlinedTextField(
                         value = eOwnerPhone,
                         onValueChange = { eOwnerPhone = it },
-                        label = { Text("WhatsApp du propriétaire") },
+                        label = { Text("Numéro / WhatsApp du propriétaire") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
+                    Text("Localisation de l'établissement", color = c.accentDeep, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    OutlinedTextField(value = eAddr, onValueChange = { eAddr = it }, label = { Text("Adresse / Quartier / Ville") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = c.cardAlt,
+                        border = BorderStroke(1.dp, c.border),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(
+                                if (establishment.latitude != null && establishment.longitude != null) {
+                                    "GPS : ${String.format("%.5f", establishment.latitude)}, ${String.format("%.5f", establishment.longitude)}"
+                                } else {
+                                    "Position GPS non enregistrée"
+                                },
+                                color = c.text,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                OutlinedButton(
+                                    enabled = !inlineGpsBusy && !busy,
+                                    onClick = {
+                                        inlineGpsBusy = true
+                                        inlineGpsMsg = null
+                                        onCaptureGps { msg ->
+                                            inlineGpsBusy = false
+                                            inlineGpsMsg = msg ?: "Position GPS enregistrée"
+                                        }
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                ) {
+                                    Text(
+                                        if (inlineGpsBusy) "..." else if (establishment.latitude != null) "MAJ GPS" else "Capturer GPS",
+                                        fontSize = 11.sp,
+                                    )
+                                }
+                                if (establishment.latitude != null && establishment.longitude != null) {
+                                    OutlinedButton(
+                                        enabled = !inlineGpsBusy && !busy,
+                                        onClick = {
+                                            val mapUrl = "https://www.google.com/maps?q=${establishment.latitude},${establishment.longitude}"
+                                            try {
+                                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(mapUrl)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                                            } catch (_: Exception) {
+                                                inlineGpsMsg = "Google Maps introuvable"
+                                            }
+                                        },
+                                    ) {
+                                        Text("Carte", color = c.sky, fontSize = 11.sp)
+                                    }
+                                    TextButton(
+                                        enabled = !inlineGpsBusy && !busy,
+                                        onClick = {
+                                            inlineGpsBusy = true
+                                            onClearGps { msg ->
+                                                inlineGpsBusy = false
+                                                inlineGpsMsg = msg ?: "GPS retiré"
+                                            }
+                                        },
+                                    ) {
+                                        Text("Retirer", color = c.rose, fontSize = 11.sp)
+                                    }
+                                }
+                            }
+                            if (!inlineGpsMsg.isNullOrBlank()) {
+                                Text(inlineGpsMsg!!, color = c.emerald, fontSize = 11.sp)
+                            }
+                        }
+                    }
                     Text("Type d'activité :", color = c.muted, fontSize = 11.sp)
                     if (canSwitchEstType) {
                         Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -792,21 +898,22 @@ fun SettingsScreen(
                             ePhone,
                             if (canSwitchEstType) eType else null,
                             eLogoUrl.trim().ifBlank { null },
+                            eOwnerName.trim().ifBlank { null },
                             eOwnerEmail.trim().ifBlank { null },
                             eOwnerPhone.trim().ifBlank { null },
                             if (eType == "complexe") eServices.toList() else null,
                         ) { err ->
                             busy = false
-                            statusMsg = err ?: "Établissement mis à jour"
+                            statusMsg = err ?: "Établissement & propriétaire mis à jour"
                             estModal = false
                         }
                     },
-                    enabled = !busy && !logoUploading,
+                    enabled = !busy && !logoUploading && !inlineGpsBusy,
                     colors = ButtonDefaults.buttonColors(containerColor = c.accent, contentColor = Color.White),
                 ) { Text("Enregistrer") }
             },
             dismissButton = {
-                TextButton(onClick = { estModal = false }, enabled = !busy && !logoUploading) {
+                TextButton(onClick = { estModal = false }, enabled = !busy && !logoUploading && !inlineGpsBusy) {
                     Text("Annuler", color = c.muted)
                 }
             },
@@ -1327,14 +1434,54 @@ fun SettingsScreen(
                         modifier = Modifier.size(36.dp).clip(CircleShape),
                     )
                     Spacer(Modifier.width(10.dp))
-                    Text("GESMAK Native", color = c.text, fontWeight = FontWeight.Bold)
+                    Text("À propos de GESMAK", color = c.text, fontWeight = FontWeight.Bold)
                 }
             },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Gestion Simplifiée, Business Maîtrisé", color = c.accent, fontWeight = FontWeight.SemiBold)
-                    Text("Version : ${BuildConfig.VERSION_NAME} (code ${BuildConfig.VERSION_CODE})", color = c.text, fontSize = 13.sp)
-                    Text("Développé par Kevin Akoh · Kevin Tech Pro", color = c.muted, fontSize = 12.sp)
+                    Text("Version : ${BuildConfig.VERSION_NAME} (code ${BuildConfig.VERSION_CODE})", color = c.text, fontSize = 12.sp)
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = c.cardAlt,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("App créée par Akoh Ago Armand Kevin", color = c.text, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            Text("Entreprise : Kevin Tech Pro", color = c.accentDeep, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                            Text("Tél : 0502012011 / 0711163661", color = c.muted, fontSize = 12.sp)
+                        }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick = {
+                                try {
+                                    context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:0502012011")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                                } catch (_: Exception) { /* */ }
+                            },
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text("0502012011", color = c.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                        OutlinedButton(
+                            onClick = {
+                                try {
+                                    context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:0711163661")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                                } catch (_: Exception) { /* */ }
+                            },
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text("0711163661", color = c.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    TextButton(
+                        onClick = {
+                            aboutModal = false
+                            onOpenPrivacyPolicy()
+                        },
+                    ) {
+                        Text("Politique de confidentialité & Cookies", color = c.sky, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    }
                 }
             },
             confirmButton = {

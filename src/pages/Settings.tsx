@@ -668,7 +668,18 @@ async function saveProfile() {
             <SettingsRow icon={<MapPin size={20} />} title="Position GPS" subtitle="Localisation" onClick={() => setOpenPanel('gps')} />
             <SettingsRow icon={<Palette size={20} />} title="Apparence" subtitle="Mode jour / sombre" onClick={() => setOpenPanel('theme')} />
             <SettingsRow icon={<RefreshCw size={20} />} title="Mises à jour" subtitle="Version de l’app" onClick={() => setOpenPanel('update')} />
-            <SettingsRow icon={<Info size={20} />} title="À propos" subtitle="GESMAK · Kevin Akoh · Kevin Tech Pro" onClick={() => setOpenPanel('about')} />
+            <SettingsRow
+              icon={<Shield size={20} />}
+              title="Confidentialité & Cookies"
+              subtitle="Politique de confidentialité et gestion du consentement"
+              onClick={() => window.dispatchEvent(new Event('gesmak-open-privacy'))}
+            />
+            <SettingsRow
+              icon={<Info size={20} />}
+              title="À propos"
+              subtitle="Akoh Ago Armand Kevin · Kevin Tech Pro · 0502012011 / 0711163661"
+              onClick={() => setOpenPanel('about')}
+            />
             <SettingsRow icon={<LogOut size={20} />} title="Session" subtitle="Déconnexion" onClick={() => setOpenPanel('session')} />
           </div>
         </div>
@@ -1262,10 +1273,23 @@ async function saveProfile() {
           <ul className="text-sm text-stone-300 space-y-2 border-t border-stone-800 pt-3">
             <li><span className="text-stone-500">Version</span> · {APP_VERSION}</li>
             <li><span className="text-stone-500">Site</span> · <a className="text-orange-400 underline" href={WEB_APP_URL} target="_blank" rel="noreferrer">{WEB_APP_URL.replace('https://','')}</a></li>
-            <li><span className="text-stone-500">Créateur</span> · Kevin Akoh</li>
-            <li><span className="text-stone-500">Éditeur</span> · Kevin Tech Pro</li>
+            <li><span className="text-stone-500">Créateur</span> · App créée par <strong className="text-stone-100">Akoh Ago Armand Kevin</strong></li>
+            <li><span className="text-stone-500">Entreprise</span> · <strong className="text-stone-100">Kevin Tech Pro</strong></li>
+            <li>
+              <span className="text-stone-500">Téléphones</span> ·{' '}
+              <a className="text-orange-400 underline" href="tel:0502012011">0502012011</a>
+              {' / '}
+              <a className="text-orange-400 underline" href="tel:0711163661">0711163661</a>
+            </li>
             <li className="text-stone-500 text-xs pt-1">Stock · Caisse · Ventes · Dépenses · Rapports</li>
           </ul>
+          <button
+            type="button"
+            className="btn-secondary w-full text-xs"
+            onClick={() => window.dispatchEvent(new Event('gesmak-open-privacy'))}
+          >
+            Politique de confidentialité &amp; Cookies
+          </button>
           <button type="button" className="btn-secondary w-full" onClick={() => setOpenPanel(null)}>Fermer</button>
         </div>
         )}

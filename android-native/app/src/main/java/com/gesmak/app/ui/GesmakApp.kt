@@ -14,6 +14,7 @@ import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -24,6 +25,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -36,9 +38,11 @@ import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Chat
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Inventory2
@@ -59,9 +63,13 @@ import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.TableRestaurant
 import androidx.compose.material.icons.filled.TrendingDown
 import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -73,9 +81,11 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.NavigationDrawerItemDefaults
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -112,6 +122,7 @@ import com.gesmak.app.data.SupabaseApi
 import com.gesmak.app.data.SupabaseAuth
 import com.gesmak.app.data.UpdateChecker
 import com.gesmak.app.ui.components.EstablishmentLogo
+import com.gesmak.app.ui.components.PrivacyCookiesDialog
 import com.gesmak.app.ui.components.StatusPill
 import com.gesmak.app.ui.screens.AppRoute
 import com.gesmak.app.ui.screens.ArrivalScreen
@@ -180,9 +191,16 @@ fun GesmakApp() {
     val orderSound by store.orderSoundEnabled.collectAsState(initial = true)
     val storedEstId by store.activeEstId.collectAsState(initial = null)
     val storedPole by store.selectedPole.collectAsState(initial = null)
+    val privacyAcceptedRaw by store.privacyCookiesAccepted.collectAsState(initial = null as Boolean?)
+    val privacyAccepted = privacyAcceptedRaw == true
+    val privacyLoaded = privacyAcceptedRaw != null
+    val privacyAcceptedAt by store.privacyCookiesAcceptedAt.collectAsState(initial = null)
     val scope = rememberCoroutineScope()
 
     var splashDone by remember { mutableStateOf(false) }
+    var showPrivacyDialog by remember { mutableStateOf(false) }
+    var estSwitchDialog by remember { mutableStateOf(false) }
+    var openEstEditOnMount by remember { mutableStateOf(false) }
 
     var member by remember { mutableStateOf<SupabaseApi.Member?>(null) }
     var establishment by remember { mutableStateOf<SupabaseApi.Establishment?>(null) }
@@ -720,6 +738,19 @@ fun GesmakApp() {
             return@GesmakTheme
         }
 
+        if ((privacyLoaded && !privacyAccepted) || showPrivacyDialog) {
+            PrivacyCookiesDialog(
+                alreadyAccepted = privacyAccepted,
+                acceptedAt = privacyAcceptedAt,
+                onAccept = { _ ->
+                    val dateLabel = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.FRANCE).format(Date())
+                    scope.launch { store.setPrivacyCookiesAccepted(true, dateLabel) }
+                    showPrivacyDialog = false
+                },
+                onDismiss = if (privacyAccepted) { { showPrivacyDialog = false } } else null,
+            )
+        }
+
         if (session == null) {
             LoginScreen(
                 authConfigured = auth.isConfigured,
@@ -933,10 +964,84 @@ fun GesmakApp() {
                         }
 
                         HorizontalDivider(color = c.border, modifier = Modifier.padding(vertical = 10.dp))
+
+                        if (establishment != null || estChoices.isNotEmpty()) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 4.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    "ACTIVITÉ",
+                                    color = c.accentDeep,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Text(
+                                    "${estChoices.size.coerceAtLeast(if (establishment != null) 1 else 0)} site${if (estChoices.size > 1) "s" else ""}",
+                                    color = c.muted,
+                                    fontSize = 11.sp,
+                                )
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            Surface(
+                                shape = RoundedCornerShape(14.dp),
+                                color = c.cardAlt,
+                                border = BorderStroke(1.dp, c.accent.copy(alpha = 0.45f)),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        scope.launch { drawerState.close() }
+                                        estSwitchDialog = true
+                                    },
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    EstablishmentLogo(
+                                        name = establishment?.name ?: "GESMAK",
+                                        logoUrl = establishment?.logoUrl,
+                                        size = 34.dp,
+                                        cornerRadius = 10.dp,
+                                        accentColor = c.accent,
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            establishment?.name ?: "Choisir un établissement",
+                                            color = c.text,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                        Text(
+                                            "${bizSpec.shortLabel} · changer de site",
+                                            color = c.accentDeep,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
+                                    Icon(
+                                        Icons.Default.UnfoldMore,
+                                        contentDescription = "Changer d'établissement",
+                                        tint = c.accent,
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.height(10.dp))
+                        }
+
                         Text(
-                            "v${BuildConfig.VERSION_NAME} · Kevin Tech Pro",
+                            "v${BuildConfig.VERSION_NAME} · Akoh Ago Armand Kevin · Kevin Tech Pro",
                             color = c.muted,
-                            fontSize = 11.sp,
+                            fontSize = 10.sp,
                             modifier = Modifier.padding(horizontal = 8.dp),
                         )
                     }
@@ -960,31 +1065,50 @@ fun GesmakApp() {
                                 IconButton(onClick = { scope.launch { drawerState.open() } }) {
                                     Icon(Icons.Default.Menu, contentDescription = "Menu", tint = c.text)
                                 }
-                                EstablishmentLogo(
-                                    name = establishment?.name ?: "GESMAK",
-                                    logoUrl = establishment?.logoUrl,
-                                    size = 34.dp,
-                                    cornerRadius = 10.dp,
-                                    accentColor = c.accent,
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        establishment?.name ?: "GESMAK",
-                                        color = c.text,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 14.sp,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
+                                Row(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .clickable(enabled = establishment != null || estChoices.isNotEmpty()) {
+                                            estSwitchDialog = true
+                                        }
+                                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    EstablishmentLogo(
+                                        name = establishment?.name ?: "GESMAK",
+                                        logoUrl = establishment?.logoUrl,
+                                        size = 34.dp,
+                                        cornerRadius = 10.dp,
+                                        accentColor = c.accent,
                                     )
-                                    Text(
-                                        "Actif · ${bizSpec.shortLabel} · ${poleLabelFr(lockedPole ?: activePole)}",
-                                        color = c.accent,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            establishment?.name ?: "GESMAK",
+                                            color = c.text,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 14.sp,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                        Text(
+                                            "Actif · ${bizSpec.shortLabel} · ${poleLabelFr(lockedPole ?: activePole)}",
+                                            color = c.accent,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
+                                    if (estChoices.isNotEmpty()) {
+                                        Icon(
+                                            Icons.Default.UnfoldMore,
+                                            contentDescription = "Changer de site",
+                                            tint = c.accent,
+                                            modifier = Modifier.size(16.dp),
+                                        )
+                                    }
                                 }
                                 StatusPill(
                                     label = if (isOffline) "Hors-ligne" else "En ligne",
@@ -1142,6 +1266,10 @@ fun GesmakApp() {
                                 }
                                 refreshData()
                             }
+                        },
+                        onEditEstablishment = {
+                            openEstEditOnMount = true
+                            activeRoute = AppRoute.SETTINGS
                         },
                         onRefresh = { refreshData() },
                         onToggleServiceDay = {
@@ -2309,11 +2437,11 @@ fun GesmakApp() {
                                 cb(err)
                             }
                         },
-                        onSaveEstablishment = { name, addr, phone, type, logoUrl, ownerEmail, ownerPhone, services, cb ->
+                        onSaveEstablishment = { name, addr, phone, type, logoUrl, ownerName, ownerEmail, ownerPhone, services, cb ->
                             val s = session ?: return@SettingsScreen
                             val eid = estIdResolved ?: return@SettingsScreen
                             scope.launch {
-                                val err = withContext(Dispatchers.IO) {
+                                val estErr = withContext(Dispatchers.IO) {
                                     api.updateEstablishmentExtended(
                                         accessToken = s.accessToken,
                                         estId = eid,
@@ -2329,10 +2457,23 @@ fun GesmakApp() {
                                         services = services,
                                     )
                                 }
-                                cb(err)
-                                if (err == null) refreshData()
+                                var finalErr = estErr
+                                val mId = member?.id
+                                val cleanOwner = ownerName?.trim()
+                                if (finalErr == null && mId != null && !cleanOwner.isNullOrBlank() && cleanOwner != member?.fullName) {
+                                    finalErr = withContext(Dispatchers.IO) {
+                                        api.updateMemberProfile(s.accessToken, mId, cleanOwner)
+                                    }
+                                }
+                                cb(finalErr)
+                                if (finalErr == null) refreshData()
                             }
                         },
+                        openEstEditInitially = openEstEditOnMount,
+                        onEstEditConsumed = { openEstEditOnMount = false },
+                        privacyAccepted = privacyAccepted,
+                        privacyAcceptedAt = privacyAcceptedAt,
+                        onOpenPrivacyPolicy = { showPrivacyDialog = true },
                         onSavePublicDepot = { visible, zone, pubPhone, cb ->
                             val s = session ?: return@SettingsScreen
                             val eid = estIdResolved ?: return@SettingsScreen
@@ -2450,6 +2591,107 @@ fun GesmakApp() {
                     )
                 }
             }
+        }
+
+        if (estSwitchDialog) {
+            AlertDialog(
+                onDismissRequest = { estSwitchDialog = false },
+                containerColor = c.card,
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Store, contentDescription = null, tint = c.accent, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Activité & Établissements", color = c.text, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    }
+                },
+                text = {
+                    Column(
+                        modifier = Modifier
+                            .heightIn(max = 420.dp)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        if (estChoices.isEmpty() && establishment != null) {
+                            val est = establishment!!
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                EstablishmentLogo(name = est.name, logoUrl = est.logoUrl, size = 38.dp, cornerRadius = 10.dp, accentColor = c.accent)
+                                Spacer(Modifier.width(10.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(est.name, color = c.text, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                    Text(BusinessTypes.spec(est.type).label, color = c.muted, fontSize = 11.sp)
+                                }
+                            }
+                        } else {
+                            estChoices.forEach { choice ->
+                                val selected = choice.id == estIdResolved
+                                val spec = BusinessTypes.spec(choice.type)
+                                val specColor = spec.accent(c.isLight)
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = if (selected) specColor.copy(alpha = 0.14f) else c.cardAlt,
+                                    border = BorderStroke(
+                                        width = if (selected) 1.5.dp else 1.dp,
+                                        color = if (selected) specColor else c.border,
+                                    ),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            estSwitchDialog = false
+                                            if (!selected) {
+                                                estIdResolved = choice.id
+                                                knownOrderIds = emptySet()
+                                                scope.launch { store.setActiveEstId(choice.id) }
+                                                refreshData()
+                                            }
+                                        },
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        EstablishmentLogo(
+                                            name = choice.name,
+                                            logoUrl = choice.logoUrl,
+                                            size = 36.dp,
+                                            cornerRadius = 10.dp,
+                                            accentColor = specColor,
+                                        )
+                                        Spacer(Modifier.width(10.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(choice.name, color = c.text, fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                            Text(spec.label, color = c.muted, fontSize = 11.sp)
+                                        }
+                                        if (selected) {
+                                            Icon(Icons.Default.Check, contentDescription = "Actif", tint = specColor, modifier = Modifier.size(18.dp))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if (isOwner && establishment != null) {
+                            Spacer(Modifier.height(4.dp))
+                            OutlinedButton(
+                                onClick = {
+                                    estSwitchDialog = false
+                                    openEstEditOnMount = true
+                                    activeRoute = AppRoute.SETTINGS
+                                },
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Icon(Icons.Default.Edit, contentDescription = null, tint = c.accent, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("Modifier nom, logo, propriétaire & GPS", color = c.accent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { estSwitchDialog = false }) {
+                        Text("Fermer", color = c.accent)
+                    }
+                },
+            )
         }
     }
 }

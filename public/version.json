@@ -1,5 +1,5 @@
 {
-  "version": "1.4.0",
-  "build": "market-release-financial-reports",
-  "notes": "Nouvelle page Rapports Financiers (bénéfices nets & charges consolidées), affichage du logo et de l'établissement actif, paramètres complets et optimisations de lancement."
+  "version": "1.5.0",
+  "build": "market-release-privacy-about",
+  "notes": "Politique de confidentialité et cookies à accepter, informations À propos mises à jour (Akoh Ago Armand Kevin · Kevin Tech Pro · 0502012011 / 0711163661), et parité complète d'édition établissement."
 }

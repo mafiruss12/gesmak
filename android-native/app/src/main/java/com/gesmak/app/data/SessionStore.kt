@@ -19,6 +19,8 @@ class SessionStore(private val context: Context) {
     private val keyOrderSound = booleanPreferencesKey("order_sound")
     private val keyActiveEstId = stringPreferencesKey("active_est_id")
     private val keySelectedPole = stringPreferencesKey("selected_pole")
+    private val keyPrivacyAccepted = booleanPreferencesKey("privacy_cookies_accepted")
+    private val keyPrivacyAcceptedAt = stringPreferencesKey("privacy_cookies_accepted_at")
 
     val session: Flow<SessionData?> = context.dataStore.data.map { prefs ->
         val access = prefs[keyAccess] ?: return@map null
@@ -45,6 +47,14 @@ class SessionStore(private val context: Context) {
 
     val selectedPole: Flow<String?> = context.dataStore.data.map { prefs ->
         prefs[keySelectedPole]?.ifBlank { null }
+    }
+
+    val privacyCookiesAccepted: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[keyPrivacyAccepted] ?: false
+    }
+
+    val privacyCookiesAcceptedAt: Flow<String?> = context.dataStore.data.map { prefs ->
+        prefs[keyPrivacyAcceptedAt]?.ifBlank { null }
     }
 
     suspend fun save(data: SessionData) {
@@ -75,6 +85,13 @@ class SessionStore(private val context: Context) {
         context.dataStore.edit { prefs ->
             if (pole.isNullOrBlank()) prefs.remove(keySelectedPole)
             else prefs[keySelectedPole] = pole
+        }
+    }
+
+    suspend fun setPrivacyCookiesAccepted(accepted: Boolean, acceptedAt: String) {
+        context.dataStore.edit { prefs ->
+            prefs[keyPrivacyAccepted] = accepted
+            prefs[keyPrivacyAcceptedAt] = acceptedAt
         }
     }
 

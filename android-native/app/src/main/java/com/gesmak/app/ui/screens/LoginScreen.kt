@@ -89,7 +89,7 @@ private val HIGHLIGHTS = listOf(
 private val MARQUEE_ITEMS = listOf(
     "GESMAK — Gestion simplifiée, business maîtrisé",
     "Zéro perte de stock invisible · Caisse multi-pôles · Clôture Z",
-    "App créée par Kevin Akoh · Kevin Tech Pro",
+    "App créée par Akoh Ago Armand Kevin · Kevin Tech Pro",
 )
 
 @Composable
@@ -418,7 +418,7 @@ fun LoginScreen(
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    "App créée par Kevin Akoh · Kevin Tech Pro · v${BuildConfig.VERSION_NAME}",
+                    "App créée par Akoh Ago Armand Kevin · Kevin Tech Pro · v${BuildConfig.VERSION_NAME}",
                     color = c.muted,
                     fontSize = 11.sp,
                 )

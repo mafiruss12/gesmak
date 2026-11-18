@@ -1,4 +1,4 @@
-versionCode=117
-versionName=2.6.0-native
+versionCode=118
+versionName=2.7.0-native
 apkUrl=https://github.com/mafiruss12/gesmak/releases/download/apk-latest/GESMAK-native.apk
-notes=Rapports Financiers (benefices nets et charges consolidees), logo et etablissement actif visibles partout, parametres mobiles complets (logo, contacts proprio, services complexe, annuaire depot, GPS, photo profil)
+notes=Switch Activite dans le menu & dashboard (logos + sites), edition complete (nom, logo, proprietaire, tel, mail, localisation GPS), A propos Akoh Ago Armand Kevin (Kevin Tech Pro 0502012011/0711163661) et Politique de confidentialite & cookies a accepter
