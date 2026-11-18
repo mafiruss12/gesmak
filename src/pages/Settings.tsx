@@ -314,21 +314,9 @@ async function saveProfile() {
         .eq('id', est.id);
       if (err) setError(err.message);
       else {
-        const typeChanged = est.type !== form.type;
         setSaved(true);
         setTimeout(() => setSaved(false), 2500);
         await refresh();
-        if (typeChanged) {
-          // Recharge pour appliquer menus / thème / modules du nouveau type
-          try {
-            localStorage.setItem(
-              'mm_active_est',
-              JSON.stringify({ id: est.id, type: form.type, name: form.name })
-            );
-          } catch { /* */ }
-          window.location.assign('/dashboard?type_switch=' + encodeURIComponent(form.type));
-          return;
-        }
       }
     } else if (canManageEst) {
       // Créer l'établissement et rattacher le membre
@@ -980,19 +968,18 @@ async function saveProfile() {
               </div>
               <div>
                 <label className="label">Type</label>
-                <select
-                  value={form.type}
-                  onChange={(e) => setForm({ ...form, type: e.target.value })}
-                  className="input-field"
-                  disabled={!canManageEst && !!est}
-                >
-                  <option value="maquis">Maquis / Bar</option>
-                  <option value="restaurant">Restaurant</option>
-                  <option value="depot">Grossiste / Dépôt</option>
-                  <option value="location_event">Location événementielle</option>
-                  <option value="complexe">Établissement (multi-services)</option>
-                </select>
-                <p className="text-xs text-stone-500 mt-1">Change le menu, le thème, le stock et le tableau de bord. Après enregistrement l&apos;app se recharge.</p>
+                <p className="input-field bg-stone-800/50 text-stone-300 cursor-default">
+                  {{
+                    maquis: 'Maquis / Bar',
+                    restaurant: 'Restaurant',
+                    depot: 'Grossiste / Dépôt',
+                    location_event: 'Location événementielle',
+                    complexe: 'Établissement (multi-services)',
+                  }[form.type] || form.type || '—'}
+                </p>
+                <p className="text-xs text-stone-500 mt-1">
+                  Pour changer le type d&apos;activité, utilisez le menu <strong className="text-stone-400">Activité</strong> (barre latérale).
+                </p>
               </div>
               <div>
                 <label className="label">Adresse</label>
