@@ -654,6 +654,36 @@ html.theme-light .auth-logo-center {
     margin: 0 !important;
     padding: 12mm !important;
   }
+
+  /* Impression reçu thermique / A4 commandes, boissons, nourriture & chambres */
+  body.printing-gesmak-receipt * {
+    visibility: hidden;
+  }
+  body.printing-gesmak-receipt .gesmak-receipt-print-root,
+  body.printing-gesmak-receipt .gesmak-receipt-print-root *,
+  body.printing-gesmak-receipt .gesmak-receipt-sheet,
+  body.printing-gesmak-receipt .gesmak-receipt-sheet * {
+    visibility: visible !important;
+  }
+  body.printing-gesmak-receipt .gesmak-receipt-print-root {
+    position: fixed !important;
+    inset: 0 !important;
+    background: white !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: flex-start !important;
+  }
+  body.printing-gesmak-receipt .gesmak-receipt-sheet {
+    box-shadow: none !important;
+    border: none !important;
+    max-width: 80mm !important;
+    width: 100% !important;
+    margin: 0 auto !important;
+    padding: 4mm !important;
+    color: #000000 !important;
+  }
 }
 
 

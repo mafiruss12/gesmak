@@ -30,10 +30,12 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Wallet
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -61,11 +63,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.gesmak.app.data.ReceiptPrinter
 import com.gesmak.app.data.SupabaseApi
 import com.gesmak.app.ui.components.GesmakCard
 import com.gesmak.app.ui.components.ProductThumb
@@ -145,7 +149,9 @@ private fun paymentLabelFr(pm: String?): String = when (pm?.lowercase()) {
 @Composable
 fun OrdersScreen(
     mod: Modifier = Modifier,
+    establishment: SupabaseApi.Establishment? = null,
     orders: List<SupabaseApi.OrderRow>,
+    preloadedItems: Map<String, List<SupabaseApi.OrderItemRow>> = emptyMap(),
     products: List<SupabaseApi.Product>,
     productImageDefaults: Map<String, String> = emptyMap(),
     tables: List<SupabaseApi.RestaurantTableRow>,
@@ -172,10 +178,12 @@ fun OrdersScreen(
         serverId: String?,
         serverName: String?,
         lines: List<Pair<SupabaseApi.Product, Int>>,
+        immediatePayMethod: String?,
         cb: (String?) -> Unit,
     ) -> Unit,
 ) {
     val c = LocalGesmakColors.current
+    val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
 
     var filter by remember { mutableStateOf("open") }
@@ -188,6 +196,7 @@ fun OrdersScreen(
     var receiptTarget by remember { mutableStateOf<SupabaseApi.OrderRow?>(null) }
     var feedbackMsg by remember { mutableStateOf<String?>(null) }
     val loadedItems = remember { mutableStateMapOf<String, List<SupabaseApi.OrderItemRow>>() }
+    val optimisticStatus = remember { mutableStateMapOf<String, String>() }
     val expandedCards = remember { mutableStateMapOf<String, Boolean>() }
 
     // Ticker SLA chaque 30s
@@ -199,26 +208,36 @@ fun OrdersScreen(
         }
     }
 
-    // Précharger les articles des commandes actives pour affichage pro immédiat
-    LaunchedEffect(orders) {
+    // Injection instantanée des articles préchargés en 1 requête batch + fallback ciblé
+    LaunchedEffect(preloadedItems, orders) {
+        preloadedItems.forEach { (oid, list) ->
+            loadedItems[oid] = list
+        }
+        orders.forEach { o ->
+            if (optimisticStatus[o.id] == o.status) optimisticStatus.remove(o.id)
+        }
         orders.filter { it.status in setOf("pending", "preparing", "ready") || (it.status == "served" && it.paidAt.isNullOrBlank()) }
-            .take(25)
+            .take(15)
             .forEach { ord ->
-                if (!loadedItems.containsKey(ord.id)) {
+                if (!loadedItems.containsKey(ord.id) && !preloadedItems.containsKey(ord.id)) {
                     onLoadItems(ord.id) { items -> loadedItems[ord.id] = items }
                 }
             }
     }
 
-    val pendingCount = orders.count { it.status == "pending" }
-    val preparingCount = orders.count { it.status == "preparing" }
-    val readyCount = orders.count { it.status == "ready" }
-    val toPayCount = orders.count { it.status == "served" && it.paidAt.isNullOrBlank() }
-    val activeRevenue = orders.filter { it.status != "cancelled" && it.paidAt.isNullOrBlank() }.sumOf { it.total }
+    fun effectiveOrder(o: SupabaseApi.OrderRow): SupabaseApi.OrderRow =
+        optimisticStatus[o.id]?.let { o.copy(status = it) } ?: o
 
-    val filtered = remember(orders, filter, searchQuery) {
+    val effectiveOrders = orders.map { effectiveOrder(it) }
+    val pendingCount = effectiveOrders.count { it.status == "pending" }
+    val preparingCount = effectiveOrders.count { it.status == "preparing" }
+    val readyCount = effectiveOrders.count { it.status == "ready" }
+    val toPayCount = effectiveOrders.count { it.status == "served" && it.paidAt.isNullOrBlank() }
+    val activeRevenue = effectiveOrders.filter { it.status != "cancelled" && it.paidAt.isNullOrBlank() }.sumOf { it.total }
+
+    val filtered = remember(orders, optimisticStatus.toMap(), filter, searchQuery) {
         val q = searchQuery.trim().lowercase()
-        orders.filter { o ->
+        effectiveOrders.filter { o ->
             val matchFilter = when (filter) {
                 "pending" -> o.status == "pending"
                 "preparing" -> o.status == "preparing"
@@ -549,7 +568,10 @@ fun OrdersScreen(
                             when (o.status) {
                                 "pending" -> {
                                     Button(
-                                        onClick = { onAdvance(o.id, "preparing") },
+                                        onClick = {
+                                            optimisticStatus[o.id] = "preparing"
+                                            onAdvance(o.id, "preparing")
+                                        },
                                         enabled = busyId != o.id,
                                         colors = ButtonDefaults.buttonColors(containerColor = c.accent, contentColor = Color.White),
                                         modifier = Modifier.weight(1f),
@@ -560,7 +582,10 @@ fun OrdersScreen(
                                 }
                                 "preparing" -> {
                                     Button(
-                                        onClick = { onAdvance(o.id, "ready") },
+                                        onClick = {
+                                            optimisticStatus[o.id] = "ready"
+                                            onAdvance(o.id, "ready")
+                                        },
                                         enabled = busyId != o.id,
                                         colors = ButtonDefaults.buttonColors(containerColor = c.sky, contentColor = Color.White),
                                         modifier = Modifier.weight(1f),
@@ -585,7 +610,10 @@ fun OrdersScreen(
                                         Text("Encaisser", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                     }
                                     OutlinedButton(
-                                        onClick = { onAdvance(o.id, "served") },
+                                        onClick = {
+                                            optimisticStatus[o.id] = "served"
+                                            onAdvance(o.id, "served")
+                                        },
                                         enabled = busyId != o.id,
                                         shape = RoundedCornerShape(10.dp),
                                     ) {
@@ -617,9 +645,9 @@ fun OrdersScreen(
                                             modifier = Modifier.weight(1f),
                                             shape = RoundedCornerShape(10.dp),
                                         ) {
-                                            Icon(Icons.Default.ReceiptLong, contentDescription = null, tint = c.accent, modifier = Modifier.size(15.dp))
+                                            Icon(Icons.Default.Print, contentDescription = null, tint = c.accent, modifier = Modifier.size(15.dp))
                                             Spacer(Modifier.width(4.dp))
-                                            Text("Addition / Reçu", color = c.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                            Text("Imprimer / Reçu", color = c.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                                         }
                                     }
                                 }
@@ -840,52 +868,96 @@ fun OrdersScreen(
                 }
             },
             confirmButton = {
-                Button(
-                    onClick = {
-                        val lines = products.mapNotNull { p ->
-                            val q = qtyMap[p.id] ?: 0
-                            if (q > 0) p to q else null
-                        }
-                        if (lines.isEmpty()) { err = "Ajoutez au moins 1 article."; return@Button }
-                        busy = true
-                        if (appending != null) {
-                            onAppendItems(appending, notes.ifBlank { null }, lines) { e ->
-                                busy = false
-                                if (e == null) {
-                                    loadedItems.remove(appending.id)
-                                    onLoadItems(appending.id) { list -> loadedItems[appending.id] = list }
-                                    feedbackMsg = "Articles ajoutés à la commande."
-                                    createOpen = false
-                                    appendTarget = null
-                                } else {
-                                    err = e
-                                }
-                            }
-                        } else {
-                            onCreateOrder(
-                                selectedTableId.ifBlank { null },
-                                tableNumber.ifBlank { null },
-                                customerName.ifBlank { null },
-                                orderType,
-                                chosenPole,
-                                notes.ifBlank { null },
-                                chosenServerId,
-                                chosenServerName,
-                                lines,
-                            ) { e ->
-                                busy = false
-                                if (e == null) {
-                                    feedbackMsg = "Commande envoyée en préparation."
-                                    createOpen = false
-                                } else {
-                                    err = e
-                                }
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        if (appending == null) {
+                            OutlinedButton(
+                                onClick = {
+                                    val lines = products.mapNotNull { p ->
+                                        val q = qtyMap[p.id] ?: 0
+                                        if (q > 0) p to q else null
+                                    }
+                                    if (lines.isEmpty()) { err = "Ajoutez au moins 1 article."; return@OutlinedButton }
+                                    busy = true
+                                    onCreateOrder(
+                                        selectedTableId.ifBlank { null },
+                                        tableNumber.ifBlank { null },
+                                        customerName.ifBlank { null },
+                                        orderType,
+                                        chosenPole,
+                                        notes.ifBlank { null },
+                                        chosenServerId,
+                                        chosenServerName,
+                                        lines,
+                                        "cash",
+                                    ) { e ->
+                                        busy = false
+                                        if (e == null) {
+                                            feedbackMsg = "Commande encaissée en caisse directe !"
+                                            createOpen = false
+                                        } else {
+                                            err = e
+                                        }
+                                    }
+                                },
+                                enabled = !busy,
+                                shape = RoundedCornerShape(10.dp),
+                            ) {
+                                Icon(Icons.Default.Wallet, contentDescription = null, tint = c.emerald, modifier = Modifier.size(14.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text("Encaisser Espèces", color = c.emerald, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
                         }
-                    },
-                    enabled = !busy,
-                    colors = ButtonDefaults.buttonColors(containerColor = c.accent, contentColor = Color.White),
-                ) { Text(if (busy) "..." else if (appending != null) "Ajouter au ticket" else "Envoyer commande") }
+                        Button(
+                            onClick = {
+                                val lines = products.mapNotNull { p ->
+                                    val q = qtyMap[p.id] ?: 0
+                                    if (q > 0) p to q else null
+                                }
+                                if (lines.isEmpty()) { err = "Ajoutez au moins 1 article."; return@Button }
+                                busy = true
+                                if (appending != null) {
+                                    onAppendItems(appending, notes.ifBlank { null }, lines) { e ->
+                                        busy = false
+                                        if (e == null) {
+                                            loadedItems.remove(appending.id)
+                                            onLoadItems(appending.id) { list -> loadedItems[appending.id] = list }
+                                            feedbackMsg = "Articles ajoutés à la commande."
+                                            createOpen = false
+                                            appendTarget = null
+                                        } else {
+                                            err = e
+                                        }
+                                    }
+                                } else {
+                                    onCreateOrder(
+                                        selectedTableId.ifBlank { null },
+                                        tableNumber.ifBlank { null },
+                                        customerName.ifBlank { null },
+                                        orderType,
+                                        chosenPole,
+                                        notes.ifBlank { null },
+                                        chosenServerId,
+                                        chosenServerName,
+                                        lines,
+                                        null,
+                                    ) { e ->
+                                        busy = false
+                                        if (e == null) {
+                                            feedbackMsg = "Commande envoyée en préparation."
+                                            createOpen = false
+                                        } else {
+                                            err = e
+                                        }
+                                    }
+                                }
+                            },
+                            enabled = !busy,
+                            colors = ButtonDefaults.buttonColors(containerColor = c.accent, contentColor = Color.White),
+                            shape = RoundedCornerShape(10.dp),
+                        ) { Text(if (busy) "..." else if (appending != null) "Ajouter au ticket" else "Envoyer commande", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+                    }
+                }
             },
             dismissButton = {
                 TextButton(onClick = { createOpen = false; appendTarget = null }, enabled = !busy) { Text("Annuler", color = c.muted) }
@@ -1159,38 +1231,50 @@ fun OrdersScreen(
         )
     }
 
-    // MODAL TICKET / ADDITION CLIENT
+    // MODAL TICKET / ADDITION CLIENT AVEC IMPRESSION & PARTAGE OFFICIELS
     val rOrder = receiptTarget
     if (rOrder != null) {
         val items = loadedItems[rOrder.id].orEmpty()
-        val receiptText = buildString {
-            appendLine("=== ADDITION GESMAK ===")
-            appendLine("Ticket #${rOrder.id.take(6).uppercase()}")
-            appendLine(rOrder.tableNumber?.let { "Table : $it" } ?: (rOrder.orderType ?: "Comptoir"))
-            if (!rOrder.customerName.isNullOrBlank()) appendLine("Client : ${rOrder.customerName}")
-            if (!rOrder.serverName.isNullOrBlank()) appendLine("Serveur : ${rOrder.serverName}")
-            appendLine("Heure : ${formatOrderClock(rOrder.createdAt)}")
-            appendLine("-----------------------")
-            items.forEach { it ->
-                appendLine("${it.quantity}x ${it.productName} : ${formatFcfa(it.unitPrice * it.quantity)}")
-            }
-            appendLine("-----------------------")
-            appendLine("TOTAL : ${formatFcfa(rOrder.total)}")
-            appendLine(if (!rOrder.paidAt.isNullOrBlank()) "Statut : PAYÉE (${paymentLabelFr(rOrder.paymentMethod)})" else "Statut : À ENCAISSER")
+        val serviceLbl = when {
+            !rOrder.tableNumber.isNullOrBlank() -> "Table ${rOrder.tableNumber}"
+            rOrder.orderType == "takeaway" -> "À emporter"
+            rOrder.orderType == "delivery" -> "Livraison"
+            else -> "Comptoir / Direct"
         }
+        val printable = ReceiptPrinter.PrintableReceipt(
+            id = rOrder.id,
+            title = if (!rOrder.paidAt.isNullOrBlank()) "Reçu officiel" else "Addition Provisoire",
+            establishmentName = establishment?.name ?: "GESMAK",
+            establishmentPhone = establishment?.phone,
+            establishmentAddress = establishment?.address,
+            serviceLabel = serviceLbl,
+            customerName = rOrder.customerName,
+            serverName = rOrder.serverName,
+            dateLabel = formatOrderClock(rOrder.createdAt),
+            statusLabel = if (!rOrder.paidAt.isNullOrBlank()) "PAYÉE" else "À ENCAISSER",
+            paymentLabel = if (!rOrder.paidAt.isNullOrBlank()) paymentLabelFr(rOrder.paymentMethod) else null,
+            total = rOrder.total,
+            paidAmount = rOrder.paidAmount,
+            notes = rOrder.notes,
+            lines = items.map {
+                ReceiptPrinter.ReceiptLine(name = it.productName, qty = it.quantity, unitPrice = it.unitPrice, note = it.notes)
+            },
+        )
+        val receiptText = ReceiptPrinter.formatPlainText(printable)
         AlertDialog(
             onDismissRequest = { receiptTarget = null },
             containerColor = c.card,
-            title = { Text("Addition · #${rOrder.id.take(6).uppercase()}", color = c.text, fontWeight = FontWeight.Bold, fontSize = 16.sp) },
+            title = { Text("Reçu / Addition · #${rOrder.id.take(6).uppercase()}", color = c.text, fontWeight = FontWeight.Bold, fontSize = 16.sp) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(printable.establishmentName, color = c.accentDeep, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     Text(
-                        "${rOrder.tableNumber?.let { "Table $it" } ?: "Comptoir"}${rOrder.customerName?.let { " · $it" } ?: ""}",
+                        "$serviceLbl${rOrder.customerName?.let { " · $it" } ?: ""}",
                         color = c.text,
                         fontWeight = FontWeight.SemiBold,
                     )
                     if (!rOrder.serverName.isNullOrBlank()) {
-                        Text("Serveur : ${rOrder.serverName}", color = c.muted, fontSize = 12.sp)
+                        Text("Agent / Serveur : ${rOrder.serverName}", color = c.muted, fontSize = 12.sp)
                     }
                     HorizontalDivider(color = c.border)
                     if (items.isEmpty()) {
@@ -1217,17 +1301,33 @@ fun OrdersScreen(
                 }
             },
             confirmButton = {
-                Button(
-                    onClick = {
-                        clipboard.setText(AnnotatedString(receiptText))
-                        feedbackMsg = "Addition copiée dans le presse-papiers."
-                        receiptTarget = null
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = c.accent, contentColor = Color.White),
-                ) {
-                    Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(15.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Copier ticket", fontSize = 12.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    OutlinedButton(
+                        onClick = { ReceiptPrinter.shareTextReceipt(context, printable) },
+                        shape = RoundedCornerShape(10.dp),
+                    ) {
+                        Icon(Icons.Default.Share, contentDescription = null, tint = c.sky, modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(3.dp))
+                        Text("Partager", color = c.sky, fontSize = 11.sp)
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            clipboard.setText(AnnotatedString(receiptText))
+                            feedbackMsg = "Reçu copié."
+                        },
+                        shape = RoundedCornerShape(10.dp),
+                    ) {
+                        Icon(Icons.Default.ContentCopy, contentDescription = null, tint = c.muted, modifier = Modifier.size(14.dp))
+                    }
+                    Button(
+                        onClick = { ReceiptPrinter.printHtmlReceipt(context, printable) },
+                        colors = ButtonDefaults.buttonColors(containerColor = c.accent, contentColor = Color.White),
+                        shape = RoundedCornerShape(10.dp),
+                    ) {
+                        Icon(Icons.Default.Print, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Imprimer", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
                 }
             },
             dismissButton = {

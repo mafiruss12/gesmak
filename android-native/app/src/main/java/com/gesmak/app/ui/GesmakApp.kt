@@ -156,7 +156,11 @@ import com.gesmak.app.ui.theme.LocalGesmakColors
 import com.gesmak.app.ui.theme.poleColorHex
 import com.gesmak.app.ui.theme.poleLabelFr
 import com.gesmak.app.ui.theme.roleLabelFr
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -226,6 +230,9 @@ fun GesmakApp() {
     var menuCategories by remember { mutableStateOf<List<SupabaseApi.MenuCategoryRow>>(emptyList()) }
     var menuItems by remember { mutableStateOf<List<SupabaseApi.MenuItemRow>>(emptyList()) }
     var reservations by remember { mutableStateOf<List<SupabaseApi.ReservationRow>>(emptyList()) }
+    var hotelRooms by remember { mutableStateOf<List<SupabaseApi.HotelRoomRow>>(emptyList()) }
+    var hotelReservations by remember { mutableStateOf<List<SupabaseApi.HotelReservationRow>>(emptyList()) }
+    var orderItemsMap by remember { mutableStateOf<Map<String, List<SupabaseApi.OrderItemRow>>>(emptyMap()) }
     var groupMessages by remember { mutableStateOf<List<SupabaseApi.ChatMessageRow>>(emptyList()) }
     var dmMessages by remember { mutableStateOf<List<SupabaseApi.ChatMessageRow>>(emptyList()) }
     var selectedChatPeer by remember { mutableStateOf<SupabaseApi.Member?>(null) }
@@ -234,6 +241,8 @@ fun GesmakApp() {
     var kits by remember { mutableStateOf<List<SupabaseApi.ProductKitRow>>(emptyList()) }
     var promos by remember { mutableStateOf<List<SupabaseApi.PromotionRow>>(emptyList()) }
     var pendingPaymentRequests by remember { mutableStateOf<List<SupabaseApi.PaymentRequestRow>>(emptyList()) }
+    var estDetailsMap by remember { mutableStateOf<Map<String, SupabaseApi.Establishment>>(emptyMap()) }
+    var activeRefreshJob by remember { mutableStateOf<Job?>(null) }
 
     var loadingData by remember { mutableStateOf(false) }
     var dataError by remember { mutableStateOf<String?>(null) }
@@ -468,7 +477,9 @@ fun GesmakApp() {
 
     fun refreshData() {
         val s = session ?: return
-        scope.launch {
+        activeRefreshJob?.cancel()
+        val job = scope.launch {
+            val myJob = coroutineContext[Job]
             loadingData = true
             dataError = null
             canInstallUnknownApps = updateChecker.canRequestPackageInstalls()
@@ -487,20 +498,29 @@ fun GesmakApp() {
                         }
                     }
                     if (m != null) member = m
-                    val links = api.fetchAllEstablishmentLinks(activeToken, s.userId)
-                    val ownedIds = api.fetchOwnedEstablishmentIds(activeToken, s.userId)
+
+                    val (links, ownedIds) = coroutineScope {
+                        val lDef = async { api.fetchAllEstablishmentLinks(activeToken, s.userId) }
+                        val oDef = async { api.fetchOwnedEstablishmentIds(activeToken, s.userId) }
+                        lDef.await() to oDef.await()
+                    }
                     val ids = (links.map { it.establishmentId } + ownedIds).toMutableList()
                     (m ?: member)?.establishmentId?.let { if (it !in ids) ids.add(0, it) }
-                    val choices = mutableListOf<EstChoice>()
-                    for (id in ids.distinct()) {
-                        val est = api.fetchEstablishment(activeToken, id)
-                        if (est != null) choices.add(EstChoice(est.id, est.name, est.type, est.logoUrl))
+                    val distinctIds = ids.distinct()
+                    val fetchedEsts = coroutineScope {
+                        distinctIds.map { id -> async { id to api.fetchEstablishment(activeToken, id) } }.mapNotNull { def ->
+                            val (id, est) = def.await()
+                            est?.let { id to it }
+                        }
                     }
-                    if (choices.isNotEmpty()) estChoices = choices
+                    if (fetchedEsts.isNotEmpty()) {
+                        estDetailsMap = fetchedEsts.toMap()
+                        estChoices = fetchedEsts.map { (_, est) -> EstChoice(est.id, est.name, est.type, est.logoUrl) }
+                    }
 
                     var eid = estIdResolved ?: storedEstId
-                    if (eid.isNullOrBlank() || (choices.isNotEmpty() && choices.none { it.id == eid })) {
-                        eid = choices.firstOrNull()?.id ?: (m ?: member)?.establishmentId
+                    if (eid.isNullOrBlank() || (estChoices.isNotEmpty() && estChoices.none { it.id == eid })) {
+                        eid = estChoices.firstOrNull()?.id ?: (m ?: member)?.establishmentId
                             ?: api.fetchLinkedEstablishmentId(activeToken, s.userId)
                     }
                     estIdResolved = eid
@@ -515,84 +535,129 @@ fun GesmakApp() {
                             null
                         }
                         val scopedPole = locked ?: activePole
+                        val canSeePatronStats = roleLower in setOf("owner", "propriétaire", "proprietaire", "admin", "super_admin", "manager", "gérant", "gerant") ||
+                            estDetailsMap[eid]?.let { it.ownerUserId == s.userId || it.createdBy == s.userId } == true
 
-                        establishment = api.fetchEstablishment(activeToken, eid) ?: establishment
-                        pendingPaymentRequests = api.fetchPendingPaymentRequests(activeToken, eid)
-                        poles = api.fetchPoles(activeToken, eid, includeInactive = false)
-                        allPoles = api.fetchPoles(activeToken, eid, includeInactive = true)
-                        productImageDefaults = api.fetchProductImageDefaults(activeToken)
-                        products = api.fetchProducts(activeToken, eid)
+                        coroutineScope {
+                            val estDef = async { estDetailsMap[eid] ?: api.fetchEstablishment(activeToken, eid) }
+                            val payReqDef = async { api.fetchPendingPaymentRequests(activeToken, eid) }
+                            val polesDef = async { api.fetchPoles(activeToken, eid, includeInactive = false) }
+                            val allPolesDef = async { api.fetchPoles(activeToken, eid, includeInactive = true) }
+                            val imgDefDef = async { api.fetchProductImageDefaults(activeToken) }
+                            val prodDef = async { api.fetchProducts(activeToken, eid) }
+                            val ordDef = async { api.fetchOrders(activeToken, eid, limit = 80) }
+                            val todaySalesDef = async { api.fetchSalesSince(activeToken, eid, todayStart, scopedPole) }
+                            val sales90Def = async { api.fetchSalesSince(activeToken, eid, isoDaysAgo(90)) }
+                            val caWeekDef = async { api.fetchSalesTotal(activeToken, eid, isoDaysAgo(7)) }
+                            val recentSalesDef = async { api.fetchRecentSales(activeToken, eid, 40) }
+                            val expDef = async { api.fetchExpenses(activeToken, eid, 200) }
+                            val sdDef = async { api.fetchServiceDay(activeToken, eid, todayStr) }
+                            val csDef = async { api.fetchTodayCashSession(activeToken, eid, todayStr, scopedPole) }
+                            val chDef = async { api.fetchCashSessionHistory(activeToken, eid, scopedPole, 20) }
+                            val tblDef = async { api.fetchTables(activeToken, eid) }
+                            val mcDef = async { api.fetchMenuCategories(activeToken, eid) }
+                            val miDef = async { api.fetchMenuItems(activeToken, eid) }
+                            val resDef = async { api.fetchReservations(activeToken, eid) }
+                            val hrDef = async { api.fetchHotelRooms(activeToken, eid) }
+                            val hresDef = async { api.fetchHotelReservations(activeToken, eid) }
+                            val teamDef = async { api.fetchTeamMembers(activeToken, eid) }
+                            val empDef = async { api.fetchEmployees(activeToken, eid) }
+                            val custDef = async { api.fetchCustomers(activeToken, eid) }
+                            val grpDef = async { api.fetchGroupMessages(activeToken, eid) }
+                            val notifDef = async { api.fetchNotifications(activeToken, s.userId) }
+                            val shiftDef = async { api.fetchShifts(activeToken, eid, isoDaysAgo(7), isoDaysAhead(14)) }
+                            val kitDef = async { api.fetchKits(activeToken, eid) }
+                            val promoDef = async { api.fetchPromos(activeToken, eid) }
 
-                        val newOrders = api.fetchOrders(activeToken, eid, limit = 80)
-                        val pendingIds = newOrders.filter { it.status == "pending" }.map { it.id }.toSet()
-                        val brandNew = pendingIds - knownOrderIds
-                        if (knownOrderIds.isNotEmpty() && brandNew.isNotEmpty()) {
-                            val first = newOrders.firstOrNull { it.id in brandNew }
-                            withContext(Dispatchers.Main) {
-                                NotifyHelper.showOrder(
-                                    context = context,
-                                    title = "Nouvelle commande",
-                                    body = "${first?.customerName ?: "Client"} · ${first?.total?.toLong() ?: 0} F",
-                                    id = brandNew.first().hashCode(),
-                                    sound = orderSound,
-                                )
+                            val peer = selectedChatPeer
+                            val dmDef = if (peer != null) async { api.fetchDirectMessages(activeToken, s.userId, peer.userId) } else null
+                            val audDef = if (canSeePatronStats) async { api.fetchOperationAudit(activeToken, eid, 25) } else null
+                            val supDef = if (canSeePatronStats) async { api.fetchSuppliers(activeToken, eid) } else null
+                            val purDef = if (canSeePatronStats) async { api.fetchPurchases(activeToken, eid, 200) } else null
+                            val drDef = if (canSeePatronStats) async { api.fetchDailyReportsRange(activeToken, eid, isoDateDaysAgo(90)) } else null
+
+                            val newOrders = ordDef.await()
+                            val itemsBatchDef = async { api.fetchOrderItemsBatch(activeToken, newOrders.take(60).map { it.id }) }
+
+                            estDef.await()?.let {
+                                establishment = it
+                                estDetailsMap = estDetailsMap + (eid to it)
                             }
-                        }
-                        knownOrderIds = knownOrderIds + newOrders.map { it.id }
-                        orders = newOrders
+                            pendingPaymentRequests = payReqDef.await()
+                            poles = polesDef.await()
+                            allPoles = allPolesDef.await()
+                            productImageDefaults = imgDefDef.await()
+                            products = prodDef.await()
 
-                        val todaySales = api.fetchSalesSince(activeToken, eid, todayStart, scopedPole)
-                        todaySalesList = todaySales
-                        caDay = todaySales.sumOf { it.total }
-                        cashSalesDay = todaySales.filter { it.paymentMethod == "cash" }.sumOf { it.total }
-                        val cutoff30 = isoDaysAgo(30)
-                        val allSales90 = api.fetchSalesSince(activeToken, eid, isoDaysAgo(90))
-                        sales90d = allSales90
-                        val allSales30 = allSales90.filter { it.createdAt >= cutoff30 }
-                        sales30d = allSales30
-                        caWeek = api.fetchSalesTotal(activeToken, eid, isoDaysAgo(7))
-                        caMonth = allSales30.sumOf { it.total }
-                        recentSales = api.fetchRecentSales(activeToken, eid, 40)
+                            val pendingIds = newOrders.filter { it.status == "pending" }.map { it.id }.toSet()
+                            val brandNew = pendingIds - knownOrderIds
+                            if (knownOrderIds.isNotEmpty() && brandNew.isNotEmpty()) {
+                                val first = newOrders.firstOrNull { it.id in brandNew }
+                                withContext(Dispatchers.Main) {
+                                    NotifyHelper.showOrder(
+                                        context = context,
+                                        title = "Nouvelle commande",
+                                        body = "${first?.customerName ?: "Client"} · ${first?.total?.toLong() ?: 0} F",
+                                        id = brandNew.first().hashCode(),
+                                        sound = orderSound,
+                                    )
+                                }
+                            }
+                            knownOrderIds = knownOrderIds + newOrders.map { it.id }
+                            orders = newOrders
+                            orderItemsMap = itemsBatchDef.await()
 
-                        val expList = api.fetchExpenses(activeToken, eid, 200)
-                        expenses = expList
-                        val todayPrefix = todayStr
-                        val monthPrefix = todayStr.take(7)
-                        expensesDay = expList.filter { it.createdAt.startsWith(todayPrefix) }.sumOf { it.amount }
-                        expensesMonth = expList.filter { it.createdAt.startsWith(monthPrefix) }.sumOf { it.amount }
+                            val todaySales = todaySalesDef.await()
+                            todaySalesList = todaySales
+                            caDay = todaySales.sumOf { it.total }
+                            cashSalesDay = todaySales.filter { it.paymentMethod == "cash" }.sumOf { it.total }
+                            val cutoff30 = isoDaysAgo(30)
+                            val allSales90 = sales90Def.await()
+                            sales90d = allSales90
+                            val allSales30 = allSales90.filter { it.createdAt >= cutoff30 }
+                            sales30d = allSales30
+                            caWeek = caWeekDef.await()
+                            caMonth = allSales30.sumOf { it.total }
+                            recentSales = recentSalesDef.await()
 
-                        serviceDay = api.fetchServiceDay(activeToken, eid, todayStr)
-                        cashSession = api.fetchTodayCashSession(activeToken, eid, todayStr, scopedPole)
-                        cashHistory = api.fetchCashSessionHistory(activeToken, eid, scopedPole, 20)
-                        tables = api.fetchTables(activeToken, eid)
-                        menuCategories = api.fetchMenuCategories(activeToken, eid)
-                        menuItems = api.fetchMenuItems(activeToken, eid)
-                        reservations = api.fetchReservations(activeToken, eid)
+                            val expList = expDef.await()
+                            expenses = expList
+                            val todayPrefix = todayStr
+                            val monthPrefix = todayStr.take(7)
+                            expensesDay = expList.filter { it.createdAt.startsWith(todayPrefix) }.sumOf { it.amount }
+                            expensesMonth = expList.filter { it.createdAt.startsWith(monthPrefix) }.sumOf { it.amount }
 
-                        teamMembers = api.fetchTeamMembers(activeToken, eid)
-                        employees = api.fetchEmployees(activeToken, eid)
-                        customers = api.fetchCustomers(activeToken, eid)
-                        groupMessages = api.fetchGroupMessages(activeToken, eid)
-                        notifications = api.fetchNotifications(activeToken, s.userId)
-                        shifts = api.fetchShifts(activeToken, eid, isoDaysAgo(7), isoDaysAhead(14))
-                        kits = api.fetchKits(activeToken, eid)
-                        promos = api.fetchPromos(activeToken, eid)
+                            serviceDay = sdDef.await()
+                            cashSession = csDef.await()
+                            cashHistory = chDef.await()
+                            tables = tblDef.await()
+                            menuCategories = mcDef.await()
+                            menuItems = miDef.await()
+                            reservations = resDef.await()
+                            hotelRooms = hrDef.await()
+                            hotelReservations = hresDef.await()
 
-                        val peer = selectedChatPeer
-                        if (peer != null) {
-                            dmMessages = api.fetchDirectMessages(activeToken, s.userId, peer.userId)
-                        }
+                            teamMembers = teamDef.await()
+                            employees = empDef.await()
+                            customers = custDef.await()
+                            groupMessages = grpDef.await()
+                            notifications = notifDef.await()
+                            shifts = shiftDef.await()
+                            kits = kitDef.await()
+                            promos = promoDef.await()
 
-                        if (roleLower in setOf("owner", "propriétaire", "proprietaire", "admin", "super_admin", "manager", "gérant", "gerant")) {
-                            audits = api.fetchOperationAudit(activeToken, eid, 25)
-                            suppliers = api.fetchSuppliers(activeToken, eid)
-                            purchases = api.fetchPurchases(activeToken, eid, 200)
-                            dailyReports = api.fetchDailyReportsRange(activeToken, eid, isoDateDaysAgo(90))
-                        } else {
-                            audits = emptyList()
-                            suppliers = emptyList()
-                            purchases = emptyList()
-                            dailyReports = emptyList()
+                            if (dmDef != null) dmMessages = dmDef.await()
+                            if (audDef != null && supDef != null && purDef != null && drDef != null) {
+                                audits = audDef.await()
+                                suppliers = supDef.await()
+                                purchases = purDef.await()
+                                dailyReports = drDef.await()
+                            } else {
+                                audits = emptyList()
+                                suppliers = emptyList()
+                                purchases = emptyList()
+                                dailyReports = emptyList()
+                            }
                         }
 
                         val syncedAt = System.currentTimeMillis()
@@ -629,6 +694,7 @@ fun GesmakApp() {
                         allPoles = emptyList()
                         products = emptyList()
                         orders = emptyList()
+                        orderItemsMap = emptyMap()
                         expenses = emptyList()
                         tables = emptyList()
                         serviceDay = null
@@ -647,6 +713,8 @@ fun GesmakApp() {
                         menuCategories = emptyList()
                         menuItems = emptyList()
                         reservations = emptyList()
+                        hotelRooms = emptyList()
+                        hotelReservations = emptyList()
                         groupMessages = emptyList()
                         dmMessages = emptyList()
                         notifications = emptyList()
@@ -656,6 +724,8 @@ fun GesmakApp() {
                         isOffline = false
                     }
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 if (SupabaseAuth.isNetworkError(e)) {
                     isOffline = true
@@ -664,10 +734,22 @@ fun GesmakApp() {
                     dataError = SupabaseAuth.friendlyNetworkError(e, "Erreur de synchronisation.")
                 }
             } finally {
-                loadingData = false
-                offlineCount = offlineQ.size()
+                if (activeRefreshJob == myJob) {
+                    loadingData = false
+                    offlineCount = offlineQ.size()
+                }
             }
         }
+        activeRefreshJob = job
+    }
+
+    fun selectEstFast(id: String) {
+        estIdResolved = id
+        estDetailsMap[id]?.let { establishment = it }
+        knownOrderIds = emptySet()
+        orderItemsMap = emptyMap()
+        scope.launch { store.setActiveEstId(id) }
+        refreshData()
     }
 
     LaunchedEffect(selectedChatPeer?.userId, session?.accessToken) {
@@ -778,8 +860,10 @@ fun GesmakApp() {
         }
 
         val roleLower = member?.role?.lowercase().orEmpty()
+        val curUid = session?.userId
+        val isEstOwner = !curUid.isNullOrBlank() && (establishment?.ownerUserId == curUid || establishment?.createdBy == curUid)
         val isPlatformAdmin = roleLower in setOf("super_admin", "admin")
-        val isOwner = roleLower in setOf("owner", "propriétaire", "proprietaire", "admin", "super_admin")
+        val isOwner = roleLower in setOf("owner", "propriétaire", "proprietaire", "admin", "super_admin") || isEstOwner
         val isManager = roleLower in setOf("manager", "gérant", "gerant")
         val isCashierOnly = roleLower in setOf("cashier", "caissier", "caissière", "caissiere")
         val canEditStock = isOwner || isManager || (member?.canEditStock == true)
@@ -809,12 +893,7 @@ fun GesmakApp() {
                 establishments = estChoices,
                 pendingPaymentRequests = pendingPaymentRequests,
                 loading = loadingData,
-                onSelectEst = { id ->
-                    estIdResolved = id
-                    knownOrderIds = emptySet()
-                    scope.launch { store.setActiveEstId(id) }
-                    refreshData()
-                },
+                onSelectEst = { id -> selectEstFast(id) },
                 onCreatePaymentRequest = { tier, months, amountFcfa, refCode, payerName, waveTxRef, cb ->
                     val s = session ?: return@SubscriptionLockScreen
                     val eid = estIdResolved ?: return@SubscriptionLockScreen
@@ -1242,12 +1321,7 @@ fun GesmakApp() {
                         error = dataError,
                         updateLabel = remoteUpdate?.let { "Mise à jour prête · v${it.versionName}" },
                         updateBusy = updateDownloading,
-                        onSelectEst = { id ->
-                            estIdResolved = id
-                            knownOrderIds = emptySet()
-                            scope.launch { store.setActiveEstId(id) }
-                            refreshData()
-                        },
+                        onSelectEst = { id -> selectEstFast(id) },
                         onSwitchBusinessType = { newType ->
                             if (!isPlatformAdmin && allowedBizSpecs.none { it.key == newType }) {
                                 dataError = "Ce type d'activité n'est pas attribué à votre compte par l'administrateur."
@@ -1302,6 +1376,7 @@ fun GesmakApp() {
                         activePole = activePole,
                         isCashierOnly = isCashierOnly,
                         estId = estIdResolved,
+                        establishment = establishment,
                         salesStore = salesStore,
                         busy = busySale,
                         onSelectPole = { p ->
@@ -1374,7 +1449,9 @@ fun GesmakApp() {
 
                     AppRoute.ORDERS -> OrdersScreen(
                         mod = pageMod,
+                        establishment = establishment,
                         orders = orders,
+                        preloadedItems = orderItemsMap,
                         products = products,
                         productImageDefaults = productImageDefaults,
                         tables = tables,
@@ -1385,16 +1462,22 @@ fun GesmakApp() {
                         busyId = busyOrderId,
                         onRefresh = { refreshData() },
                         onLoadItems = { oid, cb ->
+                            val cached = orderItemsMap[oid]
+                            if (cached != null) cb(cached)
                             val s = session ?: return@OrdersScreen
                             scope.launch {
                                 val list = withContext(Dispatchers.IO) {
-                                    try { api.fetchOrderItems(s.accessToken, oid) } catch (_: Exception) { emptyList() }
+                                    try { api.fetchOrderItems(s.accessToken, oid) } catch (_: Exception) { cached ?: emptyList() }
                                 }
+                                orderItemsMap = orderItemsMap + (oid to list)
                                 cb(list)
                             }
                         },
-                        onUpdateItemStatus = { _, itemId, status, cb ->
+                        onUpdateItemStatus = { oid, itemId, status, cb ->
                             val s = session ?: return@OrdersScreen
+                            orderItemsMap = orderItemsMap[oid]?.let { cur ->
+                                orderItemsMap + (oid to cur.map { if (it.id == itemId) it.copy(status = status) else it })
+                            } ?: orderItemsMap
                             scope.launch {
                                 withContext(Dispatchers.IO) {
                                     try { api.updateOrderItemStatus(s.accessToken, itemId, status) } catch (_: Exception) { }
@@ -1405,13 +1488,17 @@ fun GesmakApp() {
                         },
                         onAdvance = { orderId, next ->
                             val s = session ?: return@OrdersScreen
+                            orders = orders.map { if (it.id == orderId) it.copy(status = next) else it }
                             scope.launch {
                                 busyOrderId = orderId
                                 val ok = withContext(Dispatchers.IO) {
                                     try { api.updateOrderStatus(s.accessToken, orderId, next) } catch (_: Exception) { false }
                                 }
                                 busyOrderId = null
-                                if (ok) refreshData() else dataError = "Commande non mise à jour (vérifiez la connexion)."
+                                if (ok) refreshData() else {
+                                    dataError = "Commande non mise à jour (vérifiez la connexion)."
+                                    refreshData()
+                                }
                             }
                         },
                         onAssignServer = { order, srvId, srvName, cb ->
@@ -1486,7 +1573,7 @@ fun GesmakApp() {
                                 if (err == null) refreshData()
                             }
                         },
-                        onCreateOrder = { tableId, tableNum, custName, orderType, poleCode, notes, srvId, srvName, lines, cb ->
+                        onCreateOrder = { tableId, tableNum, custName, orderType, poleCode, notes, srvId, srvName, lines, immediatePayMethod, cb ->
                             val s = session ?: return@OrdersScreen
                             val eid = estIdResolved ?: return@OrdersScreen
                             scope.launch {
@@ -1505,6 +1592,8 @@ fun GesmakApp() {
                                             lines = lines,
                                             serverId = srvId,
                                             serverName = srvName,
+                                            immediatePayMethod = immediatePayMethod,
+                                            cashSessionId = cashSession?.id,
                                         )
                                     } catch (e: Exception) {
                                         SupabaseAuth.friendlyNetworkError(e, "Connexion requise pour créer la commande.")
@@ -2001,14 +2090,22 @@ fun GesmakApp() {
 
                     AppRoute.TABLES -> TablesKitchenScreen(
                         mod = pageMod,
+                        establishment = establishment,
                         tables = tables,
                         team = teamMembers,
                         menuCategories = menuCategories,
                         menuItems = menuItems,
                         reservations = reservations,
+                        hotelRooms = hotelRooms,
+                        hotelReservations = hotelReservations,
                         products = products,
                         productImageDefaults = productImageDefaults,
                         onRefresh = { refreshData() },
+                        onPickImage = { prefix, cb ->
+                            pendingImagePickPrefix = prefix
+                            pendingImagePickCallback = cb
+                            imagePickerLauncher.launch("image/*")
+                        },
                         onAddTable = { num, seats, loc, cb ->
                             val s = session ?: return@TablesKitchenScreen
                             val eid = estIdResolved ?: return@TablesKitchenScreen
@@ -2059,12 +2156,26 @@ fun GesmakApp() {
                                 if (err == null) refreshData()
                             }
                         },
-                        onSaveMenuItem = { id, name, price, catId, desc, linkedProdId, available, cb ->
+                        onSaveMenuItem = { id, name, price, catId, desc, linkedProdId, available, isDailyMenu, isWeekendPromo, promoPrice, imageUrl, cb ->
                             val s = session ?: return@TablesKitchenScreen
                             val eid = estIdResolved ?: return@TablesKitchenScreen
                             scope.launch {
                                 val err = withContext(Dispatchers.IO) {
-                                    api.upsertMenuItem(s.accessToken, eid, id, name, price, catId, desc, linkedProdId, available)
+                                    api.upsertMenuItem(
+                                        accessToken = s.accessToken,
+                                        estId = eid,
+                                        existingId = id,
+                                        name = name,
+                                        price = price,
+                                        categoryId = catId,
+                                        description = desc,
+                                        linkedProductId = linkedProdId,
+                                        isAvailable = available,
+                                        isDailyMenu = isDailyMenu,
+                                        isWeekendPromo = isWeekendPromo,
+                                        promoPrice = promoPrice,
+                                        imageUrl = imageUrl,
+                                    )
                                 }
                                 cb(err)
                                 if (err == null) refreshData()
@@ -2074,6 +2185,62 @@ fun GesmakApp() {
                             val s = session ?: return@TablesKitchenScreen
                             scope.launch {
                                 val err = withContext(Dispatchers.IO) { api.deleteMenuItem(s.accessToken, id) }
+                                cb(err)
+                                if (err == null) refreshData()
+                            }
+                        },
+                        onSaveHotelRoom = { id, number, name, description, imageUrl, floor, pricePerNight, capacity, status, cb ->
+                            val s = session ?: return@TablesKitchenScreen
+                            val eid = estIdResolved ?: return@TablesKitchenScreen
+                            scope.launch {
+                                val err = withContext(Dispatchers.IO) {
+                                    api.upsertHotelRoom(
+                                        accessToken = s.accessToken,
+                                        estId = eid,
+                                        existingId = id,
+                                        number = number,
+                                        name = name,
+                                        description = description,
+                                        imageUrl = imageUrl,
+                                        floor = floor,
+                                        pricePerNight = pricePerNight,
+                                        capacity = capacity,
+                                        status = status,
+                                    )
+                                }
+                                cb(err)
+                                if (err == null) refreshData()
+                            }
+                        },
+                        onCycleRoomStatus = { roomId, nextStatus, cb ->
+                            val s = session ?: return@TablesKitchenScreen
+                            val eid = estIdResolved ?: return@TablesKitchenScreen
+                            scope.launch {
+                                val err = withContext(Dispatchers.IO) {
+                                    api.updateHotelRoomStatus(s.accessToken, eid, roomId, nextStatus)
+                                }
+                                cb(err)
+                                if (err == null) refreshData()
+                            }
+                        },
+                        onDeleteHotelRoom = { roomId, cb ->
+                            val s = session ?: return@TablesKitchenScreen
+                            val eid = estIdResolved ?: return@TablesKitchenScreen
+                            scope.launch {
+                                val err = withContext(Dispatchers.IO) {
+                                    api.deleteHotelRoom(s.accessToken, eid, roomId)
+                                }
+                                cb(err)
+                                if (err == null) refreshData()
+                            }
+                        },
+                        onUpdateHotelReservationStatus = { resId, roomId, nextStatus, cb ->
+                            val s = session ?: return@TablesKitchenScreen
+                            val eid = estIdResolved ?: return@TablesKitchenScreen
+                            scope.launch {
+                                val err = withContext(Dispatchers.IO) {
+                                    api.updateHotelReservationStatus(s.accessToken, eid, resId, roomId, nextStatus)
+                                }
                                 cb(err)
                                 if (err == null) refreshData()
                             }
@@ -2402,6 +2569,7 @@ fun GesmakApp() {
                         establishment = establishment,
                         allowedTypes = allowedBizSpecs,
                         isPlatformAdmin = isPlatformAdmin,
+                        isOwnerOverride = isOwner,
                         pendingPaymentRequests = pendingPaymentRequests,
                         isLightTheme = isLightTheme,
                         orderSoundEnabled = orderSound,
@@ -2637,12 +2805,7 @@ fun GesmakApp() {
                                         .fillMaxWidth()
                                         .clickable {
                                             estSwitchDialog = false
-                                            if (!selected) {
-                                                estIdResolved = choice.id
-                                                knownOrderIds = emptySet()
-                                                scope.launch { store.setActiveEstId(choice.id) }
-                                                refreshData()
-                                            }
+                                            if (!selected) selectEstFast(choice.id)
                                         },
                                 ) {
                                     Row(

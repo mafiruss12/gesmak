@@ -24,8 +24,10 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -33,8 +35,10 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -49,12 +53,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.gesmak.app.data.LocalSalesStore
+import com.gesmak.app.data.ReceiptPrinter
 import com.gesmak.app.data.SupabaseApi
 import com.gesmak.app.ui.components.GesmakCard
 import com.gesmak.app.ui.components.ManagerPinModal
@@ -64,6 +70,9 @@ import com.gesmak.app.ui.theme.LocalGesmakColors
 import com.gesmak.app.ui.theme.formatFcfa
 import com.gesmak.app.ui.theme.poleColorHex
 import com.gesmak.app.ui.theme.poleLabelFr
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 private val PAYMENT_MODES = listOf(
     "cash" to "Espèces",
@@ -83,6 +92,7 @@ fun SalesScreen(
     activePole: String?,
     isCashierOnly: Boolean,
     estId: String?,
+    establishment: SupabaseApi.Establishment? = null,
     salesStore: LocalSalesStore,
     busy: Boolean,
     onSelectPole: (String?) -> Unit,
@@ -95,6 +105,7 @@ fun SalesScreen(
     ) -> Unit,
 ) {
     val c = LocalGesmakColors.current
+    val context = LocalContext.current
     var query by remember { mutableStateOf("") }
     var selectedCat by remember { mutableStateOf("Tout") }
     var paymentMethod by remember { mutableStateOf("cash") }
@@ -103,6 +114,7 @@ fun SalesScreen(
     var pinOpen by remember { mutableStateOf(false) }
     var pinBusy by remember { mutableStateOf(false) }
     var pinErr by remember { mutableStateOf<String?>(null) }
+    var receiptModal by remember { mutableStateOf<ReceiptPrinter.PrintableReceipt?>(null) }
 
     val cart = remember { mutableStateMapOf<String, Int>() }
     val categories = remember(products) {
@@ -288,15 +300,34 @@ fun SalesScreen(
                     Spacer(Modifier.height(6.dp))
                     Text("Tickets du jour (${ticketList.size})", color = c.muted, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 }
-                items(ticketList.take(5), key = { it.id }) { t ->
+                items(ticketList.take(8), key = { it.id }) { t ->
                     GesmakCard {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text("${t.at} · ${t.lines}", color = c.text, fontSize = 12.sp, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Spacer(Modifier.width(8.dp))
                             Text(formatFcfa(t.total), color = c.emerald, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            IconButton(
+                                onClick = {
+                                    receiptModal = ReceiptPrinter.PrintableReceipt(
+                                        id = t.id,
+                                        title = "Reçu Caisse",
+                                        establishmentName = establishment?.name ?: "GESMAK",
+                                        establishmentPhone = establishment?.phone,
+                                        establishmentAddress = establishment?.address,
+                                        serviceLabel = currentPole?.let { poleLabelFr(it) } ?: "Caisse directe",
+                                        dateLabel = "${SimpleDateFormat("dd/MM/yyyy", Locale.FRANCE).format(Date())} ${t.at}",
+                                        statusLabel = "PAYÉE",
+                                        total = t.total,
+                                        paidAmount = t.total,
+                                        lines = listOf(ReceiptPrinter.ReceiptLine(name = t.lines, qty = 1, unitPrice = t.total)),
+                                    )
+                                },
+                            ) {
+                                Icon(Icons.Default.Print, contentDescription = "Imprimer reçu", tint = c.accent, modifier = Modifier.size(18.dp))
+                            }
                         }
                     }
                 }
@@ -392,11 +423,30 @@ fun SalesScreen(
                             pinOpen = true
                         } else {
                             val summary = cartItems.joinToString(", ") { "${it.second}x ${it.first.name}" }
+                            val payLabel = PAYMENT_MODES.find { it.first == paymentMethod }?.second ?: paymentMethod
+                            val builtReceipt = ReceiptPrinter.PrintableReceipt(
+                                id = "CSH-${System.currentTimeMillis() % 1000000}",
+                                title = "Ticket Caisse",
+                                establishmentName = establishment?.name ?: "GESMAK",
+                                establishmentPhone = establishment?.phone,
+                                establishmentAddress = establishment?.address,
+                                serviceLabel = currentPole?.let { poleLabelFr(it) } ?: "Caisse directe",
+                                dateLabel = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.FRANCE).format(Date()),
+                                statusLabel = "PAYÉE",
+                                paymentLabel = payLabel,
+                                total = netTotal,
+                                paidAmount = netTotal,
+                                notes = if (discount > 0) "Remise appliquée : ${formatFcfa(discount)}" else null,
+                                lines = cartItems.map { (p, q) ->
+                                    ReceiptPrinter.ReceiptLine(name = p.name, qty = q, unitPrice = p.price)
+                                },
+                            )
                             estId?.let { salesStore.add(it, netTotal, summary) }
                             onValidateSale(cartItems, paymentMethod, discount, currentPole)
                             cart.clear()
                             discountInput = ""
                             checkoutOpen = false
+                            receiptModal = builtReceipt
                         }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = c.emerald, contentColor = Color.White),
@@ -426,16 +476,88 @@ fun SalesScreen(
                     pinBusy = false
                     if (ok) {
                         val summary = cartItems.joinToString(", ") { "${it.second}x ${it.first.name}" }
+                        val payLabel = PAYMENT_MODES.find { it.first == paymentMethod }?.second ?: paymentMethod
+                        val builtReceipt = ReceiptPrinter.PrintableReceipt(
+                            id = "CSH-${System.currentTimeMillis() % 1000000}",
+                            title = "Ticket Caisse",
+                            establishmentName = establishment?.name ?: "GESMAK",
+                            establishmentPhone = establishment?.phone,
+                            establishmentAddress = establishment?.address,
+                            serviceLabel = currentPole?.let { poleLabelFr(it) } ?: "Caisse directe",
+                            dateLabel = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.FRANCE).format(Date()),
+                            statusLabel = "PAYÉE",
+                            paymentLabel = payLabel,
+                            total = netTotal,
+                            paidAmount = netTotal,
+                            notes = if (discount > 0) "Remise appliquée : ${formatFcfa(discount)}" else null,
+                            lines = cartItems.map { (p, q) ->
+                                ReceiptPrinter.ReceiptLine(name = p.name, qty = q, unitPrice = p.price)
+                            },
+                        )
                         estId?.let { salesStore.add(it, netTotal, summary) }
                         onValidateSale(cartItems, paymentMethod, discount, currentPole)
                         cart.clear()
                         discountInput = ""
                         pinOpen = false
                         checkoutOpen = false
+                        receiptModal = builtReceipt
                     } else {
                         pinErr = err ?: "PIN incorrect"
                     }
                 }
+            },
+        )
+    }
+
+    val activeReceipt = receiptModal
+    if (activeReceipt != null) {
+        AlertDialog(
+            onDismissRequest = { receiptModal = null },
+            containerColor = c.card,
+            title = {
+                Text("Reçu de vente · #${activeReceipt.id.take(8)}", color = c.text, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(activeReceipt.establishmentName, color = c.accentDeep, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Text("${activeReceipt.dateLabel} · ${activeReceipt.paymentLabel ?: "Caisse"}", color = c.muted, fontSize = 11.sp)
+                    HorizontalDivider(color = c.border)
+                    activeReceipt.lines.forEach { l ->
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("${l.qty}× ${l.name}", color = c.text, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                            Text(formatFcfa(l.unitPrice * l.qty), color = c.text, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                        }
+                    }
+                    HorizontalDivider(color = c.border)
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("TOTAL PAYÉ", color = c.emerald, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Text(formatFcfa(activeReceipt.total), color = c.emerald, fontWeight = FontWeight.ExtraBold, fontSize = 15.sp)
+                    }
+                }
+            },
+            confirmButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    OutlinedButton(
+                        onClick = { ReceiptPrinter.shareTextReceipt(context, activeReceipt) },
+                        shape = RoundedCornerShape(10.dp),
+                    ) {
+                        Icon(Icons.Default.Share, contentDescription = null, tint = c.sky, modifier = Modifier.size(15.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Partager", color = c.sky, fontSize = 12.sp)
+                    }
+                    Button(
+                        onClick = { ReceiptPrinter.printHtmlReceipt(context, activeReceipt) },
+                        colors = ButtonDefaults.buttonColors(containerColor = c.accent, contentColor = Color.White),
+                        shape = RoundedCornerShape(10.dp),
+                    ) {
+                        Icon(Icons.Default.Print, contentDescription = null, modifier = Modifier.size(15.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Imprimer", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { receiptModal = null }) { Text("Fermer", color = c.muted) }
             },
         )
     }

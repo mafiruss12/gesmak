@@ -43,6 +43,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Store
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.TableRestaurant
 import androidx.compose.material.icons.filled.TrendingDown
 import androidx.compose.material.icons.filled.TrendingUp
@@ -412,6 +413,119 @@ fun HomeDashboard(
                             }
                         }
                     }
+
+                    // Bouton Switch rapide en 1 clic directement sur le Dashboard
+                    val switchableSpecsTop = if (isPlatformAdmin) BusinessTypes.ALL else allowedTypes
+                    val nextSpec = if (switchableSpecsTop.size > 1) {
+                        val idx = switchableSpecsTop.indexOfFirst { it.key == bizSpec.key }.coerceAtLeast(0)
+                        switchableSpecsTop[(idx + 1) % switchableSpecsTop.size]
+                    } else null
+                    val nextEst = if (establishments.size > 1) {
+                        val idx = establishments.indexOfFirst { it.id == currentEstId }.coerceAtLeast(0)
+                        establishments[(idx + 1) % establishments.size]
+                    } else null
+
+                    if ((canSeeFinance && nextSpec != null) || nextEst != null) {
+                        Spacer(Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            if (nextEst != null) {
+                                OutlinedButton(
+                                    onClick = { onSelectEst(nextEst.id) },
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier.weight(1f),
+                                ) {
+                                    Icon(Icons.Default.SwapHoriz, contentDescription = null, tint = c.accent, modifier = Modifier.size(16.dp))
+                                    Spacer(Modifier.width(4.dp))
+                                    Text(
+                                        "Site : ${nextEst.name}",
+                                        color = c.accentDeep,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
+                            if (canSeeFinance && nextSpec != null) {
+                                Button(
+                                    onClick = { onSwitchBusinessType(nextSpec.key) },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = nextSpec.accent(c.isLight),
+                                        contentColor = Color.White,
+                                    ),
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier.weight(1f),
+                                ) {
+                                    Icon(Icons.Default.SwapHoriz, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(Modifier.width(4.dp))
+                                    Text(
+                                        "Switch → ${nextSpec.shortLabel}",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    if (canSeeFinance && switchableSpecsTop.size > 1) {
+                        Spacer(Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            switchableSpecsTop.forEach { spec ->
+                                val selected = spec.key == bizSpec.key
+                                val chipColor = spec.accent(c.isLight)
+                                FilterChip(
+                                    selected = selected,
+                                    onClick = { if (!selected) onSwitchBusinessType(spec.key) },
+                                    label = {
+                                        Text(
+                                            spec.label,
+                                            fontSize = 11.sp,
+                                            maxLines = 1,
+                                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                        )
+                                    },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = chipColor,
+                                        selectedLabelColor = Color.White,
+                                        containerColor = c.cardAlt,
+                                        labelColor = c.text,
+                                    ),
+                                )
+                            }
+                        }
+                    } else if (canSeeFinance && !isPlatformAdmin) {
+                        Spacer(Modifier.height(6.dp))
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = c.accentSoft,
+                            border = BorderStroke(1.dp, c.accent.copy(alpha = 0.25f)),
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = "Activité attribuée : ${bizSpec.label}",
+                                    color = c.accentDeep,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 11.sp,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Text("Sur demande admin", color = c.muted, fontSize = 10.sp)
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -535,78 +649,6 @@ fun HomeDashboard(
                                     }
                                 }
                             }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Sélecteur de mode d'activité : uniquement si l'administrateur a attribué plusieurs types (+ admins)
-        if (canSeeFinance && establishment != null) {
-            val switchableSpecs = if (isPlatformAdmin) BusinessTypes.ALL else allowedTypes
-            if (isPlatformAdmin || switchableSpecs.size > 1) {
-                item {
-                    Column {
-                        Text(
-                            "Mode d'activité attribué · ${bizSpec.label}",
-                            color = c.muted,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        Row(
-                            modifier = Modifier.horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            switchableSpecs.forEach { spec ->
-                                val selected = spec.key == bizSpec.key
-                                val chipColor = spec.accent(c.isLight)
-                                FilterChip(
-                                    selected = selected,
-                                    onClick = { if (!selected) onSwitchBusinessType(spec.key) },
-                                    label = {
-                                        Text(
-                                            spec.label,
-                                            maxLines = 1,
-                                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                                        )
-                                    },
-                                    colors = FilterChipDefaults.filterChipColors(
-                                        selectedContainerColor = chipColor,
-                                        selectedLabelColor = Color.White,
-                                        containerColor = c.card,
-                                        labelColor = c.text,
-                                    ),
-                                )
-                            }
-                        }
-                    }
-                }
-            } else {
-                item {
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = c.accentSoft,
-                        border = BorderStroke(1.dp, c.accent.copy(alpha = 0.25f)),
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                text = "Activité attribuée : ${bizSpec.label}",
-                                color = c.accentDeep,
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 12.sp,
-                                modifier = Modifier.weight(1f),
-                            )
-                            Text(
-                                text = "Sur demande admin",
-                                color = c.muted,
-                                fontSize = 11.sp,
-                            )
                         }
                     }
                 }

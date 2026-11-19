@@ -20,6 +20,66 @@ export interface MenuItem {
   linked_product_id?: string | null;
   sort_order: number;
   image_url?: string | null;
+  is_daily_menu?: boolean;
+  is_weekend_promo?: boolean;
+  promo_price?: number | null;
+}
+
+export interface MenuItemMeta {
+  cleanDescription: string;
+  isDailyMenu: boolean;
+  isWeekendPromo: boolean;
+  promoPrice: number | null;
+}
+
+const DAILY_TAG = '[MENU_JOUR]';
+const WEEKEND_TAG_RE = /\[PROMO_WE(?::(\d+(?:\.\d+)?))?\]/i;
+const DAILY_TAG_RE = /\[MENU_JOUR\]/gi;
+
+export function parseMenuItemMeta(item: {
+  description?: string | null;
+  is_daily_menu?: boolean | null;
+  is_weekend_promo?: boolean | null;
+  promo_price?: number | null;
+}): MenuItemMeta {
+  const raw = item.description || '';
+  const hasDailyTag = DAILY_TAG_RE.test(raw);
+  DAILY_TAG_RE.lastIndex = 0;
+  const weMatch = WEEKEND_TAG_RE.exec(raw);
+  const tagPromo = weMatch?.[1] ? Number(weMatch[1]) : null;
+  const cleanDescription = raw
+    .replace(DAILY_TAG_RE, '')
+    .replace(WEEKEND_TAG_RE, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  const isDailyMenu = Boolean(item.is_daily_menu) || hasDailyTag;
+  const isWeekendPromo = Boolean(item.is_weekend_promo) || Boolean(weMatch);
+  const promoPrice =
+    item.promo_price != null && Number(item.promo_price) > 0
+      ? Number(item.promo_price)
+      : tagPromo && tagPromo > 0
+        ? tagPromo
+        : null;
+  return { cleanDescription, isDailyMenu, isWeekendPromo, promoPrice };
+}
+
+export function encodeMenuItemDescription(
+  description: string | null | undefined,
+  opts: { isDailyMenu?: boolean; isWeekendPromo?: boolean; promoPrice?: number | null },
+): string | null {
+  const clean = (description || '')
+    .replace(DAILY_TAG_RE, '')
+    .replace(WEEKEND_TAG_RE, '')
+    .trim();
+  const tags: string[] = [];
+  if (opts.isDailyMenu) tags.push(DAILY_TAG);
+  if (opts.isWeekendPromo) {
+    tags.push(
+      opts.promoPrice && opts.promoPrice > 0 ? `[PROMO_WE:${Math.round(opts.promoPrice)}]` : '[PROMO_WE]',
+    );
+  }
+  const merged = [...tags, clean].filter(Boolean).join(' ').trim();
+  return merged || null;
 }
 
 export interface MenuItemOption {
@@ -85,7 +145,15 @@ export async function listMenuItems(estId: string) {
     .eq('establishment_id', estId)
     .order('sort_order');
   if (error) throw error;
-  return (data || []) as MenuItem[];
+  return ((data || []) as MenuItem[]).map((item) => {
+    const meta = parseMenuItemMeta(item);
+    return {
+      ...item,
+      is_daily_menu: meta.isDailyMenu,
+      is_weekend_promo: meta.isWeekendPromo,
+      promo_price: meta.promoPrice,
+    };
+  });
 }
 
 export async function upsertMenuItem(
@@ -93,11 +161,16 @@ export async function upsertMenuItem(
   payload: Partial<MenuItem> & { name: string; price: number },
   id?: string,
 ) {
-  const row = {
+  const encodedDesc = encodeMenuItemDescription(payload.description, {
+    isDailyMenu: payload.is_daily_menu,
+    isWeekendPromo: payload.is_weekend_promo,
+    promoPrice: payload.promo_price,
+  });
+  const baseRow = {
     establishment_id: estId,
     name: payload.name,
     price: payload.price,
-    description: payload.description ?? null,
+    description: encodedDesc,
     category_id: payload.category_id ?? null,
     is_available: payload.is_available ?? true,
     linked_product_id: payload.linked_product_id ?? null,
@@ -105,11 +178,11 @@ export async function upsertMenuItem(
     image_url: payload.image_url ?? null,
   };
   if (id) {
-    const { error } = await supabase.from('menu_items').update(row).eq('id', id);
+    const { error } = await supabase.from('menu_items').update(baseRow).eq('id', id);
     if (error) throw error;
     return id;
   }
-  const { data, error } = await supabase.from('menu_items').insert(row).select('id').single();
+  const { data, error } = await supabase.from('menu_items').insert(baseRow).select('id').single();
   if (error) throw error;
   return data.id as string;
 }

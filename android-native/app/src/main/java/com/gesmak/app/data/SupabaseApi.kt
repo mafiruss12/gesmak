@@ -57,6 +57,8 @@ class SupabaseApi(
         val logoUrl: String? = null,
         val ownerEmail: String? = null,
         val ownerPhone: String? = null,
+        val ownerUserId: String? = null,
+        val createdBy: String? = null,
         val services: List<String> = emptyList(),
         val publicVisible: Boolean = false,
         val publicZone: String? = null,
@@ -277,6 +279,41 @@ class SupabaseApi(
         val description: String?,
         val linkedProductId: String?,
         val isAvailable: Boolean,
+        val imageUrl: String? = null,
+        val isDailyMenu: Boolean = false,
+        val isWeekendPromo: Boolean = false,
+        val promoPrice: Double? = null,
+    )
+
+    data class HotelRoomRow(
+        val id: String,
+        val number: String,
+        val name: String? = null,
+        val description: String? = null,
+        val imageUrl: String? = null,
+        val floor: String? = null,
+        val roomTypeId: String? = null,
+        val typeName: String? = null,
+        val pricePerNight: Double = 0.0,
+        val capacity: Int = 2,
+        val status: String = "available",
+        val notes: String? = null,
+    )
+
+    data class HotelReservationRow(
+        val id: String,
+        val guestName: String,
+        val guestPhone: String? = null,
+        val roomNumber: String? = null,
+        val roomId: String? = null,
+        val checkIn: String,
+        val checkOut: String,
+        val rate: Double = 0.0,
+        val total: Double = 0.0,
+        val amountPaid: Double = 0.0,
+        val status: String = "pending",
+        val paymentMethod: String? = null,
+        val notes: String? = null,
     )
 
     data class ReservationRow(
@@ -427,8 +464,7 @@ class SupabaseApi(
     )
 
     fun fetchMember(accessToken: String, userId: String): Member? {
-        val url =
-            "/rest/v1/members?user_id=eq.$userId&select=id,user_id,full_name,role,status,establishment_id,email,assigned_pole_code,supervisor_user_id,can_edit_stock,allowed_types,avatar_url&limit=1"
+        val url = "/rest/v1/members?user_id=eq.$userId&select=*&limit=1"
         client.newCall(get(url, accessToken)).execute().use { resp ->
             if (!resp.isSuccessful) return null
             val arr = JSONArray(resp.body?.string().orEmpty())
@@ -500,15 +536,14 @@ class SupabaseApi(
     }
 
     fun fetchEstablishment(accessToken: String, id: String): Establishment? {
-        val url =
-            "/rest/v1/establishments?id=eq.$id&select=id,name,type,business_type,slug,address,phone,subscription_status,trial_ends_at,subscription_ends_at,last_payment_at,plan_tier,latitude,longitude,location_updated_at,created_at,allowed_types,logo_url,owner_email,owner_phone,services,public_visible,public_zone,public_phone&limit=1"
+        val url = "/rest/v1/establishments?id=eq.$id&select=*&limit=1"
         client.newCall(get(url, accessToken)).execute().use { resp ->
             if (!resp.isSuccessful) return null
             val arr = JSONArray(resp.body?.string().orEmpty())
             if (arr.length() == 0) return null
             val o = arr.getJSONObject(0)
-            val lat = if (o.isNull("latitude")) null else o.optDouble("latitude")
-            val lng = if (o.isNull("longitude")) null else o.optDouble("longitude")
+            val lat = if (o.isNull("latitude") || !o.has("latitude")) null else o.optDouble("latitude")
+            val lng = if (o.isNull("longitude") || !o.has("longitude")) null else o.optDouble("longitude")
             return Establishment(
                 id = o.getString("id"),
                 name = o.optString("name"),
@@ -526,13 +561,15 @@ class SupabaseApi(
                 lastPaymentAt = o.optString("last_payment_at").ifBlank { null },
                 createdAt = o.optString("created_at").ifBlank { null },
                 allowedTypes = parseStringList(o, "allowed_types"),
-                logoUrl = if (o.isNull("logo_url")) null else o.optString("logo_url").ifBlank { null },
-                ownerEmail = if (o.isNull("owner_email")) null else o.optString("owner_email").ifBlank { null },
-                ownerPhone = if (o.isNull("owner_phone")) null else o.optString("owner_phone").ifBlank { null },
+                logoUrl = if (o.isNull("logo_url") || !o.has("logo_url")) null else o.optString("logo_url").ifBlank { null },
+                ownerEmail = if (o.isNull("owner_email") || !o.has("owner_email")) null else o.optString("owner_email").ifBlank { null },
+                ownerPhone = if (o.isNull("owner_phone") || !o.has("owner_phone")) null else o.optString("owner_phone").ifBlank { null },
+                ownerUserId = if (o.isNull("owner_user_id") || !o.has("owner_user_id")) null else o.optString("owner_user_id").ifBlank { null },
+                createdBy = if (o.isNull("created_by") || !o.has("created_by")) null else o.optString("created_by").ifBlank { null },
                 services = parseStringList(o, "services"),
                 publicVisible = o.optBoolean("public_visible", false),
-                publicZone = if (o.isNull("public_zone")) null else o.optString("public_zone").ifBlank { null },
-                publicPhone = if (o.isNull("public_phone")) null else o.optString("public_phone").ifBlank { null },
+                publicZone = if (o.isNull("public_zone") || !o.has("public_zone")) null else o.optString("public_zone").ifBlank { null },
+                publicPhone = if (o.isNull("public_phone") || !o.has("public_phone")) null else o.optString("public_phone").ifBlank { null },
             )
         }
     }
@@ -581,11 +618,18 @@ class SupabaseApi(
             obj.put("owner_email", ownerEmail?.trim()?.ifBlank { null } ?: JSONObject.NULL)
             obj.put("owner_phone", ownerPhone?.trim()?.ifBlank { null } ?: JSONObject.NULL)
         }
-        if (services != null) {
-            obj.put("services", JSONArray(services))
-        }
         client.newCall(patch("/rest/v1/establishments?id=eq.$estId", accessToken, obj.toString())).execute().use { resp ->
-            return if (resp.isSuccessful) null else "Mise à jour refusée (${resp.code})"
+            if (resp.isSuccessful) return null
+            // Fallback sans owner_email/owner_phone/logo_url si une colonne est absente sur un environnement
+            val fallback = JSONObject()
+                .put("name", name.trim())
+                .put("address", address.trim().ifBlank { JSONObject.NULL })
+                .put("phone", phone.trim().ifBlank { JSONObject.NULL })
+            if (!type.isNullOrBlank()) fallback.put("type", type.trim())
+            if (updateLogo) fallback.put("logo_url", logoUrl?.trim()?.ifBlank { null } ?: JSONObject.NULL)
+            client.newCall(patch("/rest/v1/establishments?id=eq.$estId", accessToken, fallback.toString())).execute().use { r2 ->
+                return if (r2.isSuccessful) null else "Mise à jour refusée (${resp.code})"
+            }
         }
     }
 
@@ -883,8 +927,7 @@ class SupabaseApi(
     // ---------- Équipe ----------
 
     fun fetchTeamMembers(accessToken: String, estId: String): List<Member> {
-        val url =
-            "/rest/v1/members?establishment_id=eq.$estId&select=id,user_id,full_name,role,status,establishment_id,email,assigned_pole_code,supervisor_user_id,can_edit_stock,avatar_url&order=created_at.desc&limit=100"
+        val url = "/rest/v1/members?establishment_id=eq.$estId&select=*&order=created_at.desc&limit=100"
         client.newCall(get(url, accessToken)).execute().use { resp ->
             if (!resp.isSuccessful) return emptyList()
             val arr = JSONArray(resp.body?.string().orEmpty())
@@ -1313,8 +1356,7 @@ class SupabaseApi(
         } else {
             ""
         }
-        val url =
-            "/rest/v1/orders?establishment_id=eq.$estId$statusClause&select=id,status,total,created_at,customer_name,table_id,table_number,order_type,pole_code,notes,server_id,server_name,source,payment_method,paid_at,paid_amount,stock_deducted,created_by&order=created_at.desc&limit=$limit"
+        val url = "/rest/v1/orders?establishment_id=eq.$estId$statusClause&select=*&order=created_at.desc&limit=$limit"
         client.newCall(get(url, accessToken)).execute().use { resp ->
             if (!resp.isSuccessful) return emptyList()
             val arr = JSONArray(resp.body?.string().orEmpty())
@@ -1338,7 +1380,7 @@ class SupabaseApi(
                             serverName = o.optString("server_name").ifBlank { null },
                             paymentMethod = o.optString("payment_method").ifBlank { null },
                             paidAt = o.optString("paid_at").ifBlank { null },
-                            paidAmount = if (o.isNull("paid_amount")) null else o.optDouble("paid_amount"),
+                            paidAmount = if (!o.has("paid_amount") || o.isNull("paid_amount")) null else o.optDouble("paid_amount"),
                             stockDeducted = o.optBoolean("stock_deducted", false),
                             createdBy = o.optString("created_by").ifBlank { null },
                         ),
@@ -1348,30 +1390,56 @@ class SupabaseApi(
         }
     }
 
+    private fun parseOrderItem(o: JSONObject): OrderItemRow {
+        val qty = if (o.has("qty") && !o.isNull("qty")) {
+            o.optInt("qty", 1)
+        } else if (o.has("quantity") && !o.isNull("quantity")) {
+            o.optInt("quantity", 1)
+        } else {
+            1
+        }
+        return OrderItemRow(
+            id = o.optString("id"),
+            orderId = o.optString("order_id"),
+            productId = o.optString("product_id").ifBlank { null },
+            productName = o.optString("product_name", "Article"),
+            quantity = qty.coerceAtLeast(1),
+            unitPrice = o.optDouble("unit_price", 0.0),
+            status = o.optString("status").ifBlank { null },
+            notes = o.optString("notes").ifBlank { null },
+        )
+    }
+
     fun fetchOrderItems(accessToken: String, orderId: String): List<OrderItemRow> {
-        val url =
-            "/rest/v1/order_items?order_id=eq.$orderId&select=id,order_id,product_id,product_name,quantity,qty,unit_price,status,notes"
+        val url = "/rest/v1/order_items?order_id=eq.$orderId&select=*"
         client.newCall(get(url, accessToken)).execute().use { resp ->
             if (!resp.isSuccessful) return emptyList()
             val arr = JSONArray(resp.body?.string().orEmpty())
             return buildList {
-                for (i in 0 until arr.length()) {
-                    val o = arr.getJSONObject(i)
-                    val qty = if (o.has("quantity") && !o.isNull("quantity")) o.optInt("quantity", 1) else o.optInt("qty", 1)
-                    add(
-                        OrderItemRow(
-                            id = o.optString("id"),
-                            orderId = o.optString("order_id"),
-                            productId = o.optString("product_id").ifBlank { null },
-                            productName = o.optString("product_name", "Article"),
-                            quantity = qty.coerceAtLeast(1),
-                            unitPrice = o.optDouble("unit_price", 0.0),
-                            status = o.optString("status").ifBlank { null },
-                            notes = o.optString("notes").ifBlank { null },
-                        ),
-                    )
-                }
+                for (i in 0 until arr.length()) add(parseOrderItem(arr.getJSONObject(i)))
             }
+        }
+    }
+
+    fun fetchOrderItemsBatch(accessToken: String, orderIds: List<String>): Map<String, List<OrderItemRow>> {
+        if (orderIds.isEmpty()) return emptyMap()
+        val ids = orderIds.take(60).joinToString(",")
+        val url = "/rest/v1/order_items?order_id=in.($ids)&select=*"
+        return try {
+            client.newCall(get(url, accessToken)).execute().use { resp ->
+                if (!resp.isSuccessful) return emptyMap()
+                val arr = JSONArray(resp.body?.string().orEmpty())
+                val grouped = mutableMapOf<String, MutableList<OrderItemRow>>()
+                for (i in 0 until arr.length()) {
+                    val row = parseOrderItem(arr.getJSONObject(i))
+                    if (row.orderId.isNotBlank()) {
+                        grouped.getOrPut(row.orderId) { mutableListOf() }.add(row)
+                    }
+                }
+                grouped
+            }
+        } catch (_: Exception) {
+            emptyMap()
         }
     }
 
@@ -1440,7 +1508,6 @@ class SupabaseApi(
                     .put("order_id", orderId)
                     .put("product_id", prod.id)
                     .put("product_name", prod.name)
-                    .put("quantity", qty)
                     .put("qty", qty)
                     .put("unit_price", prod.price)
                     .put("status", "pending"),
@@ -1634,12 +1701,18 @@ class SupabaseApi(
         lines: List<Pair<Product, Int>>,
         serverId: String? = userId,
         serverName: String? = null,
+        immediatePayMethod: String? = null,
+        cashSessionId: String? = null,
     ): String? {
         if (lines.isEmpty()) return "Aucun article sélectionné."
         val total = lines.sumOf { (p, q) -> p.price * q }
+        val isInstantPay = !immediatePayMethod.isNullOrBlank()
+        val nowIso = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
+            timeZone = java.util.TimeZone.getTimeZone("UTC")
+        }.format(Date())
         val orderObj = JSONObject()
             .put("establishment_id", estId)
-            .put("status", "pending")
+            .put("status", if (isInstantPay) "served" else "pending")
             .put("total", total)
             .put("order_type", orderType)
             .put("table_id", tableId?.ifBlank { null } ?: JSONObject.NULL)
@@ -1651,6 +1724,10 @@ class SupabaseApi(
             .put("created_by", userId)
             .put("server_id", serverId?.ifBlank { null } ?: JSONObject.NULL)
         if (!serverName.isNullOrBlank()) orderObj.put("server_name", serverName)
+        if (isInstantPay) {
+            orderObj.put("payment_method", immediatePayMethod)
+            orderObj.put("paid_at", nowIso)
+        }
         client.newCall(post("/rest/v1/orders", accessToken, orderObj.toString(), "return=representation")).execute().use { resp ->
             if (!resp.isSuccessful) return "Commande refusée (${resp.code})"
             val arr = JSONArray(resp.body?.string().orEmpty())
@@ -1663,16 +1740,46 @@ class SupabaseApi(
                         .put("order_id", oid)
                         .put("product_id", prod.id)
                         .put("product_name", prod.name)
-                        .put("quantity", qty)
                         .put("qty", qty)
                         .put("unit_price", prod.price)
-                        .put("status", "pending"),
+                        .put("status", if (isInstantPay) "served" else "pending"),
                 )
             }
             client.newCall(post("/rest/v1/order_items", accessToken, itemsArr.toString())).execute().use { r2 ->
                 if (!r2.isSuccessful) return "Articles non enregistrés (${r2.code})"
             }
-            if (!tableId.isNullOrBlank()) {
+            if (isInstantPay) {
+                val pm = immediatePayMethod!!
+                val canonicalPm = when (pm) {
+                    "cash" -> "cash"
+                    "wave", "orange_money", "mtn_money", "mobile", "mobile_money" -> "mobile_money"
+                    else -> "other"
+                }
+                for ((prod, qty) in lines) {
+                    val saleObj = JSONObject()
+                        .put("establishment_id", estId)
+                        .put("product_id", prod.id)
+                        .put("qty", qty)
+                        .put("unit_price", prod.price)
+                        .put("total", prod.price * qty)
+                        .put("payment_method", pm)
+                        .put("created_by", userId)
+                    if (!poleCode.isNullOrBlank()) saleObj.put("pole_code", poleCode)
+                    if (!cashSessionId.isNullOrBlank()) saleObj.put("cash_session_id", cashSessionId)
+                    var ok = false
+                    client.newCall(post("/rest/v1/sales", accessToken, saleObj.toString())).execute().use { sr -> ok = sr.isSuccessful }
+                    if (!ok && pm != canonicalPm) {
+                        saleObj.put("payment_method", canonicalPm)
+                        try { client.newCall(post("/rest/v1/sales", accessToken, saleObj.toString())).execute().use { } } catch (_: Exception) { }
+                    }
+                    val newStock = maxOf(0.0, prod.stock - qty)
+                    try {
+                        client.newCall(
+                            patch("/rest/v1/products?id=eq.${prod.id}", accessToken, JSONObject().put("stock", newStock).toString()),
+                        ).execute().use { }
+                    } catch (_: Exception) { }
+                }
+            } else if (!tableId.isNullOrBlank()) {
                 try { updateTableStatus(accessToken, tableId, "occupied") } catch (_: Exception) { }
             }
             return null
@@ -2091,24 +2198,64 @@ class SupabaseApi(
         }
     }
 
+    private fun parseMenuDescriptionMeta(rawDesc: String?): Triple<Boolean, Boolean, Pair<Double?, String?>> {
+        val raw = rawDesc.orEmpty()
+        val isDaily = Regex("\\[MENU_JOUR\\]", RegexOption.IGNORE_CASE).containsMatchIn(raw)
+        val weMatch = Regex("\\[PROMO_WE(?::(\\d+(?:\\.\\d+)?))?\\]", RegexOption.IGNORE_CASE).find(raw)
+        val isWe = weMatch != null
+        val promoPrice = weMatch?.groupValues?.getOrNull(1)?.toDoubleOrNull()?.takeIf { it > 0 }
+        val clean = raw
+            .replace(Regex("\\[MENU_JOUR\\]", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("\\[PROMO_WE(?::\\d+(?:\\.\\d+)?)?\\]", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("\\s{2,}"), " ")
+            .trim()
+            .ifBlank { null }
+        return Triple(isDaily, isWe, promoPrice to clean)
+    }
+
+    private fun encodeMenuDescriptionMeta(
+        cleanDesc: String?,
+        isDailyMenu: Boolean,
+        isWeekendPromo: Boolean,
+        promoPrice: Double?,
+    ): String? {
+        val (_, _, pair) = parseMenuDescriptionMeta(cleanDesc)
+        val pureDesc = pair.second
+        val tags = mutableListOf<String>()
+        if (isDailyMenu) tags.add("[MENU_JOUR]")
+        if (isWeekendPromo) {
+            if (promoPrice != null && promoPrice > 0) tags.add("[PROMO_WE:${promoPrice.toInt()}]")
+            else tags.add("[PROMO_WE]")
+        }
+        return (tags + listOfNotNull(pureDesc)).joinToString(" ").trim().ifBlank { null }
+    }
+
     fun fetchMenuItems(accessToken: String, estId: String): List<MenuItemRow> {
-        val url =
-            "/rest/v1/menu_items?establishment_id=eq.$estId&select=id,name,price,category_id,description,linked_product_id,is_available&order=name.asc"
+        val url = "/rest/v1/menu_items?establishment_id=eq.$estId&select=*&order=name.asc"
         client.newCall(get(url, accessToken)).execute().use { resp ->
             if (!resp.isSuccessful) return emptyList()
             val arr = JSONArray(resp.body?.string().orEmpty())
             return buildList {
                 for (i in 0 until arr.length()) {
                     val o = arr.getJSONObject(i)
+                    val rawDesc = if (o.isNull("description") || !o.has("description")) null else o.optString("description")
+                    val (isDailyTag, isWeTag, metaPair) = parseMenuDescriptionMeta(rawDesc)
+                    val isDaily = o.optBoolean("is_daily_menu", false) || isDailyTag
+                    val isWe = o.optBoolean("is_weekend_promo", false) || isWeTag
+                    val colPromo = if (o.has("promo_price") && !o.isNull("promo_price")) o.optDouble("promo_price", 0.0).takeIf { it > 0 } else null
                     add(
                         MenuItemRow(
                             id = o.optString("id"),
                             name = o.optString("name"),
                             price = o.optDouble("price", 0.0),
                             categoryId = o.optString("category_id").ifBlank { null },
-                            description = o.optString("description").ifBlank { null },
+                            description = metaPair.second,
                             linkedProductId = o.optString("linked_product_id").ifBlank { null },
                             isAvailable = o.optBoolean("is_available", true),
+                            imageUrl = if (o.has("image_url") && !o.isNull("image_url")) o.optString("image_url").ifBlank { null } else null,
+                            isDailyMenu = isDaily,
+                            isWeekendPromo = isWe,
+                            promoPrice = colPromo ?: metaPair.first,
                         ),
                     )
                 }
@@ -2126,15 +2273,21 @@ class SupabaseApi(
         description: String?,
         linkedProductId: String?,
         isAvailable: Boolean,
+        isDailyMenu: Boolean = false,
+        isWeekendPromo: Boolean = false,
+        promoPrice: Double? = null,
+        imageUrl: String? = null,
     ): String? {
+        val encodedDesc = encodeMenuDescriptionMeta(description, isDailyMenu, isWeekendPromo, promoPrice)
         val body = JSONObject()
             .put("establishment_id", estId)
             .put("name", name.trim())
             .put("price", price)
             .put("category_id", categoryId?.ifBlank { null } ?: JSONObject.NULL)
-            .put("description", description?.trim()?.ifBlank { null } ?: JSONObject.NULL)
+            .put("description", encodedDesc ?: JSONObject.NULL)
             .put("linked_product_id", linkedProductId?.ifBlank { null } ?: JSONObject.NULL)
             .put("is_available", isAvailable)
+            .put("image_url", imageUrl?.trim()?.ifBlank { null } ?: JSONObject.NULL)
             .toString()
         val req = if (existingId == null) post("/rest/v1/menu_items", accessToken, body)
         else patch("/rest/v1/menu_items?id=eq.$existingId", accessToken, body)
@@ -2147,6 +2300,236 @@ class SupabaseApi(
         client.newCall(delete("/rest/v1/menu_items?id=eq.$id", accessToken)).execute().use { resp ->
             return if (resp.isSuccessful) null else "Suppression refusée (${resp.code})"
         }
+    }
+
+    // ---------- Chambres d'Hôtel & Réservations ----------
+
+    private fun parseRoomMeta(rawNotes: String?): Triple<String?, String?, Pair<String?, String?>> {
+        val raw = rawNotes.orEmpty()
+        val regex = Regex("\\[GESMAK_ROOM\\]([\\s\\S]*?)\\[/GESMAK_ROOM\\]")
+        val match = regex.find(raw)
+        var rName: String? = null
+        var rDesc: String? = null
+        var rImg: String? = null
+        if (match != null) {
+            try {
+                val jo = JSONObject(match.groupValues[1])
+                rName = jo.optString("name").ifBlank { null }
+                rDesc = jo.optString("description").ifBlank { null }
+                rImg = jo.optString("image_url").ifBlank { null }
+            } catch (_: Exception) { }
+        }
+        val cleanNotes = raw.replace(regex, "").trim().ifBlank { null }
+        return Triple(rName, rDesc, rImg to cleanNotes)
+    }
+
+    private fun encodeRoomMeta(
+        name: String?,
+        description: String?,
+        imageUrl: String?,
+        plainNotes: String?,
+    ): String? {
+        val clean = plainNotes.orEmpty()
+            .replace(Regex("\\[GESMAK_ROOM\\][\\s\\S]*?\\[/GESMAK_ROOM\\]"), "")
+            .trim()
+        val payload = JSONObject()
+        if (!name.isNullOrBlank()) payload.put("name", name.trim())
+        if (!description.isNullOrBlank()) payload.put("description", description.trim())
+        if (!imageUrl.isNullOrBlank()) payload.put("image_url", imageUrl.trim())
+        val tag = if (payload.length() > 0) "[GESMAK_ROOM]$payload[/GESMAK_ROOM]" else ""
+        return listOf(tag, clean).filter { it.isNotBlank() }.joinToString(" ").trim().ifBlank { null }
+    }
+
+    fun syncRoomsToQrConfig(accessToken: String, estId: String) {
+        try {
+            val rooms = fetchHotelRooms(accessToken, estId)
+            val snap = JSONArray()
+            for (r in rooms) {
+                snap.put(
+                    JSONObject()
+                        .put("id", r.id)
+                        .put("number", r.number)
+                        .put("name", r.name ?: r.typeName ?: "Chambre ${r.number}")
+                        .put("description", r.description ?: "")
+                        .put("image_url", r.imageUrl ?: "")
+                        .put("price_per_night", r.pricePerNight)
+                        .put("capacity", r.capacity)
+                        .put("floor", r.floor ?: "")
+                        .put("status", r.status),
+                )
+            }
+            var prevCfg = JSONObject()
+            client.newCall(get("/rest/v1/establishments?id=eq.$estId&select=qr_config&limit=1", accessToken)).execute().use { resp ->
+                if (resp.isSuccessful) {
+                    val arr = JSONArray(resp.body?.string().orEmpty())
+                    val existing = arr.optJSONObject(0)?.optJSONObject("qr_config")
+                    if (existing != null) prevCfg = existing
+                }
+            }
+            prevCfg.put("rooms", snap)
+            client.newCall(
+                patch("/rest/v1/establishments?id=eq.$estId", accessToken, JSONObject().put("qr_config", prevCfg).toString()),
+            ).execute().use { }
+        } catch (_: Exception) { }
+    }
+
+    fun fetchHotelRooms(accessToken: String, estId: String): List<HotelRoomRow> {
+        val url =
+            "/rest/v1/hotel_rooms?establishment_id=eq.$estId&select=*,hotel_room_types(name,price_per_night,capacity)&order=number.asc&limit=200"
+        return try {
+            client.newCall(get(url, accessToken)).execute().use { resp ->
+                if (!resp.isSuccessful) return emptyList()
+                val arr = JSONArray(resp.body?.string().orEmpty())
+                buildList {
+                    for (i in 0 until arr.length()) {
+                        val o = arr.getJSONObject(i)
+                        val rt = o.optJSONObject("hotel_room_types")
+                        val rawNotes = if (o.isNull("notes") || !o.has("notes")) null else o.optString("notes")
+                        val (mName, mDesc, pair) = parseRoomMeta(rawNotes)
+                        val colImg = if (o.has("image_url") && !o.isNull("image_url")) o.optString("image_url").ifBlank { null } else null
+                        val colName = if (o.has("name") && !o.isNull("name")) o.optString("name").ifBlank { null } else null
+                        val colDesc = if (o.has("description") && !o.isNull("description")) o.optString("description").ifBlank { null } else null
+                        val basePrice = o.optDouble("price_per_night", 0.0).takeIf { it > 0 }
+                            ?: (rt?.optDouble("price_per_night", 0.0) ?: 0.0)
+                        add(
+                            HotelRoomRow(
+                                id = o.optString("id"),
+                                number = o.optString("number"),
+                                name = colName ?: mName ?: rt?.optString("name")?.ifBlank { null },
+                                description = colDesc ?: mDesc,
+                                imageUrl = colImg ?: pair.first,
+                                floor = if (o.isNull("floor") || !o.has("floor")) null else o.optString("floor").ifBlank { null },
+                                roomTypeId = if (o.isNull("room_type_id") || !o.has("room_type_id")) null else o.optString("room_type_id").ifBlank { null },
+                                typeName = rt?.optString("name")?.ifBlank { null },
+                                pricePerNight = basePrice,
+                                capacity = o.optInt("capacity", rt?.optInt("capacity", 2) ?: 2),
+                                status = o.optString("status", "available"),
+                                notes = pair.second,
+                            ),
+                        )
+                    }
+                }
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    fun upsertHotelRoom(
+        accessToken: String,
+        estId: String,
+        existingId: String?,
+        number: String,
+        name: String?,
+        description: String?,
+        imageUrl: String?,
+        floor: String?,
+        pricePerNight: Double,
+        capacity: Int,
+        status: String,
+    ): String? {
+        if (number.isBlank()) return "Numéro de chambre requis."
+        val encodedNotes = encodeRoomMeta(name, description, imageUrl, null)
+        val body = JSONObject()
+            .put("establishment_id", estId)
+            .put("number", number.trim())
+            .put("floor", floor?.trim()?.ifBlank { null } ?: JSONObject.NULL)
+            .put("price_per_night", pricePerNight)
+            .put("capacity", capacity.coerceAtLeast(1))
+            .put("status", status.ifBlank { "available" })
+            .put("notes", encodedNotes ?: JSONObject.NULL)
+            .toString()
+        val req = if (existingId == null) post("/rest/v1/hotel_rooms", accessToken, body)
+        else patch("/rest/v1/hotel_rooms?id=eq.$existingId", accessToken, body)
+        client.newCall(req).execute().use { resp ->
+            if (!resp.isSuccessful) return "Chambre non enregistrée (${resp.code})"
+        }
+        syncRoomsToQrConfig(accessToken, estId)
+        return null
+    }
+
+    fun updateHotelRoomStatus(accessToken: String, estId: String, roomId: String, status: String): String? {
+        val body = JSONObject().put("status", status).toString()
+        client.newCall(patch("/rest/v1/hotel_rooms?id=eq.$roomId", accessToken, body)).execute().use { resp ->
+            if (!resp.isSuccessful) return "Statut chambre non modifié (${resp.code})"
+        }
+        syncRoomsToQrConfig(accessToken, estId)
+        return null
+    }
+
+    fun deleteHotelRoom(accessToken: String, estId: String, roomId: String): String? {
+        client.newCall(delete("/rest/v1/hotel_rooms?id=eq.$roomId", accessToken)).execute().use { resp ->
+            if (!resp.isSuccessful) return "Suppression refusée (${resp.code})"
+        }
+        syncRoomsToQrConfig(accessToken, estId)
+        return null
+    }
+
+    fun fetchHotelReservations(accessToken: String, estId: String): List<HotelReservationRow> {
+        val url =
+            "/rest/v1/hotel_reservations?establishment_id=eq.$estId&select=*,hotel_guests(first_name,last_name,phone),hotel_rooms(number)&order=check_in.desc&limit=100"
+        return try {
+            client.newCall(get(url, accessToken)).execute().use { resp ->
+                if (!resp.isSuccessful) return emptyList()
+                val arr = JSONArray(resp.body?.string().orEmpty())
+                buildList {
+                    for (i in 0 until arr.length()) {
+                        val o = arr.getJSONObject(i)
+                        val g = o.optJSONObject("hotel_guests")
+                        val r = o.optJSONObject("hotel_rooms")
+                        val gName = listOfNotNull(
+                            g?.optString("first_name")?.ifBlank { null },
+                            g?.optString("last_name")?.ifBlank { null },
+                        ).joinToString(" ").ifBlank { "Client" }
+                        add(
+                            HotelReservationRow(
+                                id = o.optString("id"),
+                                guestName = gName,
+                                guestPhone = g?.optString("phone")?.ifBlank { null },
+                                roomNumber = r?.optString("number")?.ifBlank { null },
+                                roomId = if (o.isNull("room_id") || !o.has("room_id")) null else o.optString("room_id").ifBlank { null },
+                                checkIn = o.optString("check_in"),
+                                checkOut = o.optString("check_out"),
+                                rate = o.optDouble("rate", 0.0),
+                                total = o.optDouble("total", 0.0),
+                                amountPaid = o.optDouble("amount_paid", 0.0),
+                                status = o.optString("status", "pending"),
+                                paymentMethod = if (o.isNull("payment_method") || !o.has("payment_method")) null else o.optString("payment_method").ifBlank { null },
+                                notes = if (o.isNull("notes") || !o.has("notes")) null else o.optString("notes").ifBlank { null },
+                            ),
+                        )
+                    }
+                }
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    fun updateHotelReservationStatus(
+        accessToken: String,
+        estId: String,
+        resId: String,
+        roomId: String?,
+        newStatus: String,
+    ): String? {
+        val body = JSONObject().put("status", newStatus).toString()
+        client.newCall(patch("/rest/v1/hotel_reservations?id=eq.$resId", accessToken, body)).execute().use { resp ->
+            if (!resp.isSuccessful) return "Statut réservation refusé (${resp.code})"
+        }
+        if (!roomId.isNullOrBlank()) {
+            val roomStatus = when (newStatus) {
+                "in_progress" -> "occupied"
+                "confirmed" -> "reserved"
+                "completed" -> "cleaning"
+                "cancelled" -> "available"
+                else -> null
+            }
+            if (roomStatus != null) {
+                updateHotelRoomStatus(accessToken, estId, roomId, roomStatus)
+            }
+        }
+        return null
     }
 
     fun fetchReservations(accessToken: String, estId: String): List<ReservationRow> {

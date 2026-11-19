@@ -1,21 +1,45 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { Loader2, Minus, Plus, Send, CheckCircle2, Beer, UtensilsCrossed, Sparkles, RefreshCw } from 'lucide-react';
+import {
+  BedDouble,
+  Beer,
+  CalendarDays,
+  CheckCircle2,
+  Loader2,
+  Minus,
+  Plus,
+  Printer,
+  Receipt,
+  RefreshCw,
+  Send,
+  Sparkles,
+  UtensilsCrossed,
+} from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { formatFCFA } from '@/lib/format';
 import ProductThumb from '@/components/ProductThumb';
 import {
-  estimateWaitMinutes,
-  ORDER_STATUS_CLIENT,
-} from '@/lib/orderAlerts';
+  ReceiptSheet,
+  formatReceiptText,
+  triggerReceiptPrint,
+  type GesmakReceiptData,
+} from '@/components/ReceiptPrint';
+import { parseMenuItemMeta, type MenuItem } from '@/lib/restaurant';
+import { parseRoomMeta, formatFcfa } from '@/lib/hotel';
+import { estimateWaitMinutes, ORDER_STATUS_CLIENT } from '@/lib/orderAlerts';
 import { triggerOrderPush } from '@/lib/push';
-import { fetchServiceStatus, assertServiceOpen, getActiveSessionId } from '@/lib/serviceDay';
+import { fetchServiceStatus, getActiveSessionId } from '@/lib/serviceDay';
 
 type Est = {
   id: string;
   name: string;
+  type?: string | null;
   public_menu?: boolean;
   phone?: string | null;
+  address?: string | null;
+  logo_url?: string | null;
+  cover_url?: string | null;
+  qr_config?: Record<string, any> | null;
 };
 
 type Prod = {
@@ -27,145 +51,288 @@ type Prod = {
   image_url?: string | null;
 };
 
+type PublicRoom = {
+  id: string;
+  number: string;
+  name: string;
+  description: string;
+  image_url: string;
+  price_per_night: number;
+  capacity: number;
+  floor: string;
+  status: string;
+};
+
+type CatalogEntry = {
+  key: string;
+  kind: 'product' | 'menu';
+  id: string;
+  linkedProductId?: string | null;
+  name: string;
+  description?: string;
+  category: string;
+  section: 'boissons' | 'nourriture';
+  price: number;
+  originalPrice?: number | null;
+  imageUrl?: string | null;
+  isDailyMenu?: boolean;
+  isWeekendPromo?: boolean;
+  soldOut?: boolean;
+};
+
+const DRINK_KEYWORDS = [
+  'boisson',
+  'bière',
+  'biere',
+  'bierre',
+  'soft',
+  'jus',
+  'eau',
+  'vin',
+  'cocktail',
+  'alcool',
+  'soda',
+  'coca',
+  'café',
+  'cafe',
+  'thé',
+  'the',
+  'drink',
+  'liqueur',
+  'whisky',
+  'gin',
+  'rhum',
+  'castel',
+  'flag',
+  'bock',
+  'guinness',
+  'sucrerie',
+  'bar',
+  'bouteille',
+  'canette',
+];
+
+function isDrinkNameOrCat(text: string): boolean {
+  const lower = text.toLowerCase();
+  return DRINK_KEYWORDS.some((k) => lower.includes(k));
+}
+
 export default function PublicTableOrder() {
   const { estId: estParam } = useParams<{ estId: string }>();
   const [params] = useSearchParams();
-  const tableNum = (params.get('table') || params.get('t') || '').trim();
+  const initialTable = (params.get('table') || params.get('t') || '').trim();
+  const initialSectionParam = (params.get('section') || '').toLowerCase();
   const kioskMode = params.get('kiosk') === '1' || params.get('kiosk') === 'true';
+
   const [estId, setEstId] = useState<string | null>(null);
-  const [welcome, setWelcome] = useState('Bienvenue — passez votre commande');
+  const [est, setEst] = useState<Est | null>(null);
+  const [welcome, setWelcome] = useState('Commandez directement depuis votre table ou chambre');
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
 
-  const [est, setEst] = useState<Est | null>(null);
   const [products, setProducts] = useState<Prod[]>([]);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [menuCats, setMenuCats] = useState<Record<string, string>>({});
+  const [rooms, setRooms] = useState<PublicRoom[]>([]);
+  const [tablesList, setTablesList] = useState<{ id: string; number: string }[]>([]);
+  const [selectedTableNum, setSelectedTableNum] = useState(initialTable);
+  const [serviceChoice, setServiceChoice] = useState<'table' | 'takeaway' | 'room'>(
+    initialTable ? 'table' : 'table',
+  );
   const [tableId, setTableId] = useState<string | null>(null);
+
   const [cart, setCart] = useState<Record<string, number>>({});
   const [note, setNote] = useState('');
-  const [customerName, setCustomerName] = useState('');
+  const [customerName, setCustomerName] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('gesmak_qr_client') || '{}');
+      return saved.name || '';
+    } catch {
+      return '';
+    }
+  });
+  const [customerPhone, setCustomerPhone] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('gesmak_qr_client') || '{}');
+      return saved.phone || '';
+    } catch {
+      return '';
+    }
+  });
+
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [serviceOpen, setServiceOpen] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState(false);
-  const [showIntro, setShowIntro] = useState(true);
-  const [clientHistory, setClientHistory] = useState<{ id: string; created_at: string; total: number; status: string }[]>([]);
-  const [customerPhone, setCustomerPhone] = useState('');
 
+  const [section, setSection] = useState<'boissons' | 'nourriture' | 'chambres'>(
+    initialSectionParam === 'chambres'
+      ? 'chambres'
+      : initialSectionParam === 'nourriture'
+        ? 'nourriture'
+        : 'boissons',
+  );
+  const [cat, setCat] = useState('Tous');
+
+  // Room booking modal state
+  const [bookingRoom, setBookingRoom] = useState<PublicRoom | null>(null);
+  const [bookingCheckIn, setBookingCheckIn] = useState(new Date().toISOString().slice(0, 10));
+  const [bookingNights, setBookingNights] = useState(1);
+  const [bookingNotes, setBookingNotes] = useState('');
+
+  // Active order & official receipt state
+  const [activeReceipt, setActiveReceipt] = useState<GesmakReceiptData | null>(null);
   const [lastOrderId, setLastOrderId] = useState<string | null>(null);
   const [trackStatus, setTrackStatus] = useState<string>('pending');
-  const [trackItems, setTrackItems] = useState<{ product_name: string; qty: number; unit_price: number }[]>([]);
-  const [trackTotal, setTrackTotal] = useState(0);
-  const [trackCreated, setTrackCreated] = useState<string | null>(null);
-  const [pendingAhead, setPendingAhead] = useState(0);
   const [trackServer, setTrackServer] = useState<string | null>(null);
-  const [cat, setCat] = useState('Tous');
-  const [section, setSection] = useState<'boissons' | 'nourriture'>('boissons');
+  const [savedReceipts, setSavedReceipts] = useState<GesmakReceiptData[]>([]);
+  const [showReceiptsDrawer, setShowReceiptsDrawer] = useState(false);
 
-  
+  // Persist customer identity for fast repeat orders
   useEffect(() => {
-    if (!estId) return;
-    void fetchServiceStatus(estId).then((s) => setServiceOpen(s.status === 'open'));
-    const tmr = window.setInterval(() => {
-      void fetchServiceStatus(estId).then((s) => setServiceOpen(s.status === 'open'));
-    }, 20000);
-    return () => window.clearInterval(tmr);
-  }, [estId]);
+    try {
+      localStorage.setItem(
+        'gesmak_qr_client',
+        JSON.stringify({ name: customerName, phone: customerPhone }),
+      );
+    } catch {
+      // ignore storage quota errors
+    }
+  }, [customerName, customerPhone]);
 
-useEffect(() => {
-    document.title = tableNum
-      ? `Commander · Table ${tableNum}`
-      : 'Commander · GESMAK';
-  }, [tableNum]);
+  useEffect(() => {
+    document.title = selectedTableNum
+      ? `${est?.name || 'Menu'} · Table ${selectedTableNum}`
+      : `${est?.name || 'GESMAK'} · Commande & Chambres`;
+  }, [selectedTableNum, est?.name]);
 
   useEffect(() => {
     if (!kioskMode) return;
     try {
       document.documentElement.requestFullscreen?.();
-    } catch { /* */ }
-    const block = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      e.returnValue = '';
-    };
-    window.addEventListener('beforeunload', block);
-    // wake lock si dispo
-    let wake: any = null;
-    (async () => {
-      try {
-        wake = await (navigator as any).wakeLock?.request?.('screen');
-      } catch { /* */ }
-    })();
-    return () => {
-      window.removeEventListener('beforeunload', block);
-      try { wake?.release?.(); } catch { /* */ }
-    };
+    } catch {
+      /* ignore */
+    }
   }, [kioskMode]);
 
-
-  // Intro motion « Bienvenue chez … » (Partie 3) — non bloquant longtemps
-  useEffect(() => {
-    if (loading || !est || !showIntro) return;
-    const t = window.setTimeout(() => setShowIntro(false), 2000);
-    return () => window.clearTimeout(t);
-  }, [loading, est, showIntro]);
-
+  // Initial parallel load (target < 1s)
   useEffect(() => {
     if (!estParam) {
-      setError('Lien invalide');
+      setError('Lien QR invalide.');
       setLoading(false);
       return;
     }
     let cancelled = false;
     (async () => {
       setLoading(true);
-      // Résolution par UUID ou slug public (QR propre à l'établissement)
-      let e: any = null;
-      const looksUuid = !!estParam && /^[0-9a-f-]{32,36}$/i.test(estParam);
+      let e: Est | null = null;
+      const looksUuid = /^[0-9a-f-]{32,36}$/i.test(estParam);
       if (looksUuid) {
         const { data } = await supabase
           .from('establishments')
-          .select('id, name, public_menu, phone, slug, qr_config, logo_url, cover_url')
+          .select('id, name, type, public_menu, phone, address, slug, qr_config, logo_url, cover_url')
           .eq('id', estParam)
           .maybeSingle();
-        e = data;
+        e = data as Est | null;
       }
-      if (!e && estParam) {
+      if (!e) {
         const { data } = await supabase
           .from('establishments')
-          .select('id, name, public_menu, phone, slug, qr_config, logo_url, cover_url')
+          .select('id, name, type, public_menu, phone, address, slug, qr_config, logo_url, cover_url')
           .eq('slug', estParam)
           .maybeSingle();
-        e = data;
+        e = data as Est | null;
       }
       if (cancelled) return;
       if (!e) {
-        setError('Établissement introuvable. Vérifiez le QR de cet établissement.');
+        setError('Établissement introuvable. Vérifiez le QR code.');
         setLoading(false);
         return;
       }
       setEstId(e.id);
-      setEst(e as Est);
+      setEst(e);
+      if (e.qr_config?.welcome) setWelcome(String(e.qr_config.welcome));
+      if (e.logo_url || e.cover_url) setLogoUrl(e.logo_url || e.cover_url || null);
+
       try {
-        const cfg = typeof e.qr_config === 'object' && e.qr_config ? e.qr_config : {};
-        if (cfg.welcome) setWelcome(String(cfg.welcome));
-        if (e.logo_url || e.cover_url) setLogoUrl(e.logo_url || e.cover_url);
-      } catch { /* */ }
+        const storedReceipts = JSON.parse(
+          localStorage.getItem(`gesmak_qr_receipts_${e.id}`) || '[]',
+        );
+        if (Array.isArray(storedReceipts)) setSavedReceipts(storedReceipts);
+      } catch {
+        setSavedReceipts([]);
+      }
 
-      const resolvedId = e.id as string;
-      const { data: prods } = await supabase
-        .from('products')
-        .select('id, name, category, price, stock, image_url')
-        .eq('establishment_id', resolvedId)
-        .order('name');
-      setProducts(((prods as Prod[]) || []).filter((p) => Number(p.price) > 0));
-
-      if (tableNum) {
-        const { data: tabs } = await supabase
+      const [prodRes, menuRes, catRes, roomRes, tabRes, svcRes] = await Promise.all([
+        supabase
+          .from('products')
+          .select('id, name, category, price, stock, image_url')
+          .eq('establishment_id', e.id)
+          .order('name'),
+        supabase
+          .from('menu_items')
+          .select('id, establishment_id, category_id, name, description, price, is_available, image_url, linked_product_id, sort_order')
+          .eq('establishment_id', e.id)
+          .eq('is_available', true)
+          .order('sort_order'),
+        supabase
+          .from('menu_categories')
+          .select('id, name')
+          .eq('establishment_id', e.id)
+          .order('sort_order'),
+        supabase
+          .from('hotel_rooms')
+          .select('id, number, floor, status, notes, price_per_night, capacity, hotel_room_types(name, price_per_night, capacity)')
+          .eq('establishment_id', e.id)
+          .order('number'),
+        supabase
           .from('restaurant_tables')
           .select('id, number')
-          .eq('establishment_id', resolvedId);
-        const match = (tabs || []).find(
-          (t: any) => String(t.number).toLowerCase() === tableNum.toLowerCase(),
-        );
+          .eq('establishment_id', e.id)
+          .order('number'),
+        fetchServiceStatus(e.id),
+      ]);
+
+      if (cancelled) return;
+      setServiceOpen(svcRes.status === 'open');
+      setProducts(((prodRes.data as Prod[]) || []).filter((p) => Number(p.price) > 0));
+      setMenuItems((menuRes.data as MenuItem[]) || []);
+
+      const catMap: Record<string, string> = {};
+      for (const c of (catRes.data || []) as { id: string; name: string }[]) {
+        catMap[c.id] = c.name;
+      }
+      setMenuCats(catMap);
+
+      // Prefer live hotel_rooms rows, fallback to qr_config.rooms snapshot
+      const dbRooms = (roomRes.data || []) as any[];
+      const cfgRooms = Array.isArray(e.qr_config?.rooms) ? (e.qr_config!.rooms as any[]) : [];
+      const mergedRooms: PublicRoom[] = (dbRooms.length > 0 ? dbRooms : cfgRooms)
+        .map((r: any) => {
+          const meta = parseRoomMeta(r);
+          return {
+            id: String(r.id),
+            number: String(r.number || ''),
+            name: meta.name || r.name || r.hotel_room_types?.name || `Chambre ${r.number}`,
+            description: meta.description || r.description || '',
+            image_url: meta.image_url || r.image_url || '',
+            price_per_night: Number(
+              r.price_per_night || r.hotel_room_types?.price_per_night || 0,
+            ),
+            capacity: Number(r.capacity || r.hotel_room_types?.capacity || 2),
+            floor: String(r.floor || ''),
+            status: String(r.status || 'available'),
+          };
+        })
+        .filter((r) => r.status === 'available' || r.status === 'reserved');
+      setRooms(mergedRooms);
+
+      const tabs = ((tabRes.data || []) as { id: string; number: string }[]).map((t) => ({
+        id: t.id,
+        number: String(t.number),
+      }));
+      setTablesList(tabs);
+      if (initialTable) {
+        const match = tabs.find((t) => t.number.toLowerCase() === initialTable.toLowerCase());
         if (match) setTableId(match.id);
       }
       setLoading(false);
@@ -173,667 +340,1073 @@ useEffect(() => {
     return () => {
       cancelled = true;
     };
-  }, [estParam, tableNum]);
+  }, [estParam, initialTable]);
 
-  // Suivi statut commande client
+  // Keep tableId synced if user picks table manually
   useEffect(() => {
-    if (!lastOrderId || !done) return;
+    if (!selectedTableNum) {
+      setTableId(null);
+      return;
+    }
+    const match = tablesList.find(
+      (t) => t.number.toLowerCase() === selectedTableNum.trim().toLowerCase(),
+    );
+    setTableId(match?.id || null);
+  }, [selectedTableNum, tablesList]);
+
+  // Live tracking for submitted order & updating in-app receipt
+  useEffect(() => {
+    if (!lastOrderId || !activeReceipt) return;
     let cancelled = false;
     async function pull() {
-      const { data, error } = await supabase.rpc('get_order_public_status', { p_id: lastOrderId });
-      if (cancelled || error || !data) return;
+      const { data, error: rpcErr } = await supabase.rpc('get_order_public_status', {
+        p_id: lastOrderId,
+      });
+      if (cancelled || rpcErr || !data) return;
       const row = data as any;
-      if (row.status) setTrackStatus(String(row.status));
-      if (Array.isArray(row.items) && row.items.length) setTrackItems(row.items);
-      if (row.total != null) setTrackTotal(Number(row.total) || 0);
-      if (row.created_at) setTrackCreated(String(row.created_at));
+      if (row.status) {
+        const nextSt = String(row.status);
+        setTrackStatus(nextSt);
+        setActiveReceipt((prev) => (prev ? { ...prev, status: nextSt } : prev));
+        setSavedReceipts((prev) => {
+          const updated = prev.map((r) =>
+            r.id === lastOrderId ? { ...r, status: nextSt } : r,
+          );
+          if (estId) {
+            try {
+              localStorage.setItem(`gesmak_qr_receipts_${estId}`, JSON.stringify(updated));
+            } catch {
+              /* ignore */
+            }
+          }
+          return updated;
+        });
+      }
       if (row.server_name) setTrackServer(String(row.server_name));
     }
     void pull();
-    const t = setInterval(() => void pull(), 4000);
+    const t = window.setInterval(() => void pull(), 3500);
     return () => {
       cancelled = true;
-      clearInterval(t);
+      window.clearInterval(t);
     };
-  }, [lastOrderId, done]);
+  }, [lastOrderId, activeReceipt?.id, estId]);
 
+  const catalogEntries = useMemo<CatalogEntry[]>(() => {
+    const entries: CatalogEntry[] = [];
+    for (const m of menuItems) {
+      const meta = parseMenuItemMeta(m);
+      const catName = (m.category_id && menuCats[m.category_id]) || 'Cuisine & Plats';
+      const sec: 'boissons' | 'nourriture' = isDrinkNameOrCat(`${catName} ${m.name}`)
+        ? 'boissons'
+        : 'nourriture';
+      const activePrice =
+        meta.isWeekendPromo && meta.promoPrice && meta.promoPrice > 0
+          ? meta.promoPrice
+          : Number(m.price) || 0;
+      entries.push({
+        key: `menu:${m.id}`,
+        kind: 'menu',
+        id: m.id,
+        linkedProductId: m.linked_product_id,
+        name: m.name,
+        description: meta.cleanDescription,
+        category: catName,
+        section: sec,
+        price: activePrice,
+        originalPrice:
+          meta.isWeekendPromo && meta.promoPrice && meta.promoPrice < Number(m.price)
+            ? Number(m.price)
+            : null,
+        imageUrl: m.image_url,
+        isDailyMenu: meta.isDailyMenu,
+        isWeekendPromo: meta.isWeekendPromo,
+        soldOut: !m.is_available,
+      });
+    }
+    for (const p of products) {
+      const catName = p.category || 'Carte';
+      const sec: 'boissons' | 'nourriture' = isDrinkNameOrCat(`${catName} ${p.name}`)
+        ? 'boissons'
+        : 'nourriture';
+      entries.push({
+        key: `prod:${p.id}`,
+        kind: 'product',
+        id: p.id,
+        linkedProductId: p.id,
+        name: p.name,
+        category: catName,
+        section: sec,
+        price: Math.round(Number(p.price) || 0),
+        imageUrl: p.image_url,
+        soldOut: Number(p.stock ?? 0) <= 0,
+      });
+    }
+    return entries;
+  }, [menuItems, menuCats, products]);
 
-  function isDrinkProduct(p: Prod): boolean {
-    const c = `${p.category || ''} ${p.name || ''}`.toLowerCase();
-    const keys = [
-      'boisson', 'bière', 'biere', 'bierre', 'soft', 'jus', 'eau', 'vin', 'cocktail',
-      'alcool', 'soda', 'coca', 'café', 'cafe', 'thé', 'the', 'drink', 'liqueur',
-      'whisky', 'gin', 'rhum', 'castel', 'flag', 'bock', 'guinness', 'sucrerie',
-    ];
-    return keys.some((k) => c.includes(k));
-  }
+  const sectionEntries = useMemo(() => {
+    if (section === 'chambres') return [];
+    const drinks = catalogEntries.filter((e) => e.section === 'boissons');
+    const foods = catalogEntries.filter((e) => e.section === 'nourriture');
+    if (section === 'boissons') return drinks.length ? drinks : catalogEntries;
+    return foods;
+  }, [catalogEntries, section]);
 
-  const sectionProducts = useMemo(() => {
-    const drinks = products.filter(isDrinkProduct);
-    const food = products.filter((p) => !isDrinkProduct(p));
-    // Si aucun mot-clé boisson : tout le catalogue en "Boissons" (maquis typique)
-    if (section === 'boissons') return drinks.length ? drinks : products;
-    // Nourriture : plats détectés, sinon message vide (pas de doublon de tout le stock)
-    return food;
-  }, [products, section]);
+  const dailyMenuEntries = useMemo(
+    () => catalogEntries.filter((e) => e.isDailyMenu && !e.soldOut),
+    [catalogEntries],
+  );
+  const weekendPromoEntries = useMemo(
+    () => catalogEntries.filter((e) => e.isWeekendPromo && !e.soldOut),
+    [catalogEntries],
+  );
 
   const categories = useMemo(() => {
-    const s = new Set(sectionProducts.map((p) => p.category || 'Autres'));
+    const s = new Set(sectionEntries.map((p) => p.category || 'Autres'));
     return ['Tous', ...Array.from(s).sort()];
-  }, [sectionProducts]);
+  }, [sectionEntries]);
 
-  const visible = useMemo(() => {
-    if (cat === 'Tous') return sectionProducts;
-    return sectionProducts.filter((p) => (p.category || 'Autres') === cat);
-  }, [sectionProducts, cat]);
+  const visibleEntries = useMemo(() => {
+    if (cat === 'Tous') return sectionEntries;
+    return sectionEntries.filter((p) => (p.category || 'Autres') === cat);
+  }, [sectionEntries, cat]);
 
   const lines = useMemo(() => {
-    return products
-      .filter((p) => (cart[p.id] || 0) > 0)
-      .map((p) => ({
-        product: p,
-        qty: cart[p.id],
-        total: cart[p.id] * Math.round(Number(p.price) || 0),
+    return catalogEntries
+      .filter((e) => (cart[e.key] || 0) > 0)
+      .map((e) => ({
+        entry: e,
+        qty: cart[e.key],
+        total: cart[e.key] * Math.round(e.price),
       }));
-  }, [products, cart]);
+  }, [catalogEntries, cart]);
 
   const total = lines.reduce((s, l) => s + l.total, 0);
 
-  function bump(id: string, d: number) {
+  function bump(key: string, d: number) {
     setCart((c) => {
-      const n = Math.max(0, (c[id] || 0) + d);
+      const n = Math.max(0, (c[key] || 0) + d);
       const next = { ...c };
-      if (n === 0) delete next[id];
-      else next[id] = n;
+      if (n === 0) delete next[key];
+      else next[key] = n;
       return next;
     });
   }
 
-  async function loadClientHistory(name: string) {
-    if (!estId || name.trim().length < 2) {
-      setClientHistory([]);
-      return;
-    }
-    let q = supabase
-      .from('orders')
-      .select('id, created_at, total, status, customer_name, notes')
-      .eq('establishment_id', estId)
-      .ilike('customer_name', name.trim())
-      .order('created_at', { ascending: false })
-      .limit(10);
-    const { data } = await q;
-    setClientHistory((data as any) || []);
+  function saveReceiptToHistory(receipt: GesmakReceiptData) {
+    setActiveReceipt(receipt);
+    setLastOrderId(receipt.id);
+    setTrackStatus(receipt.status);
+    setSavedReceipts((prev) => {
+      const next = [receipt, ...prev.filter((r) => r.id !== receipt.id)].slice(0, 15);
+      if (estId) {
+        try {
+          localStorage.setItem(`gesmak_qr_receipts_${estId}`, JSON.stringify(next));
+        } catch {
+          /* ignore */
+        }
+      }
+      return next;
+    });
   }
 
-  async function submit() {
+  async function submitCartOrder() {
     if (!estId || lines.length === 0) return;
-    const st = await fetchServiceStatus(estId);
-    if (st.status !== 'open') {
-      setServiceOpen(false);
-      setError('Le service est terminé pour aujourd’hui. Les commandes reprendront à la prochaine ouverture de caisse.');
+    if (!serviceOpen) {
+      setError('Le service est actuellement clôturé. Revenez après l’ouverture de caisse.');
       return;
     }
     const name = customerName.trim();
     if (name.length < 2) {
-      setError('Indiquez votre prénom ou nom (min. 2 caractères) pour que le serveur vous identifie.');
+      setError('Indiquez votre prénom ou nom pour identifier votre commande.');
       return;
     }
     setBusy(true);
     setError(null);
     try {
+      const svcText =
+        serviceChoice === 'takeaway'
+          ? 'À emporter'
+          : selectedTableNum
+            ? `Table ${selectedTableNum}`
+            : 'Sur place';
       const noteParts = [
-        tableNum ? `Table ${tableNum}` : null,
+        svcText,
         `Client: ${name}`,
         customerPhone.trim() ? `Tél: ${customerPhone.trim()}` : null,
         note.trim() || null,
       ].filter(Boolean);
-      const notesCombined = noteParts.join(' · ') || 'Commande QR';
+      const notesCombined = noteParts.join(' · ');
 
       const sessionId = await getActiveSessionId(estId);
-      const orderPayload: Record<string, unknown> = {
-          establishment_id: estId,
-          table_id: tableId,
-          table_number: tableNum || null,
-          status: 'pending',
-          order_type: 'dine_in',
-          total,
-          notes: sessionId ? `${notesCombined} · session:${sessionId}` : notesCombined,
-          source: 'qr_table',
-          customer_name: name,
-        };
-      // P4 — si colonne présente
-      if (sessionId) orderPayload.cash_session_id = sessionId;
+      const baseOrder: Record<string, unknown> = {
+        establishment_id: estId,
+        table_id: serviceChoice === 'table' ? tableId : null,
+        table_number: serviceChoice === 'table' && selectedTableNum ? selectedTableNum : null,
+        status: 'pending',
+        order_type: serviceChoice === 'takeaway' ? 'takeaway' : 'dine_in',
+        total,
+        notes: sessionId ? `${notesCombined} · session:${sessionId}` : notesCombined,
+        source: 'qr_table',
+        customer_name: name,
+      };
+      if (sessionId) baseOrder.cash_session_id = sessionId;
 
-      const { data: order, error: oErr } = await supabase
+      let orderRes = await supabase
         .from('orders')
-        .insert(orderPayload)
-        .select('id')
+        .insert(baseOrder)
+        .select('id, created_at')
         .maybeSingle();
 
-      if (oErr || !order?.id) {
-        // fallback sans colonnes optionnelles
-        const { data: o2, error: e2 } = await supabase
+      if (orderRes.error || !orderRes.data?.id) {
+        // Fallback minimal insert if cash_session_id column missing
+        orderRes = await supabase
           .from('orders')
           .insert({
             establishment_id: estId,
-            table_id: tableId,
-            table_number: tableNum || null,
+            table_id: serviceChoice === 'table' ? tableId : null,
+            table_number: serviceChoice === 'table' && selectedTableNum ? selectedTableNum : null,
             status: 'pending',
-            order_type: 'dine_in',
+            order_type: serviceChoice === 'takeaway' ? 'takeaway' : 'dine_in',
             total,
             notes: notesCombined,
+            source: 'qr_table',
+            customer_name: name,
           })
-          .select('id')
+          .select('id, created_at')
           .maybeSingle();
-        if (e2 || !o2?.id) {
-          throw new Error(
-            e2?.message ||
-              oErr?.message ||
-              'Commande refusée. Activez les commandes QR (politique Supabase) ou réessayez.',
-          );
-        }
-        for (const l of lines) {
-          await supabase.from('order_items').insert({
-            order_id: o2.id,
-            product_id: l.product.id,
-            product_name: l.product.name,
-            qty: l.qty,
-            unit_price: Math.round(Number(l.product.price) || 0),
-            status: 'pending',
-          });
-        }
-        setLastOrderId(o2.id);
-        void triggerOrderPush(o2.id, estId);
-      } else {
-        for (const l of lines) {
-          await supabase.from('order_items').insert({
-            order_id: order.id,
-            product_id: l.product.id,
-            product_name: l.product.name,
-            qty: l.qty,
-            unit_price: Math.round(Number(l.product.price) || 0),
-            status: 'pending',
-          });
-        }
-        setLastOrderId(order.id);
-        void triggerOrderPush(order.id, estId);
+      }
+      if (orderRes.error || !orderRes.data?.id) {
+        throw new Error(orderRes.error?.message || 'Commande refusée, veuillez réessayer.');
       }
 
-      if (tableId) {
-        await supabase.from('restaurant_tables').update({ status: 'occupied' }).eq('id', tableId);
-      }
+      const oid = orderRes.data.id;
+      const itemsBatch = lines.map((l) => ({
+        order_id: oid,
+        product_id: l.entry.linkedProductId || null,
+        menu_item_id: l.entry.kind === 'menu' ? l.entry.id : null,
+        product_name: l.entry.name,
+        qty: l.qty,
+        unit_price: Math.round(l.entry.price),
+        status: 'pending',
+      }));
+      const { error: iErr } = await supabase.from('order_items').insert(itemsBatch);
+      if (iErr) throw new Error(iErr.message);
 
-      setTrackItems(
-        lines.map((l) => ({
-          product_name: l.product.name,
+      if (serviceChoice === 'table' && tableId) {
+        void supabase.from('restaurant_tables').update({ status: 'occupied' }).eq('id', tableId);
+      }
+      void triggerOrderPush(oid, estId);
+
+      const hasDrink = lines.some((l) => l.entry.section === 'boissons');
+      const hasFood = lines.some((l) => l.entry.section === 'nourriture');
+      const kind: GesmakReceiptData['kind'] =
+        hasDrink && hasFood ? 'mixte' : hasFood ? 'nourriture' : 'boisson';
+
+      saveReceiptToHistory({
+        id: oid,
+        kind,
+        establishmentName: est?.name || 'GESMAK',
+        establishmentPhone: est?.phone,
+        establishmentAddress: est?.address,
+        tableOrRoomLabel: svcText,
+        customerName: name,
+        customerPhone: customerPhone.trim() || null,
+        createdAt: orderRes.data.created_at || new Date().toISOString(),
+        status: 'pending',
+        paymentMethod: 'À régler au service / caisse',
+        total,
+        notes: note.trim() || null,
+        items: lines.map((l) => ({
+          name: l.entry.name,
           qty: l.qty,
-          unit_price: Math.round(Number(l.product.price) || 0),
+          unitPrice: Math.round(l.entry.price),
         })),
-      );
-      setTrackTotal(total);
-      setTrackStatus('pending');
-      setTrackCreated(new Date().toISOString());
-      setDone(true);
+      });
       setCart({});
       setNote('');
-      setCustomerName('');
     } catch (e: any) {
-      setError(e?.message || 'Envoi impossible');
+      setError(e?.message || 'Envoi impossible.');
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
   }
 
-  if (!tableNum && !loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-white text-stone-800 p-6 text-center">
-      <button
-        type="button"
-        onClick={() => window.location.reload()}
-        className="fixed top-3 right-3 z-50 inline-flex items-center gap-1.5 rounded-full bg-white/95 border border-orange-200 px-3 py-2 text-xs font-bold text-orange-700 shadow-md"
-      >
-        <RefreshCw size={14} />
-        Actualiser
-      </button>
+  async function submitRoomBooking() {
+    if (!estId || !bookingRoom) return;
+    const name = customerName.trim();
+    if (name.length < 2) {
+      setError('Indiquez votre prénom ou nom pour réserver la chambre.');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const nights = Math.max(1, bookingNights);
+      const nightly = Math.round(bookingRoom.price_per_night || 0);
+      const stayTotal = nights * nightly;
+      const roomLabel = `Ch. ${bookingRoom.number} (${bookingRoom.name})`;
+      const bookingSummary = `[CHAMBRE] ${roomLabel} · Arrivée ${bookingCheckIn} · ${nights} nuit(s) · Client: ${name}${
+        customerPhone.trim() ? ` · Tél: ${customerPhone.trim()}` : ''
+      }${bookingNotes.trim() ? ` · ${bookingNotes.trim()}` : ''}`;
 
-        <div>
-          <Beer className="mx-auto text-amber-400 mb-3" size={36} />
-          <p className="font-bold text-lg">Scannez le QR de votre table</p>
-          <p className="text-sm text-stone-400 mt-2">Le lien doit contenir le numéro de table.</p>
-        </div>
-      </div>
-    );
-  }
+      // 1. Tenter la RPC hotel_reservations si déployée
+      try {
+        await supabase.rpc('create_public_room_booking', {
+          p_establishment_id: estId,
+          p_room_id: bookingRoom.id,
+          p_guest_name: name,
+          p_guest_phone: customerPhone.trim() || '',
+          p_check_in: bookingCheckIn,
+          p_nights: nights,
+          p_notes: bookingNotes.trim() || null,
+        });
+      } catch {
+        // Fallback géré ci-dessous par commande suivie
+      }
 
-  if (!loading && estId && !serviceOpen) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-stone-50 text-center">
-        <p className="text-xl font-bold text-stone-900 mb-2">Service terminé</p>
-        <p className="text-sm text-stone-600 max-w-sm">
-          L&apos;établissement a clôturé le service. Les commandes QR seront de nouveau disponibles
-          après l&apos;ouverture de caisse.
-        </p>
-      </div>
-    );
+      // 2. Toujours créer une commande suivie dans orders pour notification immédiate & reçu officiel
+      const { data: orderData, error: ordErr } = await supabase
+        .from('orders')
+        .insert({
+          establishment_id: estId,
+          table_number: `Ch.${bookingRoom.number}`,
+          status: 'pending',
+          order_type: 'dine_in',
+          total: stayTotal,
+          notes: bookingSummary,
+          source: 'qr_table',
+          customer_name: name,
+        })
+        .select('id, created_at')
+        .maybeSingle();
+
+      if (ordErr || !orderData?.id) {
+        throw new Error(ordErr?.message || 'Réservation impossible pour le moment.');
+      }
+
+      await supabase.from('order_items').insert([
+        {
+          order_id: orderData.id,
+          product_name: `Réservation ${roomLabel} (${nights} nuit${nights > 1 ? 's' : ''})`,
+          qty: nights,
+          unit_price: nightly,
+          status: 'pending',
+          notes: `Arrivée ${bookingCheckIn}`,
+        },
+      ]);
+      void triggerOrderPush(orderData.id, estId);
+
+      saveReceiptToHistory({
+        id: orderData.id,
+        kind: 'chambre',
+        establishmentName: est?.name || 'Hôtel',
+        establishmentPhone: est?.phone,
+        establishmentAddress: est?.address,
+        tableOrRoomLabel: `${roomLabel} · ${bookingCheckIn} (${nights} nuit${nights > 1 ? 's' : ''})`,
+        customerName: name,
+        customerPhone: customerPhone.trim() || null,
+        createdAt: orderData.created_at || new Date().toISOString(),
+        status: 'pending',
+        paymentMethod: 'À régler à la réception',
+        total: stayTotal,
+        notes: bookingNotes.trim() || null,
+        items: [
+          {
+            name: `${roomLabel} · Tarif nuitée`,
+            qty: nights,
+            unitPrice: nightly,
+            note: `Arrivée le ${bookingCheckIn}`,
+          },
+        ],
+      });
+      setBookingRoom(null);
+      setBookingNotes('');
+    } catch (e: any) {
+      setError(e?.message || 'Réservation refusée.');
+    } finally {
+      setBusy(false);
+    }
   }
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-3 px-6"
-        style={{ background: 'linear-gradient(165deg,#fff7ed 0%,#ffffff 45%,#eff6ff 100%)' }}>
-        <div className="relative w-20 h-20 flex items-center justify-center">
-          <span className="absolute inset-0 rounded-full border-2 border-transparent border-t-blue-500 border-r-amber-400 animate-spin" style={{ animationDuration: '1.8s' }} aria-hidden />
-          <img src="/logo-circle.png" alt="GESMAK" className="relative z-[1] w-[78%] h-[78%] rounded-full object-cover" />
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3 px-6 bg-stone-50">
+        <div className="w-16 h-16 rounded-2xl bg-amber-500/15 flex items-center justify-center">
+          <Loader2 className="animate-spin text-amber-600" size={28} />
         </div>
-        <p className="text-sm font-semibold text-stone-600">Préparation du menu…</p>
-        <div className="w-40 h-1.5 rounded-full bg-stone-200 overflow-hidden">
-          <div className="h-full w-2/5 rounded-full bg-gradient-to-r from-blue-500 to-amber-400 animate-pulse" />
-        </div>
+        <p className="text-sm font-semibold text-stone-700">Ouverture du menu…</p>
       </div>
     );
   }
 
   if (error && !est) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white text-stone-700 p-6 text-center">
-        {error}
-      </div>
-    );
-  }
-
-
-  if (showIntro && est) {
-    return (
-      <div
-        className="min-h-screen flex flex-col items-center justify-center px-6 text-center relative overflow-hidden qr-intro"
-        style={{ background: 'linear-gradient(165deg,#0f172a 0%,#1e293b 50%,#0f172a 100%)' }}
-        role="status"
-        aria-label="Bienvenue"
-      >
-        <div className="absolute inset-0 pointer-events-none" aria-hidden
-          style={{ background: 'radial-gradient(ellipse 70% 40% at 50% 20%, rgba(249,115,22,.2), transparent 55%)' }}
-        />
-        <div className="relative z-[1] flex flex-col items-center gap-3 animate-[qrIntroIn_.6s_ease_both]">
-          <div className="relative w-28 h-28 sm:w-32 sm:h-32 flex items-center justify-center">
-            <span className="absolute inset-0 rounded-full border-2 border-transparent border-t-blue-400 border-r-amber-400 animate-spin" style={{ animationDuration: '2.8s' }} aria-hidden />
-            <img
-              src={logoUrl || '/logo-circle.png'}
-              alt=""
-              className="relative z-[1] w-[82%] h-[82%] rounded-full object-cover shadow-2xl ring-2 ring-white/20"
-              onError={(e) => { (e.target as HTMLImageElement).src = '/logo-circle.png'; }}
-            />
-          </div>
-          <p className="text-xs font-semibold uppercase tracking-widest text-amber-400/90">Bienvenue chez</p>
-          <h1 className="text-2xl sm:text-3xl font-black text-white max-w-xs leading-tight">{est.name}</h1>
-          {tableNum ? (
-            <p className="text-sm text-orange-300 font-bold bg-orange-500/15 border border-orange-400/30 rounded-full px-4 py-1.5">
-              Table {tableNum}
-            </p>
-          ) : null}
-          <p className="text-sm text-slate-400 max-w-[260px] mt-1">{welcome}</p>
-          <div className="mt-4 flex gap-4 text-2xl" aria-hidden>
-            <span className="opacity-90">🍺</span>
-            <span className="opacity-90">🍽️</span>
-          </div>
+      <div className="min-h-screen flex items-center justify-center bg-stone-50 text-stone-700 p-6 text-center">
+        <div className="max-w-sm space-y-3">
+          <p className="font-bold text-stone-900">{error}</p>
           <button
             type="button"
-            className="mt-5 text-xs font-semibold text-slate-400 underline underline-offset-2"
-            onClick={() => setShowIntro(false)}
+            onClick={() => window.location.reload()}
+            className="px-4 py-2.5 rounded-xl bg-amber-500 text-stone-950 font-bold text-sm"
           >
-            Passer →
+            Réessayer
           </button>
         </div>
-        <style dangerouslySetInnerHTML={{ __html: "\n          @keyframes qrIntroIn {\n            from { opacity: 0; transform: scale(.88) translateY(12px); }\n            to { opacity: 1; transform: scale(1) translateY(0); }\n          }\n        " }} />
       </div>
     );
   }
 
-  if (done) {
-    const waitMin = estimateWaitMinutes(trackStatus, pendingAhead);
+  if (estId && !serviceOpen) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-stone-50 text-center">
+        <p className="text-xl font-bold text-stone-900 mb-2">Service terminé</p>
+        <p className="text-sm text-stone-600 max-w-sm">
+          {est?.name || 'Cet établissement'} a clôturé le service pour aujourd’hui. Revenez dès l’ouverture de caisse.
+        </p>
+      </div>
+    );
+  }
+
+  // Vue Reçu & Suivi Client en direct (avec impression + historique + autre commande)
+  if (activeReceipt) {
+    const waitMin = estimateWaitMinutes(trackStatus, 0);
     const steps = ['pending', 'preparing', 'ready', 'served'] as const;
     const stepIdx = Math.max(0, steps.indexOf(trackStatus as any));
     return (
-      <div className="min-h-screen bg-white text-stone-900 px-4 py-6 pb-24">
-        <div className="max-w-lg mx-auto space-y-4">
-          <div className="text-center space-y-3 gesmak-pop">
-            <div className="relative mx-auto w-20 h-20 flex items-center justify-center">
-              <span className="absolute inset-0 rounded-full bg-emerald-400/20 animate-ping" aria-hidden />
-              <CheckCircle2 className="relative z-[1] text-emerald-500 drop-shadow-md" size={52} />
+      <div className="gesmak-receipt-print-root min-h-screen bg-stone-50 text-stone-900 px-4 py-5 pb-24 print:bg-white print:p-0">
+        <div className="max-w-md mx-auto space-y-4">
+          <div className="no-print text-center space-y-1.5">
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-emerald-100 text-emerald-700">
+              <CheckCircle2 size={32} />
             </div>
-            {logoUrl ? (
-              <img src={logoUrl} alt="" className="w-12 h-12 rounded-full object-cover mx-auto ring-2 ring-emerald-300" />
-            ) : (
-              <img src="/logo-circle.png" alt="" className="w-12 h-12 rounded-full object-cover mx-auto opacity-90" />
-            )}
-            <h1 className="text-xl font-black text-stone-900">Commande reçue !</h1>
-            <p className="text-stone-500 text-sm">
-              {tableNum ? `Table ${tableNum}` : 'Votre commande'} · <span className="font-semibold text-stone-700">{est?.name}</span>
+            <h1 className="text-xl font-extrabold text-stone-900">
+              {activeReceipt.kind === 'chambre' ? 'Réservation enregistrée' : 'Commande envoyée'}
+            </h1>
+            <p className="text-xs text-stone-600">
+              {ORDER_STATUS_CLIENT[trackStatus] || 'En cours de traitement'}
+              {activeReceipt.kind !== 'chambre' && trackStatus !== 'served' ? ` · ~${waitMin} min` : ''}
+              {trackServer ? ` · Agent : ${trackServer}` : ''}
             </p>
-            <p className="text-xs text-emerald-600 font-medium">Le personnel a été notifié</p>
           </div>
 
-          {trackServer && (
-            <div className="rounded-2xl border border-sky-500/30 bg-sky-500/10 p-3 text-center">
-              <p className="text-xs text-sky-200/90">Votre serveur / serveuse</p>
-              <p className="text-lg font-bold text-stone-100 mt-1">👤 {trackServer}</p>
+          {activeReceipt.kind !== 'chambre' && (
+            <div className="no-print flex justify-between gap-1.5 px-1">
+              {steps.map((s, i) => (
+                <div key={s} className="flex-1 text-center">
+                  <div
+                    className={`h-1.5 rounded-full mb-1 ${
+                      i <= stepIdx ? 'bg-amber-500' : 'bg-stone-200'
+                    }`}
+                  />
+                  <p className="text-[10px] font-medium text-stone-600">
+                    {s === 'pending' ? 'Reçue' : s === 'preparing' ? 'Prépa' : s === 'ready' ? 'Prête' : 'Livrée'}
+                  </p>
+                </div>
+              ))}
             </div>
           )}
 
-          <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 text-center">
-            <p className="text-xs text-orange-800 uppercase tracking-wide">Délai estimé</p>
-            <p className="text-4xl font-black text-amber-300 my-1">
-              {trackStatus === 'served' ? '0' : `~${waitMin}`}
-              <span className="text-lg font-bold"> min</span>
-            </p>
-            <p className="text-sm font-semibold text-stone-100">
-              {ORDER_STATUS_CLIENT[trackStatus] || trackStatus}
-            </p>
-          </div>
+          {/* Reçu officiel dans l'App (imprimable) */}
+          <ReceiptSheet receipt={activeReceipt} />
 
-          <div className="flex justify-between gap-1">
-            {steps.map((s, i) => (
-              <div key={s} className="flex-1 text-center">
-                <div
-                  className={`h-2 rounded-full mb-1 ${
-                    i <= stepIdx ? 'bg-amber-500' : 'bg-stone-800'
-                  }`}
-                />
-                <p className="text-[9px] text-stone-500 leading-tight">
-                  {s === 'pending' ? 'Reçue' : s === 'preparing' ? 'Prep.' : s === 'ready' ? 'Prête' : 'Servie'}
-                </p>
-              </div>
-            ))}
-          </div>
-
-          <div className="rounded-2xl border border-stone-800 bg-stone-900/80 p-4 space-y-2">
-            <p className="text-xs text-stone-500 uppercase font-semibold">Votre panier</p>
-            {trackItems.map((it, i) => (
-              <div key={i} className="flex justify-between gap-2 text-sm">
-                <span className="text-stone-200">
-                  <span className="inline-flex items-center justify-center min-w-[1.5rem] h-6 rounded-lg bg-amber-500/20 text-amber-300 font-bold text-xs mr-1">
-                    {it.qty}
-                  </span>
-                  {it.product_name}
-                </span>
-                <span className="font-mono text-amber-300/90 shrink-0">
-                  {formatFCFA(it.qty * Number(it.unit_price || 0))}
-                </span>
-              </div>
-            ))}
-            <div className="border-t border-stone-700 pt-2 flex justify-between font-bold">
-              <span>Total</span>
-              <span className="text-amber-300">{formatFCFA(trackTotal)}</span>
-            </div>
-          </div>
-
-          {(customerName.trim() || trackServer) && (
-            <p className="text-center text-sm text-stone-300">
-              {customerName.trim() ? (
-                <>Client : <strong className="text-amber-300">{customerName.trim()}</strong></>
-              ) : null}
-              {customerName.trim() && trackServer ? ' · ' : null}
-              {trackServer ? (
-                <>Serveur : <strong className="text-emerald-300">{trackServer}</strong></>
-              ) : null}
-            </p>
-          )}
-          <p className="text-center text-xs text-stone-500">
-            Le statut se met à jour automatiquement. Paiement au serveur.
-          </p>
-
-          {trackStatus === 'served' || !kioskMode ? (
+          <div className="no-print grid grid-cols-2 gap-2">
             <button
               type="button"
-              className="w-full min-h-[52px] rounded-2xl bg-amber-500 text-stone-950 font-bold text-lg"
-              onClick={() => {
-                setDone(false);
-                setLastOrderId(null);
-              }}
+              onClick={triggerReceiptPrint}
+              className="min-h-[48px] rounded-xl border border-stone-300 bg-white text-stone-900 font-bold text-sm flex items-center justify-center gap-2 hover:bg-stone-100"
             >
-              + Nouvelle commande
+              <Printer size={17} /> Imprimer reçu
             </button>
-          ) : null}
+            <button
+              type="button"
+              onClick={async () => {
+                const txt = formatReceiptText(activeReceipt);
+                try {
+                  if (navigator.share) await navigator.share({ title: `Reçu ${est?.name}`, text: txt });
+                  else await navigator.clipboard.writeText(txt);
+                } catch {
+                  /* ignore */
+                }
+              }}
+              className="min-h-[48px] rounded-xl border border-stone-300 bg-white text-stone-900 font-bold text-sm flex items-center justify-center gap-2 hover:bg-stone-100"
+            >
+              <Receipt size={17} /> Partager
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              setActiveReceipt(null);
+              setLastOrderId(null);
+            }}
+            className="no-print w-full min-h-[52px] rounded-2xl bg-amber-500 hover:bg-amber-600 text-stone-950 font-extrabold text-base shadow-md"
+          >
+            + Passer une autre commande
+          </button>
         </div>
       </div>
     );
   }
 
+  const cartCount = lines.reduce((s, l) => s + l.qty, 0);
+
   return (
-    <div className="min-h-screen text-stone-900 pb-40 relative overflow-x-hidden overflow-y-auto qr-order-page bg-white">
-      <style dangerouslySetInnerHTML={{ __html: "\n        .qr-order-page {\n          background: #ffffff !important;\n        }\n        .qr-order-page::before {\n          content: '';\n          position: fixed;\n          inset: 0;\n          pointer-events: none;\n          z-index: 0;\n          background:\n            radial-gradient(circle at 15% 10%, rgba(251,146,60,0.18), transparent 42%),\n            radial-gradient(circle at 85% 5%, rgba(250,204,21,0.2), transparent 40%),\n            radial-gradient(circle at 50% 90%, rgba(249,115,22,0.12), transparent 45%),\n            #ffffff;\n          animation: bgShift 10s ease-in-out infinite alternate;\n        }\n        @keyframes bgShift {\n          0% { filter: hue-rotate(0deg); }\n          100% { filter: hue-rotate(12deg); }\n        }\n        @keyframes floaty {\n          0%,100% { transform: translateY(0) rotate(0deg); }\n          50% { transform: translateY(-12px) rotate(6deg); }\n        }\n        @keyframes drift {\n          0% { transform: translate(0,0) scale(1); }\n          50% { transform: translate(24px,-28px) scale(1.08); }\n          100% { transform: translate(0,0) scale(1); }\n        }\n        @keyframes bubbleUp {\n          0% { transform: translateY(110vh) scale(0.3); opacity: 0; }\n          15% { opacity: 0.55; }\n          85% { opacity: 0.4; }\n          100% { transform: translateY(-15vh) scale(1.1); opacity: 0; }\n        }\n        @keyframes shimmer {\n          0% { background-position: 0% 50%; }\n          100% { background-position: 200% 50%; }\n        }\n        @keyframes popin {\n          from { opacity: 0; transform: translateY(16px) scale(0.92); }\n          to { opacity: 1; transform: translateY(0) scale(1); }\n        }\n        @keyframes neonPulse {\n          0%,100% { box-shadow: 0 0 0 0 rgba(249,115,22,0.55), 0 8px 28px rgba(249,115,22,0.45); }\n          50% { box-shadow: 0 0 0 10px rgba(249,115,22,0), 0 12px 36px rgba(234,88,12,0.55); }\n        }\n        @keyframes cardShine {\n          0% { background-position: -120% 0; }\n          100% { background-position: 220% 0; }\n        }\n        .gesmak-float { animation: floaty 3s ease-in-out infinite; }\n        .gesmak-pop { animation: popin 0.55s cubic-bezier(0.22,1,0.36,1) both; }\n        .gesmak-shimmer {\n          background: linear-gradient(105deg, #ea580c, #f59e0b, #fbbf24, #f97316, #ea580c);\n          background-size: 280% 100%;\n          animation: shimmer 2.2s linear infinite;\n          color: #fff !important;\n        }\n        .qr-orb {\n          position: absolute;\n          border-radius: 50%;\n          pointer-events: none;\n          z-index: 0;\n          animation: drift 11s ease-in-out infinite;\n          filter: blur(0.5px);\n        }\n        .qr-bubble {\n          position: absolute;\n          border-radius: 50%;\n          pointer-events: none;\n          z-index: 0;\n          background: radial-gradient(circle at 30% 28%, #fff, rgba(251,191,36,0.55));\n          animation: bubbleUp linear infinite;\n          box-shadow: 0 0 12px rgba(251,146,60,0.35);\n        }\n        .qr-send-btn {\n          background: linear-gradient(90deg, #ea580c, #f59e0b, #fb923c, #ea580c) !important;\n          background-size: 250% 100% !important;\n          animation: shimmer 2s linear infinite, neonPulse 1.8s ease-in-out infinite !important;\n          color: #fff !important;\n          font-weight: 900 !important;\n          letter-spacing: 0.02em;\n          border: none !important;\n        }\n        .qr-send-btn:disabled {\n          animation: none !important;\n          background: #fdba74 !important;\n          color: #fff !important;\n          opacity: 0.85 !important;\n        }\n        .qr-product-card {\n          background: #fff;\n          border: 2px solid #ffedd5;\n          box-shadow: 0 10px 28px rgba(251,146,60,0.12);\n          transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;\n        }\n        .qr-product-card:active { transform: scale(0.97); }\n        .qr-product-card.is-in-cart {\n          border-color: #f97316;\n          box-shadow: 0 0 0 3px rgba(249,115,22,0.25), 0 12px 32px rgba(249,115,22,0.2);\n        }\n        .qr-content { position: relative; z-index: 1; }\n      " }} />
-
-      {/* Décors animés */}
-      <div className="qr-orb w-72 h-72 bg-orange-400/30 -top-16 -right-20" style={{ animationDuration: '14s' }} />
-      <div className="qr-orb w-56 h-56 bg-yellow-300/35 top-1/3 -left-16" style={{ animationDuration: '18s', animationDelay: '-3s' }} />
-      <div className="qr-orb w-40 h-40 bg-rose-300/25 bottom-24 right-8" style={{ animationDuration: '11s', animationDelay: '-6s' }} />
-      <div className="qr-bubble w-8 h-8 left-[12%]" style={{ animationDuration: '14s', animationDelay: '0s' }} />
-      <div className="qr-bubble w-5 h-5 left-[45%]" style={{ animationDuration: '11s', animationDelay: '2s' }} />
-      <div className="qr-bubble w-10 h-10 left-[72%]" style={{ animationDuration: '16s', animationDelay: '4s' }} />
-      <div className="qr-bubble w-6 h-6 left-[28%]" style={{ animationDuration: '13s', animationDelay: '7s' }} />
-      <div className="qr-bubble w-4 h-4 left-[88%]" style={{ animationDuration: '10s', animationDelay: '1s' }} />
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-white/50 to-transparent" />
-
-      <header className="sticky top-0 z-20 border-b border-orange-100 bg-white px-4 py-3 shadow-md shadow-orange-100/50">
-        <div className="max-w-lg mx-auto flex items-center gap-3">
-          {logoUrl ? (
-            <img src={logoUrl} alt="" className="w-12 h-12 rounded-2xl object-cover ring-2 ring-orange-300 shadow-md gesmak-float" />
-          ) : (
-            <div className="gesmak-float rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 p-2.5 shadow-lg shadow-orange-300/60">
-              <Beer className="text-white" size={22} />
+    <div className="min-h-screen bg-stone-50 text-stone-900 pb-36">
+      {/* Compact Sticky Header */}
+      <header className="sticky top-0 z-20 border-b border-stone-200 bg-white/95 backdrop-blur px-4 py-2.5">
+        <div className="max-w-lg mx-auto flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            {logoUrl ? (
+              <img
+                src={logoUrl}
+                alt={est?.name || 'Logo'}
+                referrerPolicy="no-referrer"
+                className="w-10 h-10 rounded-xl object-cover shrink-0 border border-stone-200"
+              />
+            ) : (
+              <div className="w-10 h-10 rounded-xl bg-amber-500 text-white font-black flex items-center justify-center shrink-0">
+                {(est?.name || 'G').slice(0, 1).toUpperCase()}
+              </div>
+            )}
+            <div className="min-w-0">
+              <h1 className="font-extrabold text-base truncate text-stone-900">{est?.name || 'Menu'}</h1>
+              <p className="text-xs text-stone-500 truncate">
+                {serviceChoice === 'takeaway'
+                  ? 'À emporter'
+                  : selectedTableNum
+                    ? `Table ${selectedTableNum}`
+                    : 'Sur place'}{' '}
+                · Commande rapide
+              </p>
             </div>
-          )}
-          <div className="min-w-0 flex-1">
-            <h1 className="font-black truncate text-lg tracking-tight text-stone-900">{est?.name || 'Menu'}</h1>
-            <p className="text-xs text-orange-700 font-semibold">
-              {tableNum ? `Table ${tableNum}` : 'Commande'} · scan &amp; commandez
-            </p>
           </div>
-          <img src="/logo-circle.png" alt="GESMAK" className="w-9 h-9 rounded-full object-cover opacity-90" title="Propulsé par GESMAK" />
+          <div className="flex items-center gap-1.5 shrink-0">
+            {savedReceipts.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowReceiptsDrawer((v) => !v)}
+                className="min-h-[40px] px-2.5 rounded-xl border border-stone-200 bg-stone-100 text-stone-800 text-xs font-bold inline-flex items-center gap-1"
+              >
+                <Receipt size={14} /> Reçus ({savedReceipts.length})
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              aria-label="Actualiser"
+              className="min-h-[40px] min-w-[40px] rounded-xl border border-stone-200 bg-white text-stone-700 inline-flex items-center justify-center"
+            >
+              <RefreshCw size={15} />
+            </button>
+          </div>
         </div>
       </header>
 
-      <div className="max-w-lg mx-auto px-3 pt-3 space-y-3 qr-content">
-        {!tableNum && (
-          <p className="text-xs text-orange-800 bg-amber-500/10 border border-amber-500/30 rounded-xl px-3 py-2 gesmak-pop">
-            Astuce : le QR de table contient le numéro (ex. table=5).
-          </p>
-        )}
+      <div className="max-w-lg mx-auto px-3 pt-3 space-y-3">
         {error && (
-          <p className="text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-xl px-3 py-2">
+          <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-800">
             {error}
-          </p>
-        )}
-
-        {/* Nom client EN HAUT */}
-        <div className="rounded-3xl border-2 border-orange-200 bg-white p-4 space-y-2.5 gesmak-pop shadow-xl shadow-orange-200/40 shadow-lg shadow-amber-950/20">
-          <label className="block text-xs font-bold uppercase tracking-wide text-orange-800">
-            Comment vous appeler ?
-          </label>
-          <input
-            className="w-full rounded-xl bg-white border border-orange-200 px-3 py-3 text-base font-semibold text-stone-900 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-amber-400"
-            placeholder="Votre prénom"
-            value={customerName}
-            onChange={(e) => setCustomerName(e.target.value)}
-            onBlur={() => void loadClientHistory(customerName)}
-            maxLength={60}
-            autoComplete="name"
-          />
-          <input
-            className="w-full rounded-xl bg-white/90 border border-orange-100 px-3 py-2 text-sm text-stone-800 placeholder:text-stone-400 focus:outline-none focus:ring-1 focus:ring-amber-500/50"
-            placeholder="Téléphone (optionnel)"
-            value={customerPhone}
-            onChange={(e) => setCustomerPhone(e.target.value)}
-            inputMode="tel"
-          />
-        </div>
-
-        {(welcome) && (
-          <p className="text-center text-sm text-stone-600 italic px-2">{welcome}</p>
-        )}
-
-        {/* Deux côtés : Boissons | Nourriture */}
-        <div className="grid grid-cols-2 gap-2 p-1 rounded-2xl bg-white/90 border border-orange-200 shadow-md">
-          <button
-            type="button"
-            onClick={() => { setSection('boissons'); setCat('Tous'); }}
-            className={`flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition ${
-              section === 'boissons'
-                ? 'gesmak-shimmer text-stone-950 shadow-md'
-                : 'text-stone-500 hover:text-stone-800'
-            }`}
-          >
-            <Beer size={18} /> Boissons
-          </button>
-          <button
-            type="button"
-            onClick={() => { setSection('nourriture'); setCat('Tous'); }}
-            className={`flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition ${
-              section === 'nourriture'
-                ? 'bg-emerald-500 text-stone-950 shadow-md'
-                : 'text-stone-500 hover:text-stone-800'
-            }`}
-          >
-            <UtensilsCrossed size={18} /> Nourriture
-          </button>
-        </div>
-
-        <div className="flex gap-1 overflow-x-auto pb-1">
-          {categories.map((c) => (
-            <button
-              key={c}
-              type="button"
-              onClick={() => setCat(c)}
-              className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition ${
-                cat === c ? 'bg-amber-500 text-stone-950 scale-105' : 'bg-white/80 text-stone-600 border border-orange-100'
-              }`}
-            >
-              {c}
-            </button>
-          ))}
-        </div>
-
-        <p className="text-center text-xs text-stone-600 flex items-center justify-center gap-1">
-          <Sparkles size={12} className="text-amber-400" />
-          Touchez l&apos;image pour ajouter · {section === 'boissons' ? 'boissons' : 'plats & grillades'}
-        </p>
-        {visible.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-stone-700 p-8 text-center text-stone-500 text-sm">
-            Aucun article dans « {section === 'boissons' ? 'Boissons' : 'Nourriture'} » pour l&apos;instant.
           </div>
-        ) : null}
-        <div className="grid grid-cols-2 gap-3">
-          {visible.map((p) => {
-            const q = cart[p.id] || 0;
-            const soldOut = Number((p as any).stock ?? (p as any).quantity ?? 0) <= 0;
-            return (
-              <button
-                key={p.id}
-                type="button"
-                disabled={soldOut}
-                onClick={() => !soldOut && bump(p.id, 1)}
-                className={`relative text-left rounded-3xl overflow-hidden gesmak-pop qr-product-card ${
-                  q > 0 ? 'is-in-cart' : ''
-                } ${soldOut ? 'opacity-45 grayscale' : ''}`}
-              >
-                <div className="aspect-square w-full bg-gradient-to-b from-orange-50 to-white flex items-center justify-center p-3">
-                  <ProductThumb
-                    name={p.name}
-                    category={p.category}
-                    imageUrl={p.image_url}
-                    size={120}
-                  />
-                </div>
-                {q > 0 && (
-                  <span className="absolute top-2 right-2 min-w-[28px] h-7 px-1.5 rounded-full bg-amber-500 text-stone-950 text-sm font-black flex items-center justify-center shadow-lg">
-                    {q}
-                  </span>
-                )}
-                {soldOut && (
-                  <span className="absolute inset-0 flex items-center justify-center bg-black/50 text-white text-xs font-bold">
-                    Épuisé
-                  </span>
-                )}
-                <div className="px-2 py-2 border-t border-stone-800/80">
-                  <p className="text-lg font-black text-orange-600 leading-none">
-                    {formatFCFA(Number(p.price) || 0)}
-                  </p>
-                  {/* Nom en petit pour ceux qui lisent — l’image reste principale */}
-                  <p className="text-[10px] text-stone-600 truncate mt-1 leading-tight">{p.name}</p>
-                </div>
-                {!soldOut && (
-                  <div
-                    className="flex items-center justify-between gap-1 px-2 pb-2"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <span
-                      role="button"
-                      className="flex-1 min-h-[40px] rounded-xl bg-orange-50 text-stone-700 flex items-center justify-center"
-                      onClick={() => bump(p.id, -1)}
-                    >
-                      <Minus size={18} />
-                    </span>
-                    <span
-                      role="button"
-                      className="flex-1 min-h-[40px] rounded-xl bg-amber-500 text-stone-950 flex items-center justify-center font-bold"
-                      onClick={() => bump(p.id, 1)}
-                    >
-                      <Plus size={18} />
-                    </span>
-                  </div>
-                )}
-              </button>
-            );
-          })}
-        </div>
+        )}
 
-        {clientHistory.length > 0 && (
-          <div className="rounded-xl border border-stone-700 bg-stone-900/80 p-3 text-xs space-y-1 gesmak-pop">
-            <p className="text-stone-400 font-medium">Commandes précédentes (même nom)</p>
-            {clientHistory.map((h) => (
-              <div key={h.id} className="flex justify-between text-stone-300">
-                <span>{new Date(h.created_at).toLocaleString('fr-FR')}</span>
-                <span>
-                  {Math.round(Number(h.total) || 0)} F · {h.status}
+        {/* Historique des reçus client sauvegardés */}
+        {showReceiptsDrawer && savedReceipts.length > 0 && (
+          <div className="rounded-2xl border border-stone-200 bg-white p-3 space-y-2 shadow-sm">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-bold uppercase tracking-wider text-stone-600">
+                Mes reçus récents
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowReceiptsDrawer(false)}
+                className="text-xs text-stone-500 font-semibold"
+              >
+                Fermer
+              </button>
+            </div>
+            {savedReceipts.map((r) => (
+              <button
+                key={r.id}
+                type="button"
+                onClick={() => {
+                  setActiveReceipt(r);
+                  setShowReceiptsDrawer(false);
+                }}
+                className="w-full text-left flex items-center justify-between rounded-xl border border-stone-200 px-3 py-2 hover:bg-stone-50"
+              >
+                <div>
+                  <p className="text-xs font-bold text-stone-900">
+                    Reçu #{r.id.slice(0, 6).toUpperCase()} · {r.tableOrRoomLabel || r.kind}
+                  </p>
+                  <p className="text-[11px] text-stone-500">
+                    {new Date(r.createdAt).toLocaleString('fr-FR')}
+                  </p>
+                </div>
+                <span className="text-xs font-extrabold text-amber-600 tabular-nums">
+                  {formatFCFA(r.total)}
                 </span>
-              </div>
+              </button>
             ))}
           </div>
         )}
-        <label className="block text-xs text-stone-400">
-          Note (optionnel)
-          <input
-            className="mt-1 w-full rounded-xl border border-stone-700 bg-stone-900 px-3 py-2 text-sm text-stone-100"
-            placeholder="Sans glaçon, etc."
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-          />
-        </label>
+
+        {/* Identité client + Table / Service (enregistrée automatiquement) */}
+        <div className="rounded-2xl border border-stone-200 bg-white p-3 space-y-2 shadow-sm">
+          <p className="text-xs text-stone-500">{welcome}</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <input
+              className="w-full rounded-xl border border-stone-200 bg-stone-50 px-3 py-2.5 text-sm font-semibold text-stone-900 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-amber-400"
+              placeholder="Votre prénom / nom *"
+              value={customerName}
+              onChange={(e) => setCustomerName(e.target.value)}
+              maxLength={60}
+              autoComplete="name"
+            />
+            <input
+              className="w-full rounded-xl border border-stone-200 bg-stone-50 px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-amber-400"
+              placeholder="Téléphone (optionnel)"
+              value={customerPhone}
+              onChange={(e) => setCustomerPhone(e.target.value)}
+              inputMode="tel"
+            />
+          </div>
+          {!initialTable && section !== 'chambres' && (
+            <div className="flex flex-wrap items-center gap-2 pt-0.5">
+              <button
+                type="button"
+                onClick={() => setServiceChoice('table')}
+                className={`min-h-[38px] px-3 rounded-xl text-xs font-bold border ${
+                  serviceChoice === 'table'
+                    ? 'border-amber-500 bg-amber-50 text-amber-800'
+                    : 'border-stone-200 bg-white text-stone-600'
+                }`}
+              >
+                Sur place / Table
+              </button>
+              <button
+                type="button"
+                onClick={() => setServiceChoice('takeaway')}
+                className={`min-h-[38px] px-3 rounded-xl text-xs font-bold border ${
+                  serviceChoice === 'takeaway'
+                    ? 'border-amber-500 bg-amber-50 text-amber-800'
+                    : 'border-stone-200 bg-white text-stone-600'
+                }`}
+              >
+                À emporter
+              </button>
+              {serviceChoice === 'table' && (
+                <input
+                  className="flex-1 min-w-[110px] rounded-xl border border-stone-200 bg-stone-50 px-2.5 py-2 text-xs font-semibold text-stone-900"
+                  placeholder="N° Table (ex. 5)"
+                  value={selectedTableNum}
+                  onChange={(e) => setSelectedTableNum(e.target.value)}
+                />
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* 3 Sections : Boissons | Nourriture | Chambres */}
+        <div className="grid grid-cols-3 gap-1.5 p-1 rounded-2xl bg-white border border-stone-200 shadow-sm">
+          <button
+            type="button"
+            onClick={() => {
+              setSection('boissons');
+              setCat('Tous');
+            }}
+            className={`min-h-[44px] flex items-center justify-center gap-1.5 rounded-xl text-xs font-extrabold transition ${
+              section === 'boissons'
+                ? 'bg-amber-500 text-stone-950 shadow-sm'
+                : 'text-stone-600 hover:bg-stone-50'
+            }`}
+          >
+            <Beer size={16} /> Boissons
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setSection('nourriture');
+              setCat('Tous');
+            }}
+            className={`min-h-[44px] flex items-center justify-center gap-1.5 rounded-xl text-xs font-extrabold transition ${
+              section === 'nourriture'
+                ? 'bg-emerald-600 text-white shadow-sm'
+                : 'text-stone-600 hover:bg-stone-50'
+            }`}
+          >
+            <UtensilsCrossed size={16} /> Nourriture
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setSection('chambres');
+              setCat('Tous');
+            }}
+            className={`min-h-[44px] flex items-center justify-center gap-1.5 rounded-xl text-xs font-extrabold transition ${
+              section === 'chambres'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'text-stone-600 hover:bg-stone-50'
+            }`}
+          >
+            <BedDouble size={16} /> Chambres
+          </button>
+        </div>
+
+        {/* SECTION NOURRITURE : Menu du jour & Promos Week-end mis en avant */}
+        {section === 'nourriture' && (dailyMenuEntries.length > 0 || weekendPromoEntries.length > 0) && (
+          <div className="space-y-2.5">
+            {dailyMenuEntries.length > 0 && (
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-3 space-y-2">
+                <p className="text-xs font-extrabold uppercase tracking-wide text-emerald-800 flex items-center gap-1.5">
+                  <Sparkles size={14} /> Menu du jour
+                </p>
+                <div className="space-y-1.5">
+                  {dailyMenuEntries.map((item) => {
+                    const q = cart[item.key] || 0;
+                    return (
+                      <div
+                        key={`daily-${item.key}`}
+                        className="flex items-center justify-between gap-2 rounded-xl bg-white border border-emerald-100 px-3 py-2"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-bold text-stone-900 truncate">{item.name}</p>
+                          {item.description && (
+                            <p className="text-[11px] text-stone-500 line-clamp-1">{item.description}</p>
+                          )}
+                          <p className="text-xs font-extrabold text-emerald-700 tabular-nums">
+                            {formatFCFA(item.price)}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => bump(item.key, 1)}
+                          className="min-h-[40px] px-3 rounded-xl bg-emerald-600 text-white text-xs font-bold shrink-0"
+                        >
+                          {q > 0 ? `+1 (${q})` : '+ Ajouter'}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {weekendPromoEntries.length > 0 && (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-3 space-y-2">
+                <p className="text-xs font-extrabold uppercase tracking-wide text-amber-900 flex items-center gap-1.5">
+                  <Sparkles size={14} /> Offres spéciales Week-end
+                </p>
+                <div className="space-y-1.5">
+                  {weekendPromoEntries.map((item) => {
+                    const q = cart[item.key] || 0;
+                    return (
+                      <div
+                        key={`we-${item.key}`}
+                        className="flex items-center justify-between gap-2 rounded-xl bg-white border border-amber-100 px-3 py-2"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-bold text-stone-900 truncate">{item.name}</p>
+                          <p className="text-xs font-extrabold text-amber-700 tabular-nums">
+                            {formatFCFA(item.price)}
+                            {item.originalPrice ? (
+                              <span className="ml-1.5 line-through font-normal text-stone-400">
+                                {formatFCFA(item.originalPrice)}
+                              </span>
+                            ) : null}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => bump(item.key, 1)}
+                          className="min-h-[40px] px-3 rounded-xl bg-amber-500 text-stone-950 text-xs font-extrabold shrink-0"
+                        >
+                          {q > 0 ? `+1 (${q})` : '+ Profiter'}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* SECTION CHAMBRES D'HÔTEL */}
+        {section === 'chambres' ? (
+          <div className="space-y-3">
+            {rooms.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-stone-300 bg-white p-8 text-center text-stone-500 text-sm">
+                Aucune chambre disponible à la réservation pour le moment.
+              </div>
+            ) : (
+              rooms.map((r) => (
+                <div
+                  key={r.id}
+                  className="rounded-2xl border border-stone-200 bg-white overflow-hidden shadow-sm"
+                >
+                  {r.image_url ? (
+                    <img
+                      src={r.image_url}
+                      alt={`Chambre ${r.number}`}
+                      referrerPolicy="no-referrer"
+                      className="w-full h-44 object-cover bg-stone-200"
+                    />
+                  ) : (
+                    <div className="w-full h-32 bg-gradient-to-br from-indigo-50 via-stone-100 to-amber-50 flex flex-col items-center justify-center text-indigo-800">
+                      <BedDouble size={28} />
+                      <span className="text-xs font-bold mt-1">Chambre {r.number}</span>
+                    </div>
+                  )}
+                  <div className="p-3.5 space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <h3 className="font-extrabold text-base text-stone-900">
+                          Ch. {r.number} · {r.name}
+                        </h3>
+                        <p className="text-xs text-stone-500">
+                          {r.capacity} personne{r.capacity > 1 ? 's' : ''}
+                          {r.floor ? ` · Étage ${r.floor}` : ''} ·{' '}
+                          <span className="text-emerald-700 font-semibold">Disponible</span>
+                        </p>
+                      </div>
+                      <p className="text-base font-black text-indigo-700 tabular-nums shrink-0">
+                        {formatFcfa(r.price_per_night)}
+                        <span className="block text-[10px] font-medium text-stone-500 text-right">
+                          / nuit
+                        </span>
+                      </p>
+                    </div>
+                    {r.description && (
+                      <p className="text-xs text-stone-600 leading-relaxed">{r.description}</p>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBookingRoom(r);
+                        setBookingNights(1);
+                      }}
+                      className="w-full min-h-[46px] rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm"
+                    >
+                      Réserver cette chambre
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        ) : (
+          <>
+            {/* Filtres catégories */}
+            {categories.length > 1 && (
+              <div className="flex gap-1.5 overflow-x-auto pb-1">
+                {categories.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => setCat(c)}
+                    className={`shrink-0 min-h-[36px] px-3 rounded-xl text-xs font-bold transition ${
+                      cat === c
+                        ? 'bg-stone-900 text-white'
+                        : 'bg-white text-stone-600 border border-stone-200'
+                    }`}
+                  >
+                    {c}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {visibleEntries.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-stone-300 bg-white p-8 text-center text-stone-500 text-sm">
+                Aucun article disponible dans « {section === 'boissons' ? 'Boissons' : 'Nourriture'} ».
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2.5">
+                {visibleEntries.map((item) => {
+                  const q = cart[item.key] || 0;
+                  return (
+                    <div
+                      key={item.key}
+                      onClick={() => !item.soldOut && bump(item.key, 1)}
+                      className={`relative rounded-2xl border bg-white overflow-hidden transition cursor-pointer ${
+                        q > 0 ? 'border-amber-500 ring-2 ring-amber-400/30' : 'border-stone-200'
+                      } ${item.soldOut ? 'opacity-50' : ''}`}
+                    >
+                      <div className="aspect-[4/3] w-full bg-stone-100 flex items-center justify-center overflow-hidden">
+                        {item.imageUrl ? (
+                          <img
+                            src={item.imageUrl}
+                            alt={item.name}
+                            referrerPolicy="no-referrer"
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <ProductThumb
+                            name={item.name}
+                            category={item.category}
+                            imageUrl={item.imageUrl}
+                            size={84}
+                          />
+                        )}
+                      </div>
+                      {q > 0 && (
+                        <span className="absolute top-2 right-2 min-w-[26px] h-7 px-1.5 rounded-full bg-amber-500 text-stone-950 text-xs font-black flex items-center justify-center shadow">
+                          {q}
+                        </span>
+                      )}
+                      <div className="p-2.5 space-y-1">
+                        <p className="text-sm font-bold text-stone-900 line-clamp-1">{item.name}</p>
+                        {item.description && (
+                          <p className="text-[11px] text-stone-500 line-clamp-1">{item.description}</p>
+                        )}
+                        <p className="text-sm font-black text-amber-600 tabular-nums">
+                          {formatFCFA(item.price)}
+                          {item.originalPrice ? (
+                            <span className="ml-1 text-[10px] line-through text-stone-400 font-normal">
+                              {formatFCFA(item.originalPrice)}
+                            </span>
+                          ) : null}
+                        </p>
+                      </div>
+                      {!item.soldOut && (
+                        <div
+                          className="flex items-center gap-1 px-2 pb-2"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => bump(item.key, -1)}
+                            aria-label={`Retirer ${item.name}`}
+                            className="flex-1 min-h-[40px] rounded-xl bg-stone-100 text-stone-700 flex items-center justify-center font-bold"
+                          >
+                            <Minus size={16} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => bump(item.key, 1)}
+                            aria-label={`Ajouter ${item.name}`}
+                            className="flex-1 min-h-[40px] rounded-xl bg-amber-500 text-stone-950 flex items-center justify-center font-bold"
+                          >
+                            <Plus size={16} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <label className="block text-xs font-semibold text-stone-600 pt-1">
+              Note pour le service (optionnel)
+              <input
+                className="mt-1 w-full rounded-xl border border-stone-200 bg-white px-3 py-2.5 text-sm text-stone-900"
+                placeholder="Ex. Bien glacée, peu pimenté, livraison rapide…"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+              />
+            </label>
+          </>
+        )}
       </div>
 
-      {lines.length > 0 && (
-        <div className="fixed bottom-0 inset-x-0 z-30 border-t-2 border-orange-200 bg-white p-3 shadow-[0_-8px_30px_rgba(249,115,22,0.15)]">
-          <div className="max-w-lg mx-auto space-y-2">
-            <div className="flex justify-between text-sm items-center">
-              <span className="text-stone-700 font-semibold">{lines.reduce((s, l) => s + l.qty, 0)} article(s)</span>
-              <span className="font-black text-xl text-orange-600">{formatFCFA(total)}</span>
+      {/* Modal confirmation réservation chambre */}
+      {bookingRoom && (
+        <div className="fixed inset-0 z-40 bg-black/60 flex items-end sm:items-center justify-center p-3">
+          <div className="w-full max-w-md rounded-2xl bg-white p-4 space-y-3 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <h2 className="font-extrabold text-base text-stone-900">
+                Réserver Ch. {bookingRoom.number} · {bookingRoom.name}
+              </h2>
+              <button
+                type="button"
+                onClick={() => setBookingRoom(null)}
+                className="text-xs font-bold text-stone-500 px-2 py-1"
+              >
+                Fermer
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="text-xs font-semibold text-stone-600">
+                <span className="flex items-center gap-1 mb-1">
+                  <CalendarDays size={13} /> Date d’arrivée
+                </span>
+                <input
+                  type="date"
+                  className="w-full rounded-xl border border-stone-200 px-2.5 py-2 text-sm text-stone-900"
+                  value={bookingCheckIn}
+                  onChange={(e) => setBookingCheckIn(e.target.value)}
+                />
+              </label>
+              <label className="text-xs font-semibold text-stone-600">
+                <span className="block mb-1">Nombre de nuits</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={60}
+                  className="w-full rounded-xl border border-stone-200 px-2.5 py-2 text-sm text-stone-900"
+                  value={bookingNights}
+                  onChange={(e) => setBookingNights(Math.max(1, Number(e.target.value) || 1))}
+                />
+              </label>
+            </div>
+            <input
+              className="w-full rounded-xl border border-stone-200 px-3 py-2.5 text-sm text-stone-900"
+              placeholder="Demande particulière (heure d’arrivée, lit extra…)"
+              value={bookingNotes}
+              onChange={(e) => setBookingNotes(e.target.value)}
+            />
+            <div className="rounded-xl bg-indigo-50 p-3 flex items-center justify-between">
+              <span className="text-xs font-semibold text-indigo-900">
+                Total séjour ({bookingNights} nuit{bookingNights > 1 ? 's' : ''})
+              </span>
+              <span className="text-lg font-black text-indigo-700 tabular-nums">
+                {formatFcfa(bookingNights * (bookingRoom.price_per_night || 0))}
+              </span>
             </div>
             <button
               type="button"
               disabled={busy || customerName.trim().length < 2}
-              onClick={() => void submit()}
-              className="qr-send-btn w-full min-h-[56px] rounded-2xl text-base flex items-center justify-center gap-2"
+              onClick={() => void submitRoomBooking()}
+              className="w-full min-h-[50px] rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-sm disabled:opacity-50"
             >
-              {busy ? <Loader2 className="animate-spin" size={20} /> : <Send size={20} />}
-              ENVOYER LA COMMANDE
+              {busy ? 'Enregistrement…' : 'Confirmer la réservation & obtenir le reçu'}
             </button>
             {customerName.trim().length < 2 && (
-              <p className="text-[10px] text-center text-amber-400/90">
-                Saisissez votre nom ci-dessus pour envoyer
+              <p className="text-[11px] text-center text-amber-700 font-medium">
+                Saisissez votre nom ci-dessus avant de confirmer.
               </p>
             )}
-            <p className="text-[10px] text-center text-stone-500">
-              Touchez les images · paiement au serveur
-            </p>
           </div>
+        </div>
+      )}
+
+      {/* Barre panier fixe en bas (14% max viewport height) */}
+      {lines.length > 0 && section !== 'chambres' && (
+        <div className="fixed bottom-0 inset-x-0 z-30 border-t border-stone-200 bg-white px-3 py-2.5 shadow-[0_-6px_24px_rgba(0,0,0,0.08)]">
+          <div className="max-w-lg mx-auto flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs text-stone-500 font-semibold">{cartCount} article(s)</p>
+              <p className="text-lg font-black text-amber-600 tabular-nums">{formatFCFA(total)}</p>
+            </div>
+            <button
+              type="button"
+              disabled={busy || customerName.trim().length < 2}
+              onClick={() => void submitCartOrder()}
+              className="flex-1 min-h-[48px] rounded-xl bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-stone-950 font-extrabold text-sm inline-flex items-center justify-center gap-2 px-4"
+            >
+              {busy ? <Loader2 className="animate-spin" size={18} /> : <Send size={17} />}
+              Commander maintenant
+            </button>
+          </div>
+          {customerName.trim().length < 2 && (
+            <p className="text-[10px] text-center text-amber-700 font-medium mt-1">
+              Indiquez votre nom ci-dessus pour valider la commande
+            </p>
+          )}
         </div>
       )}
     </div>

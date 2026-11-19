@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Receipt, Plus, Trash2, ShoppingBag, CheckCircle2, Clock, UtensilsCrossed, X, UserCog, RefreshCw,
-  Search, Wallet, Copy, Printer, Ban, AlertCircle, StickyNote,
+  Search, Wallet, Ban, AlertCircle, StickyNote,
 } from 'lucide-react';
 import { addTicket, type LivePayMethod } from '@/lib/liveDaySales';
 import { supabase } from '@/lib/supabase';
@@ -12,6 +12,7 @@ import { ORDER_STATUS_LABELS, ORDER_TYPE_LABELS } from '@/lib/types';
 import { formatFCFA, formatTime } from '@/lib/format';
 import { Modal, EmptyState, Badge } from '@/components/ui';
 import ProductThumb from '@/components/ProductThumb';
+import { ReceiptPrintModal } from '@/components/ReceiptPrint';
 import {
   loadServerCandidates,
   assignServerToOrder,
@@ -153,7 +154,6 @@ export default function Orders() {
 
   const [detail, setDetail] = useState<OrderRow | null>(null);
   const [receiptOrder, setReceiptOrder] = useState<OrderRow | null>(null);
-  const [copiedReceipt, setCopiedReceipt] = useState(false);
   const [cancelOrder, setCancelOrder] = useState<OrderRow | null>(null);
   const [cancelReason, setCancelReason] = useState('');
   const [cancelBusy, setCancelBusy] = useState(false);
@@ -252,26 +252,38 @@ export default function Orders() {
     }
   }, [estId, dateFilter]);
 
+  const reloadTimerRef = useRef<number | null>(null);
+
   useEffect(() => {
     void load();
   }, [load]);
 
   useEffect(() => {
     if (!estId) return;
+    const scheduleReload = () => {
+      if (reloadTimerRef.current != null) window.clearTimeout(reloadTimerRef.current);
+      reloadTimerRef.current = window.setTimeout(() => {
+        reloadTimerRef.current = null;
+        void load();
+      }, 350);
+    };
     const ch = supabase
       .channel(`orders-live-${estId}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'orders', filter: `establishment_id=eq.${estId}` },
-        () => { void load(); },
+        scheduleReload,
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'order_items' },
-        () => { void load(); },
+        scheduleReload,
       )
       .subscribe();
-    return () => { void supabase.removeChannel(ch); };
+    return () => {
+      if (reloadTimerRef.current != null) window.clearTimeout(reloadTimerRef.current);
+      void supabase.removeChannel(ch);
+    };
   }, [estId, load]);
 
   useEffect(() => {
@@ -356,45 +368,46 @@ export default function Orders() {
     );
   }
 
-  async function createOrder() {
+  async function createOrder(immediatePayMethod?: PayChoice) {
     if (!estId || cart.length === 0) return;
     setBusy(true);
     setModalErr(null);
     try {
       const orderId = appendOrderId;
       if (orderId) {
-        for (const i of cart) {
-          if (i.kind === 'product') {
-            await supabase.from('order_items').insert({
-              order_id: orderId,
-              product_id: i.product.id,
-              product_name: i.product.name,
-              qty: i.qty,
-              quantity: i.qty,
-              unit_price: i.product.price,
-              status: 'pending',
-            });
-          } else {
-            await supabase.from('order_items').insert({
-              order_id: orderId,
-              product_id: i.item.linked_product_id || null,
-              product_name: i.item.name,
-              qty: i.qty,
-              quantity: i.qty,
-              unit_price: linePrice(i),
-              status: 'pending',
-              menu_item_id: i.item.id,
-              selected_options: i.options || [],
-              notes: i.notes || null,
-            });
-          }
+        const batchRows = cart.map((i) =>
+          i.kind === 'product'
+            ? {
+                order_id: orderId,
+                product_id: i.product.id,
+                product_name: i.product.name,
+                qty: i.qty,
+                unit_price: i.product.price,
+                status: 'pending',
+              }
+            : {
+                order_id: orderId,
+                product_id: i.item.linked_product_id || null,
+                product_name: i.item.name,
+                qty: i.qty,
+                unit_price: linePrice(i),
+                status: 'pending',
+                menu_item_id: i.item.id,
+                selected_options: i.options || [],
+                notes: i.notes || null,
+              },
+        );
+        const { error: itemErr } = await supabase.from('order_items').insert(batchRows);
+        if (itemErr) {
+          setModalErr(itemErr.message || 'Ajout articles impossible.');
+          return;
         }
         const { data: items } = await supabase
           .from('order_items')
-          .select('qty, quantity, unit_price')
+          .select('qty, unit_price')
           .eq('order_id', orderId);
-        const total = ((items || []) as Array<{ qty?: number | null; quantity?: number | null; unit_price?: number | null }>)
-          .reduce((s, it) => s + Number(it.qty ?? it.quantity ?? 1) * Number(it.unit_price || 0), 0);
+        const total = ((items || []) as Array<{ qty?: number | null; unit_price?: number | null }>)
+          .reduce((s, it) => s + Number(it.qty ?? 1) * Number(it.unit_price || 0), 0);
         const existing = orders.find((o) => o.id === orderId);
         const mergedNotes = [existing?.notes?.trim(), notes.trim()].filter(Boolean).join(' · ') || null;
         await supabase.from('orders').update({ total, status: 'pending', notes: mergedNotes }).eq('id', orderId);
@@ -402,6 +415,8 @@ export default function Orders() {
       } else {
         const table = tables.find((t) => t.id === tableId);
         const srv = servers.find((s) => s.user_id === selectedServerId);
+        const nowIso = new Date().toISOString();
+        const isInstantPay = Boolean(immediatePayMethod);
         const { data: order, error } = await supabase
           .from('orders')
           .insert({
@@ -409,7 +424,7 @@ export default function Orders() {
             table_id: tableId || null,
             table_number: table ? String(table.number) : null,
             customer_name: customerName.trim() || null,
-            status: 'pending',
+            status: isInstantPay ? 'served' : 'pending',
             order_type: orderType,
             pole_code: selectedPole || null,
             total: cartTotal,
@@ -418,6 +433,7 @@ export default function Orders() {
             created_by: user?.id || null,
             server_id: srv?.user_id || user?.id || null,
             server_name: srv?.full_name || member?.full_name || null,
+            ...(isInstantPay ? { payment_method: immediatePayMethod, paid_at: nowIso } : {}),
           })
           .select('id')
           .maybeSingle();
@@ -425,36 +441,78 @@ export default function Orders() {
           setModalErr(error?.message || 'Création de la commande impossible.');
           return;
         }
-        for (const i of cart) {
-          if (i.kind === 'product') {
-            await supabase.from('order_items').insert({
-              order_id: order.id,
-              product_id: i.product.id,
-              product_name: i.product.name,
-              qty: i.qty,
-              quantity: i.qty,
-              unit_price: i.product.price,
-              status: 'pending',
-            });
-          } else {
-            await supabase.from('order_items').insert({
-              order_id: order.id,
-              product_id: i.item.linked_product_id || null,
-              product_name: i.item.name,
-              qty: i.qty,
-              quantity: i.qty,
-              unit_price: linePrice(i),
-              status: 'pending',
-              menu_item_id: i.item.id,
-              selected_options: i.options || [],
-              notes: i.notes || null,
-            });
+        const batchRows = cart.map((i) =>
+          i.kind === 'product'
+            ? {
+                order_id: order.id,
+                product_id: i.product.id,
+                product_name: i.product.name,
+                qty: i.qty,
+                unit_price: i.product.price,
+                status: isInstantPay ? 'served' : 'pending',
+              }
+            : {
+                order_id: order.id,
+                product_id: i.item.linked_product_id || null,
+                product_name: i.item.name,
+                qty: i.qty,
+                unit_price: linePrice(i),
+                status: isInstantPay ? 'served' : 'pending',
+                menu_item_id: i.item.id,
+                selected_options: i.options || [],
+                notes: i.notes || null,
+              },
+        );
+        const { error: itemsErr } = await supabase.from('order_items').insert(batchRows);
+        if (itemsErr) {
+          setModalErr(itemsErr.message || 'Articles non enregistrés.');
+          return;
+        }
+        if (isInstantPay && immediatePayMethod) {
+          const cfg = PAY_CHOICES.find((p) => p.id === immediatePayMethod) || PAY_CHOICES[0];
+          const sessionId = await getActiveSessionId(estId);
+          const canonicalPm: 'cash' | 'mobile_money' | 'other' =
+            immediatePayMethod === 'cash'
+              ? 'cash'
+              : ['wave', 'orange_money', 'mtn_money'].includes(immediatePayMethod)
+                ? 'mobile_money'
+                : 'other';
+          await Promise.all(
+            cart.map(async (i) => {
+              const pid = i.kind === 'product' ? i.product.id : i.item.linked_product_id;
+              if (!pid) return;
+              const unitP = linePrice(i);
+              const salePayload = {
+                establishment_id: estId,
+                product_id: pid,
+                qty: i.qty,
+                unit_price: unitP,
+                total: i.qty * unitP,
+                payment_method: immediatePayMethod,
+                created_by: user?.id || null,
+                pole_code: selectedPole || null,
+                cash_session_id: sessionId || null,
+              };
+              const { error: sErr } = await supabase.from('sales').insert(salePayload);
+              if (sErr && immediatePayMethod !== canonicalPm) {
+                await supabase.from('sales').insert({ ...salePayload, payment_method: canonicalPm });
+              }
+              const prod = productById.get(pid);
+              if (prod) {
+                await supabase
+                  .from('products')
+                  .update({ stock: Math.max(0, Number(prod.stock || 0) - i.qty) })
+                  .eq('id', pid);
+              }
+            }),
+          );
+          setFeedback({ ok: true, text: `Commande créée & encaissée immédiatement (${cfg.label}).` });
+        } else {
+          if (tableId) {
+            await supabase.from('restaurant_tables').update({ status: 'occupied' }).eq('id', tableId);
           }
+          setFeedback({ ok: true, text: 'Commande créée et transmise au service.' });
         }
-        if (tableId) {
-          await supabase.from('restaurant_tables').update({ status: 'occupied' }).eq('id', tableId);
-        }
-        setFeedback({ ok: true, text: 'Commande créée et transmise au service.' });
       }
       setCart([]);
       setNotes('');
@@ -463,24 +521,37 @@ export default function Orders() {
       setAppendOrderId(null);
       setModalOpen(false);
       setSearchParams({});
-      await load();
+      void load();
     } finally {
       setBusy(false);
     }
   }
 
   async function sendToKitchen(id: string) {
-    await supabase.from('orders').update({ status: 'preparing' }).eq('id', id);
-    await supabase
-      .from('order_items')
-      .update({ status: 'preparing' })
-      .eq('order_id', id)
-      .eq('status', 'pending');
+    setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status: 'preparing' } : o)));
+    setItemsByOrder((prev) => ({
+      ...prev,
+      [id]: (prev[id] || []).map((it) => (it.status === 'pending' ? { ...it, status: 'preparing' } : it)),
+    }));
     setFeedback({ ok: true, text: 'Commande envoyée en préparation.' });
-    void load();
+    await Promise.all([
+      supabase.from('orders').update({ status: 'preparing' }).eq('id', id),
+      supabase.from('order_items').update({ status: 'preparing' }).eq('order_id', id).eq('status', 'pending'),
+    ]);
   }
 
   async function updateStatus(id: string, status: string) {
+    setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status: status as Order['status'] } : o)));
+    if (status === 'ready' || status === 'served') {
+      setItemsByOrder((prev) => ({
+        ...prev,
+        [id]: (prev[id] || []).map((it) => (it.status !== 'served' ? { ...it, status: status as OrderItem['status'] } : it)),
+      }));
+    }
+    setFeedback({
+      ok: true,
+      text: status === 'ready' ? 'Commande marquée prête.' : status === 'served' ? 'Commande servie — prête pour encaissement.' : 'Statut mis à jour.',
+    });
     await supabase.from('orders').update({ status }).eq('id', id);
     if (status === 'ready' || status === 'served') {
       await supabase
@@ -489,11 +560,6 @@ export default function Orders() {
         .eq('order_id', id)
         .neq('status', 'served');
     }
-    setFeedback({
-      ok: true,
-      text: status === 'ready' ? 'Commande marquée prête.' : status === 'served' ? 'Commande servie — prête pour encaissement.' : 'Statut mis à jour.',
-    });
-    void load();
   }
 
   async function cycleItemStatus(item: OrderItemExtended) {
@@ -505,8 +571,11 @@ export default function Orders() {
           : item.status === 'ready'
             ? 'served'
             : 'pending';
+    setItemsByOrder((prev) => ({
+      ...prev,
+      [item.order_id]: (prev[item.order_id] || []).map((it) => (it.id === item.id ? { ...it, status: next } : it)),
+    }));
     await supabase.from('order_items').update({ status: next }).eq('id', item.id);
-    void load();
   }
 
   async function assignServer(order: OrderRow, server: ServerCandidate) {
@@ -685,25 +754,6 @@ export default function Orders() {
     } finally {
       setPayBusy(false);
     }
-  }
-
-  function buildReceiptText(o: OrderRow) {
-    const items = itemsByOrder[o.id] || [];
-    const lines = [
-      `=== ${activeEstablishment?.name || 'GESMAK'} ===`,
-      `Addition #CMD-${o.id.slice(0, 6).toUpperCase()}`,
-      `Date : ${formatTime(o.created_at)}`,
-      o.table_number ? `Table : ${o.table_number}` : `Type : ${ORDER_TYPE_LABELS[o.order_type] || o.order_type}`,
-      o.customer_name ? `Client : ${o.customer_name}` : null,
-      o.server_name ? `Serveur : ${o.server_name}` : null,
-      '--------------------------------',
-      ...items.map((it) => `${it.qty}x ${it.product_name}  ${formatFCFA(it.qty * it.unit_price)}`),
-      '--------------------------------',
-      `TOTAL : ${formatFCFA(Number(o.total) || 0)}`,
-      o.paid_at ? `Statut : PAYÉE (${payChoiceLabel(o.payment_method)})` : 'Statut : À ENCAISSER',
-      'Merci pour votre visite !',
-    ].filter(Boolean);
-    return lines.join('\n');
   }
 
   function clientLabel(o: OrderRow) {
@@ -1388,14 +1438,26 @@ export default function Orders() {
                 </div>
               ))}
               <p className="font-bold text-amber-300 text-right">Total : {formatFCFA(cartTotal)}</p>
-              <button
-                type="button"
-                className="btn-primary w-full"
-                disabled={busy}
-                onClick={() => void createOrder()}
-              >
-                {busy ? 'Envoi…' : appendOrderId ? 'Ajouter ce tour à la commande' : 'Créer & envoyer la commande'}
-              </button>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  className="btn-primary w-full"
+                  disabled={busy}
+                  onClick={() => void createOrder()}
+                >
+                  {busy ? 'Envoi…' : appendOrderId ? 'Ajouter ce tour à la commande' : 'Créer & envoyer la commande'}
+                </button>
+                {!appendOrderId && (
+                  <button
+                    type="button"
+                    className="w-full rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 px-3 text-sm font-bold disabled:opacity-50"
+                    disabled={busy}
+                    onClick={() => void createOrder('cash')}
+                  >
+                    Créer & Encaisser (Espèces)
+                  </button>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -1565,45 +1627,41 @@ export default function Orders() {
         </Modal>
       )}
 
-      {/* Modal Ticket / Addition */}
+      {/* Modal Ticket / Addition imprimable 80mm / A4 */}
       {receiptOrder && (
-        <Modal
-          open={!!receiptOrder}
+        <ReceiptPrintModal
+          receipt={{
+            id: receiptOrder.id,
+            kind: (receiptOrder.notes || '').includes('[CHAMBRE]')
+              ? 'chambre'
+              : (receiptOrder.pole_code || '') === 'cuisine'
+                ? 'nourriture'
+                : (receiptOrder.pole_code || '') === 'bar'
+                  ? 'boisson'
+                  : 'mixte',
+            establishmentName: activeEstablishment?.name || 'GESMAK',
+            establishmentPhone: activeEstablishment?.phone,
+            establishmentAddress: activeEstablishment?.address,
+            tableOrRoomLabel: receiptOrder.table_number
+              ? `Table ${receiptOrder.table_number}`
+              : ORDER_TYPE_LABELS[receiptOrder.order_type] || receiptOrder.order_type,
+            customerName: clientLabel(receiptOrder),
+            serverName: receiptOrder.server_name,
+            createdAt: receiptOrder.created_at,
+            status: receiptOrder.status,
+            paymentMethod: receiptOrder.payment_method,
+            paidAmount: receiptOrder.paid_amount ?? (receiptOrder.paid_at ? Number(receiptOrder.total) : 0),
+            total: Number(receiptOrder.total) || 0,
+            notes: receiptOrder.notes,
+            items: (itemsByOrder[receiptOrder.id] || []).map((it) => ({
+              name: it.product_name,
+              qty: it.qty,
+              unitPrice: Number(it.unit_price) || 0,
+              note: it.notes,
+            })),
+          }}
           onClose={() => setReceiptOrder(null)}
-          title="Addition / Reçu client"
-        >
-          <div className="space-y-3">
-            <pre className="rounded-xl bg-stone-950 border border-stone-800 p-3 text-xs text-stone-200 font-mono whitespace-pre-wrap">
-              {buildReceiptText(receiptOrder)}
-            </pre>
-            {copiedReceipt && (
-              <p className="text-xs text-emerald-400 font-semibold">Addition copiée dans le presse-papier.</p>
-            )}
-            <div className="flex gap-2">
-              <button
-                type="button"
-                className="btn-secondary flex-1 text-xs flex items-center justify-center gap-1.5"
-                onClick={() => {
-                  try {
-                    void navigator.clipboard.writeText(buildReceiptText(receiptOrder));
-                    setCopiedReceipt(true);
-                  } catch {
-                    /* ignore */
-                  }
-                }}
-              >
-                <Copy size={14} /> Copier
-              </button>
-              <button
-                type="button"
-                className="btn-primary flex-1 text-xs flex items-center justify-center gap-1.5"
-                onClick={() => window.print()}
-              >
-                <Printer size={14} /> Imprimer
-              </button>
-            </div>
-          </div>
-        </Modal>
+        />
       )}
 
       {/* Modal Détail rapide */}

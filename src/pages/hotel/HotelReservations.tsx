@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
+import { Printer } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
+import { ReceiptPrintModal, type GesmakReceiptData } from '@/components/ReceiptPrint';
 import {
   listReservations,
   listRooms,
@@ -27,6 +29,7 @@ export default function HotelReservations() {
   const [detailId, setDetailId] = useState<string | null>(null);
   const [consumptions, setConsumptions] = useState<any[]>([]);
   const [consForm, setConsForm] = useState({ description: '', unit_price: '', service_code: 'restaurant' });
+  const [receiptData, setReceiptData] = useState<GesmakReceiptData | null>(null);
   const [form, setForm] = useState({
     first_name: '',
     last_name: '',
@@ -289,6 +292,52 @@ export default function HotelReservations() {
                 Check-out
               </button>
             )}
+            <button
+              type="button"
+              className="btn-secondary text-sm inline-flex items-center gap-1.5"
+              onClick={() => {
+                const nights = Math.max(
+                  1,
+                  Math.round(
+                    (new Date(detail.check_out).getTime() - new Date(detail.check_in).getTime()) /
+                      86400000,
+                  ),
+                );
+                const stayTotal = Number(detail.total || 0);
+                const consItems = consumptions.map((c) => ({
+                  name: `[${c.service_code || 'Service'}] ${c.description}`,
+                  qty: Number(c.quantity || 1),
+                  unitPrice: Number(c.unit_price || c.total || 0),
+                }));
+                const consSum = consumptions.reduce((s, c) => s + Number(c.total || 0), 0);
+                setReceiptData({
+                  id: detail.id,
+                  kind: 'chambre',
+                  establishmentName: activeEstablishment?.name || 'Complexe Hôtelier',
+                  establishmentPhone: activeEstablishment?.phone,
+                  establishmentAddress: activeEstablishment?.address,
+                  tableOrRoomLabel: `Chambre ${detail.hotel_rooms?.number || '—'} · ${detail.check_in} → ${detail.check_out}`,
+                  customerName: `${detail.hotel_guests?.first_name || ''} ${detail.hotel_guests?.last_name || ''}`.trim() || 'Client',
+                  customerPhone: detail.hotel_guests?.phone || null,
+                  createdAt: detail.created_at || new Date().toISOString(),
+                  status: detail.status,
+                  paymentMethod: detail.payment_method,
+                  paidAmount: Number(detail.amount_paid || 0),
+                  total: stayTotal + consSum,
+                  notes: detail.notes || null,
+                  items: [
+                    {
+                      name: `Séjour Chambre ${detail.hotel_rooms?.number || ''} (${nights} nuit${nights > 1 ? 's' : ''})`,
+                      qty: nights,
+                      unitPrice: Number(detail.rate || Math.round(stayTotal / nights)),
+                    },
+                    ...consItems,
+                  ],
+                });
+              }}
+            >
+              <Printer size={15} /> Imprimer reçu
+            </button>
           </div>
           <div>
             <h3 className="text-sm font-semibold mb-2">Consommations (resto / bar / spa…)</h3>
@@ -380,6 +429,8 @@ export default function HotelReservations() {
           )}
         </div>
       )}
+
+      <ReceiptPrintModal receipt={receiptData} onClose={() => setReceiptData(null)} />
     </div>
   );
 }

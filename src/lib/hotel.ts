@@ -99,13 +99,106 @@ export async function listHotelServices(establishmentId: string) {
   return { data: data || [], error: error?.message };
 }
 
+export interface RoomMeta {
+  name?: string;
+  description?: string;
+  image_url?: string;
+  cleanNotes?: string;
+}
+
+const ROOM_META_RE = /\[GESMAK_ROOM\]([\s\S]*?)\[\/GESMAK_ROOM\]/;
+
+export function parseRoomMeta(room: {
+  name?: string | null;
+  description?: string | null;
+  image_url?: string | null;
+  notes?: string | null;
+}): RoomMeta {
+  const rawNotes = room.notes || '';
+  const match = ROOM_META_RE.exec(rawNotes);
+  let parsed: { name?: string; description?: string; image_url?: string } = {};
+  if (match?.[1]) {
+    try {
+      parsed = JSON.parse(match[1]);
+    } catch {
+      parsed = {};
+    }
+  }
+  const cleanNotes = rawNotes.replace(ROOM_META_RE, '').trim();
+  return {
+    name: (room.name || parsed.name || '').trim() || undefined,
+    description: (room.description || parsed.description || '').trim() || undefined,
+    image_url: (room.image_url || parsed.image_url || '').trim() || undefined,
+    cleanNotes: cleanNotes || undefined,
+  };
+}
+
+export function encodeRoomNotes(
+  meta: { name?: string; description?: string; image_url?: string },
+  plainNotes?: string | null,
+): string | null {
+  const cleanNotes = (plainNotes || '').replace(ROOM_META_RE, '').trim();
+  const payload: Record<string, string> = {};
+  if (meta.name?.trim()) payload.name = meta.name.trim();
+  if (meta.description?.trim()) payload.description = meta.description.trim();
+  if (meta.image_url?.trim()) payload.image_url = meta.image_url.trim();
+  const tag = Object.keys(payload).length > 0 ? `[GESMAK_ROOM]${JSON.stringify(payload)}[/GESMAK_ROOM]` : '';
+  const combined = [tag, cleanNotes].filter(Boolean).join(' ').trim();
+  return combined || null;
+}
+
+export async function syncRoomsToQrConfig(establishmentId: string) {
+  try {
+    const [{ data: rooms }, { data: est }] = await Promise.all([
+      supabase
+        .from('hotel_rooms')
+        .select('id, number, floor, status, notes, price_per_night, capacity, hotel_room_types(name, price_per_night, capacity)')
+        .eq('establishment_id', establishmentId)
+        .order('number'),
+      supabase.from('establishments').select('qr_config').eq('id', establishmentId).maybeSingle(),
+    ]);
+    const list = (rooms || []).map((r: any) => {
+      const meta = parseRoomMeta(r);
+      const baseRate = Number(r.price_per_night || r.hotel_room_types?.price_per_night || 0);
+      return {
+        id: r.id,
+        number: r.number,
+        name: meta.name || r.hotel_room_types?.name || `Chambre ${r.number}`,
+        description: meta.description || '',
+        image_url: meta.image_url || '',
+        price_per_night: baseRate,
+        capacity: Number(r.capacity || r.hotel_room_types?.capacity || 2),
+        floor: r.floor || '',
+        status: r.status || 'available',
+      };
+    });
+    const prevCfg = (est?.qr_config && typeof est.qr_config === 'object' ? est.qr_config : {}) as Record<string, unknown>;
+    await supabase
+      .from('establishments')
+      .update({ qr_config: { ...prevCfg, rooms: list } })
+      .eq('id', establishmentId);
+  } catch {
+    // Non bloquant
+  }
+}
+
 export async function listRooms(establishmentId: string) {
   const { data, error } = await supabase
     .from('hotel_rooms')
     .select('*, hotel_room_types(name, price_per_night, capacity)')
     .eq('establishment_id', establishmentId)
     .order('number');
-  return { data: data || [], error: error?.message };
+  const enriched = (data || []).map((r: any) => {
+    const meta = parseRoomMeta(r);
+    return {
+      ...r,
+      room_name: meta.name,
+      description: meta.description,
+      image_url: meta.image_url,
+      clean_notes: meta.cleanNotes,
+    };
+  });
+  return { data: enriched, error: error?.message };
 }
 
 export async function listRoomTypes(establishmentId: string) {
@@ -146,13 +239,21 @@ export async function createRoom(
   establishmentId: string,
   input: {
     number: string;
+    name?: string;
+    description?: string;
+    image_url?: string;
     floor?: string;
     room_type_id?: string | null;
     price_per_night?: number;
     capacity?: number;
     status?: RoomStatus;
+    notes?: string;
   },
 ) {
+  const encodedNotes = encodeRoomNotes(
+    { name: input.name, description: input.description, image_url: input.image_url },
+    input.notes,
+  );
   const { data, error } = await supabase
     .from('hotel_rooms')
     .insert({
@@ -163,14 +264,61 @@ export async function createRoom(
       price_per_night: input.price_per_night ?? 0,
       capacity: input.capacity ?? 2,
       status: input.status || 'available',
+      notes: encodedNotes,
     })
     .select()
     .single();
+  if (!error) void syncRoomsToQrConfig(establishmentId);
   return { data, error: error?.message };
 }
 
-export async function updateRoomStatus(roomId: string, status: RoomStatus) {
+export async function updateRoom(
+  establishmentId: string,
+  roomId: string,
+  input: {
+    number?: string;
+    name?: string;
+    description?: string;
+    image_url?: string;
+    floor?: string;
+    room_type_id?: string | null;
+    price_per_night?: number;
+    capacity?: number;
+    status?: RoomStatus;
+    notes?: string;
+  },
+) {
+  const encodedNotes = encodeRoomNotes(
+    { name: input.name, description: input.description, image_url: input.image_url },
+    input.notes,
+  );
+  const { data, error } = await supabase
+    .from('hotel_rooms')
+    .update({
+      number: input.number,
+      floor: input.floor || null,
+      room_type_id: input.room_type_id || null,
+      price_per_night: input.price_per_night ?? 0,
+      capacity: input.capacity ?? 2,
+      status: input.status || 'available',
+      notes: encodedNotes,
+    })
+    .eq('id', roomId)
+    .select()
+    .single();
+  if (!error) void syncRoomsToQrConfig(establishmentId);
+  return { data, error: error?.message };
+}
+
+export async function deleteRoom(establishmentId: string, roomId: string) {
+  const { error } = await supabase.from('hotel_rooms').delete().eq('id', roomId);
+  if (!error) void syncRoomsToQrConfig(establishmentId);
+  return { error: error?.message };
+}
+
+export async function updateRoomStatus(roomId: string, status: RoomStatus, establishmentId?: string) {
   const { error } = await supabase.from('hotel_rooms').update({ status }).eq('id', roomId);
+  if (!error && establishmentId) void syncRoomsToQrConfig(establishmentId);
   return { error: error?.message };
 }
 

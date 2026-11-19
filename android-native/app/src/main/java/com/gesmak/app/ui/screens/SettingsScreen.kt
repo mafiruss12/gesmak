@@ -113,6 +113,7 @@ fun SettingsScreen(
     establishment: SupabaseApi.Establishment?,
     allowedTypes: List<BizSpec> = emptyList(),
     isPlatformAdmin: Boolean = false,
+    isOwnerOverride: Boolean = false,
     pendingPaymentRequests: List<SupabaseApi.PaymentRequestRow> = emptyList(),
     isLightTheme: Boolean,
     orderSoundEnabled: Boolean,
@@ -171,7 +172,9 @@ fun SettingsScreen(
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
     val role = member?.role?.lowercase().orEmpty()
-    val canManageEst = role in setOf("super_admin", "admin", "owner", "propriétaire", "proprietaire")
+    val uid = member?.userId
+    val isEstOwner = !uid.isNullOrBlank() && (establishment?.ownerUserId == uid || establishment?.createdBy == uid)
+    val canManageEst = isOwnerOverride || isEstOwner || role in setOf("super_admin", "admin", "owner", "propriétaire", "proprietaire")
     val switchableSpecs = if (isPlatformAdmin) BusinessTypes.ALL else allowedTypes
     val canSwitchEstType = isPlatformAdmin || switchableSpecs.size > 1
     val canCreateNewEst = isPlatformAdmin || (member?.allowedTypes?.size ?: 0) > 1
@@ -210,27 +213,47 @@ fun SettingsScreen(
             Text("Compte, sécurité, établissement & mises à jour", color = c.muted, fontSize = 12.sp)
         }
 
-        if (establishment != null) {
-            item {
+        item {
+            if (establishment != null) {
                 GesmakCard(borderColor = c.accent.copy(alpha = 0.35f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         EstablishmentLogo(
                             name = establishment.name,
                             logoUrl = establishment.logoUrl,
-                            size = 44.dp,
+                            size = 50.dp,
                             cornerRadius = 12.dp,
                             accentColor = c.accent,
                         )
-                        Spacer(Modifier.width(10.dp))
+                        Spacer(Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text("ÉTABLISSEMENT ACTIF", color = c.accentDeep, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                            Text(establishment.name, color = c.text, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                            Text(establishment.name, color = c.text, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                             Text(BusinessTypes.spec(establishment.type).label, color = c.muted, fontSize = 11.sp)
+                            if (!establishment.address.isNullOrBlank() || !establishment.phone.isNullOrBlank()) {
+                                Text(
+                                    listOfNotNull(establishment.phone?.ifBlank { null }, establishment.address?.ifBlank { null }).joinToString(" · "),
+                                    color = c.muted,
+                                    fontSize = 11.sp,
+                                )
+                            }
                         }
                         if (canManageEst) {
-                            TextButton(onClick = { estModal = true }) {
+                            OutlinedButton(onClick = { estModal = true }, shape = RoundedCornerShape(10.dp)) {
                                 Text("Modifier", color = c.accent, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                             }
+                        }
+                    }
+                }
+            } else {
+                GesmakCard(borderColor = c.border) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("ÉTABLISSEMENT ACTIF", color = c.accentDeep, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Text("Synchronisation de l'établissement…", color = c.text, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                            Text("Appuyez sur Actualiser si les détails tardent.", color = c.muted, fontSize = 11.sp)
+                        }
+                        OutlinedButton(onClick = onRefreshStatus, shape = RoundedCornerShape(10.dp)) {
+                            Text("Actualiser", color = c.accent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
